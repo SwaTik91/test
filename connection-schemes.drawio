@@ -1,0 +1,60 @@
+<mxfile host="app.diagrams.net" modified="2026-03-29T12:00:00.000Z" agent="Cursor GPT-5.4" version="24.7.17" compressed="false">
+  <diagram id="route-443" name="443 route">
+    <mxGraphModel dx="1420" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="client443" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="60" y="150" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="yandex443" value="Сервер Яндекса" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="280" y="150" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="balancer443" value="Балансер" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="540" y="150" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="germany1" value="Germany 1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="780" y="90" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="germany2" value="Germany 2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="780" y="220" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-client-yandex-443" value="443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="client443" target="yandex443">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-yandex-balancer-443" value="443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="yandex443" target="balancer443">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-balancer-g1-443" value="443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="balancer443" target="germany1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-balancer-g2-443" value="443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="balancer443" target="germany2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="route-8443" name="8443 route">
+    <mxGraphModel dx="1420" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="client8443" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="yandex8443" value="Сервер Яндекса" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="320" y="160" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="russian8443" value="Другой русский сервер" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="620" y="160" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-client-yandex-8443" value="8443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="client8443" target="yandex8443">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-yandex-russian-8443" value="8443" style="endArrow=block;html=1;rounded=0;strokeWidth=2;fontSize=14;" edge="1" parent="1" source="yandex8443" target="russian8443">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
