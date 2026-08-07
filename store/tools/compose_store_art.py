@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose store listing art: launcher icons (and screenshots in Task 3)."""
+"""Compose store listing art: launcher icons and landscape store screenshots."""
 
 from __future__ import annotations
 

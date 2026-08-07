@@ -41,7 +41,7 @@ python3 store/tools/compose_store_art.py --all
 - `--screenshots` — landscape PNG 1920×1080 в `store/screenshots/` (RU-подписи; нужен `store/tools/fonts/DejaVuSans-Bold.ttf`)
 - `--all` — оба режима
 
-Шрифт подписей: **DejaVu Sans Bold** (Bitstream Vera / DejaVu Fonts License) в `store/tools/fonts/`.
+Шрифт подписей: **DejaVu Sans Bold** в `store/tools/fonts/` (`DejaVuSans-Bold.ttf`); лицензия — `store/tools/fonts/LICENSE-DejaVu.txt` (Bitstream Vera / DejaVu Fonts License).
 
 Скрипт читает `midgard_outpost/assets/images/` (hub, heroes, enemies, props, world).
 
