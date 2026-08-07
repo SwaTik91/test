@@ -61,6 +61,10 @@ class HudOverlay extends StatelessWidget {
                               'Дистанция: ${game.distance.toStringAsFixed(0)}',
                               style: const TextStyle(color: Colors.white),
                             ),
+                            Text(
+                              'Биом: ${game.biomeLabel}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ],
                         ),
                       ),

@@ -56,6 +56,11 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateRunState(RunState state) {
+    _runState = state;
+    notifyListeners();
+  }
+
   Future<void> onRunFinished(RunRewards rewards) async {
     final current = _hero;
     if (current == null) return;

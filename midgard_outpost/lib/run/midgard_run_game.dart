@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -6,24 +7,36 @@ import 'package:flame/input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../content/balance.dart';
+import '../content/monsters.dart';
+import '../content/run_upgrades.dart';
 import '../content/skills.dart';
 import '../core/ids.dart';
 import '../progress/hero_progress.dart';
 import 'combat_math.dart';
+import 'components/chest_component.dart';
 import 'components/monster_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
 import 'run_rewards.dart';
+import 'run_state.dart';
+import 'upgrade_offer_service.dart';
 import 'systems/auto_skill_system.dart';
+import 'systems/spawn_system.dart' hide Biome;
 
 class MidgardRunGame extends FlameGame with KeyboardEvents {
   MidgardRunGame({
     required this.hero,
     required this.onDeath,
-    Set<String> ownedRunUpgradeIds = const {},
-  }) : ownedRunUpgradeIds = {...ownedRunUpgradeIds};
+    required RunState initialRunState,
+    this.onRunStateChanged,
+    Random? rng,
+  }) : _runState = initialRunState,
+       ownedRunUpgradeIds = {...initialRunState.ownedUpgradeIds},
+       _rng = rng ?? Random();
 
   static const String hudOverlayKey = 'hud';
+  static const String upgradePickerOverlayKey = 'upgradePicker';
   static const double _groundY = 330;
   static const double _tileWidth = 360;
   static const double _attackInterval = 0.75;
@@ -31,9 +44,11 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   final HeroProgress hero;
   final void Function(RunRewards rewards) onDeath;
+  final ValueChanged<RunState>? onRunStateChanged;
   final Set<String> ownedRunUpgradeIds;
   final RunRewardsAccumulator rewards = RunRewardsAccumulator();
   final ValueNotifier<int> hudRevision = ValueNotifier<int>(0);
+  final Random _rng;
 
   late final PlayerComponent player;
   late final AutoSkillSystem autoSkillSystem;
@@ -41,7 +56,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   final List<RectangleComponent> _groundTiles = [];
   final List<MonsterComponent> _monsters = [];
+  final List<ChestComponent> _chests = [];
 
+  RunState _runState;
+  List<RunUpgradeDef> _pendingUpgradeOffers = const [];
   bool _leftPressed = false;
   bool _rightPressed = false;
   bool _finished = false;
@@ -49,8 +67,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double _collisionTimer = 0;
   double _hudTimer = 0;
   double _nextSpawnX = 520;
+  double _nextChestX = Balance.chestEveryDistancePx.toDouble();
+  double _nextBossX = Balance.bossEveryDistancePx.toDouble();
 
   double get distance => player.position.x;
+
+  Biome get biome => SpawnSystem.biomeAt(distance);
+
+  String get biomeLabel => biome.label;
 
   double get hpFraction => player.currentHp / player.maxHp;
 
@@ -60,6 +84,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       autoSkillSystem.ultimateCooldownRemaining;
 
   RunRewards get currentRewards => rewards.toRewards();
+
+  RunState get runState => _runState;
+
+  List<RunUpgradeDef> get pendingUpgradeOffers => _pendingUpgradeOffers;
 
   @override
   Color backgroundColor() => const Color(0xFF101826);
@@ -103,8 +131,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
     _recycleGroundTiles();
     _spawnAheadIfNeeded();
+    _spawnMilestonesIfNeeded();
     _handleAutoSkills(dt);
     _handleAutoAttack();
+    _handleChestContact();
     _handleMonsterContact();
     _publishHudIfNeeded();
   }
@@ -205,22 +235,63 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
   }
 
-  void _spawnMonster() {
-    final wave = (_nextSpawnX / 500).floor();
-    final maxHp = 18 + (wave * 3);
+  void _spawnMilestonesIfNeeded() {
+    while (player.position.x + 920 > _nextChestX) {
+      _spawnChest(_nextChestX);
+      _nextChestX += Balance.chestEveryDistancePx;
+    }
+    while (player.position.x + 920 > _nextBossX) {
+      _spawnMonster(spawnX: _nextBossX, isBoss: true);
+      _nextBossX += Balance.bossEveryDistancePx;
+    }
+  }
+
+  void _spawnChest(double x) {
+    final chest = ChestComponent(position: Vector2(x, _groundY - 34));
+    _chests.add(chest);
+    world.add(chest);
+  }
+
+  void _spawnMonster({double? spawnX, bool isBoss = false}) {
+    final x = spawnX ?? _nextSpawnX;
+    final monsterBiome = SpawnSystem.biomeAt(x);
+    final spec = MonstersCatalog.forDistance(
+      distancePx: x,
+      biome: monsterBiome,
+      isBoss: isBoss,
+    );
     final monster = MonsterComponent(
       target: player,
-      position: Vector2(_nextSpawnX, _groundY - 44),
-      maxHp: maxHp,
-      touchDamage: 7 + wave,
-      baseXp: 5 + wave,
-      jobXp: 3 + (wave ~/ 2),
-      gold: 2 + (wave ~/ 3),
-      moveSpeed: 50 + (wave * 2),
+      position: Vector2(x, _groundY - spec.height),
+      maxHp: spec.maxHp,
+      touchDamage: spec.touchDamage,
+      baseXp: spec.baseXp,
+      jobXp: spec.jobXp,
+      gold: spec.gold,
+      tempXp: spec.tempXp,
+      upgradeDropChance: spec.isBoss
+          ? Balance.bossUpgradeDropChance
+          : Balance.monsterUpgradeDropChance,
+      isBoss: spec.isBoss,
+      moveSpeed: spec.moveSpeed,
+      size: Vector2(spec.width, spec.height),
+      color: _monsterColor(spec),
     );
-    _nextSpawnX += 430;
+    if (!isBoss) {
+      _nextSpawnX += 430;
+    }
     _monsters.add(monster);
     world.add(monster);
+  }
+
+  Color _monsterColor(MonsterSpec spec) {
+    if (spec.isBoss) {
+      return Colors.purpleAccent;
+    }
+    return switch (spec.biome) {
+      Biome.fields => Colors.deepOrangeAccent,
+      Biome.forest => Colors.greenAccent,
+    };
   }
 
   void _handleAutoAttack() {
@@ -368,6 +439,16 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
   }
 
+  void _handleChestContact() {
+    for (final chest in _chests.toList(growable: false)) {
+      if (!chest.isCollected && chest.bounds.overlaps(player.bounds)) {
+        chest.collect();
+        _chests.remove(chest);
+        _openUpgradeOffer();
+      }
+    }
+  }
+
   void _collectKill(MonsterComponent monster) {
     rewards.addKill(
       baseXp: monster.baseXp,
@@ -376,6 +457,63 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     );
     monster.removeFromParent();
     _monsters.remove(monster);
+
+    final xpResult = UpgradeOfferService.addTempXp(
+      _runState,
+      _tempXpFor(monster),
+    );
+    _setRunState(xpResult.state);
+
+    final dropReady = monster.isBoss
+        ? _rng.nextDouble() < monster.upgradeDropChance
+        : UpgradeOfferService.shouldDropFromMonster(_rng);
+    if (dropReady || xpResult.offerReady) {
+      _openUpgradeOffer();
+    }
+
+    _publishHud();
+  }
+
+  int _tempXpFor(MonsterComponent monster) {
+    var amount = monster.tempXp.toDouble();
+    if (ownedRunUpgradeIds.contains('temp_xp_boost')) {
+      amount *= 1.25;
+    }
+    return amount.round().clamp(1, Balance.tempXpPerUpgrade).toInt();
+  }
+
+  void _openUpgradeOffer() {
+    if (_finished || _pendingUpgradeOffers.isNotEmpty) {
+      return;
+    }
+
+    final offers = UpgradeOfferService.rollOffer(
+      classId: hero.classId,
+      owned: ownedRunUpgradeIds,
+      rng: _rng,
+    );
+    if (offers.isEmpty) {
+      return;
+    }
+
+    _pendingUpgradeOffers = offers;
+    pauseEngine();
+    overlays.add(upgradePickerOverlayKey);
+    _publishHud();
+  }
+
+  void chooseUpgrade(String id) {
+    if (!_pendingUpgradeOffers.any((offer) => offer.id == id)) {
+      return;
+    }
+
+    ownedRunUpgradeIds.add(id);
+    _setRunState(_runState.copyWith(ownedUpgradeIds: {...ownedRunUpgradeIds}));
+    _pendingUpgradeOffers = const [];
+    overlays.remove(upgradePickerOverlayKey);
+    if (!_finished) {
+      resumeEngine();
+    }
     _publishHud();
   }
 
@@ -387,7 +525,21 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _publishHud() {
+    _syncRunDistance();
     hudRevision.value += 1;
+  }
+
+  void _syncRunDistance() {
+    final distancePx = distance.round();
+    if (_runState.distancePx == distancePx) {
+      return;
+    }
+    _setRunState(_runState.copyWith(distancePx: distancePx));
+  }
+
+  void _setRunState(RunState state) {
+    _runState = state;
+    onRunStateChanged?.call(_runState);
   }
 
   void _finishRun() {

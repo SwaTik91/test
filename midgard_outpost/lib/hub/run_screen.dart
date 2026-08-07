@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../run/components/hud_overlay.dart';
+import '../run/components/upgrade_picker_overlay.dart';
 import '../run/midgard_run_game.dart';
 import '../run/run_rewards.dart';
 import 'game_controller.dart';
@@ -29,11 +30,14 @@ class _RunScreenState extends State<RunScreen> {
           gameFactory: () => MidgardRunGame(
             hero: hero,
             onDeath: _openSummary,
-            ownedRunUpgradeIds: runState.ownedUpgradeIds,
+            initialRunState: runState,
+            onRunStateChanged: widget.controller.updateRunState,
           ),
           overlayBuilderMap: {
             MidgardRunGame.hudOverlayKey: (context, game) =>
                 HudOverlay(game: game),
+            MidgardRunGame.upgradePickerOverlayKey: (context, game) =>
+                UpgradePickerOverlay(game: game),
           },
           initialActiveOverlays: const [MidgardRunGame.hudOverlayKey],
         ),

@@ -12,12 +12,17 @@ class MonsterComponent extends RectangleComponent {
     required this.baseXp,
     required this.jobXp,
     required this.gold,
+    required this.tempXp,
+    required this.upgradeDropChance,
+    this.isBoss = false,
     this.moveSpeed = 58,
+    Vector2? size,
+    Color? color,
   }) : currentHp = maxHp,
        super(
          position: position,
-         size: Vector2(40, 44),
-         paint: Paint()..color = Colors.deepOrangeAccent,
+         size: size ?? Vector2(40, 44),
+         paint: Paint()..color = color ?? Colors.deepOrangeAccent,
        );
 
   final PlayerComponent target;
@@ -26,6 +31,9 @@ class MonsterComponent extends RectangleComponent {
   final int baseXp;
   final int jobXp;
   final int gold;
+  final int tempXp;
+  final double upgradeDropChance;
+  final bool isBoss;
   final double moveSpeed;
 
   int currentHp;
