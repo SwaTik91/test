@@ -14,7 +14,7 @@ void main() {
     );
 
     expect(CombatMath.maxHp(tank), greaterThan(CombatMath.maxHp(weak)));
-    expect(CombatMath.maxHp(tank), 172);
+    expect(CombatMath.maxHp(tank), 200);
   });
 
   test('int increases max sp', () {

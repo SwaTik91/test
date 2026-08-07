@@ -9,7 +9,7 @@ class CombatMath {
     HeroProgress hero, {
     Set<String> ownedUpgradeIds = const {},
   }) {
-    final base = 100 + (_stat(hero, StatId.vit, ownedUpgradeIds) * 12);
+    final base = 128 + (_stat(hero, StatId.vit, ownedUpgradeIds) * 12);
     return (base *
             RunUpgradeEffects.maxHpMultiplier(
               ownedUpgradeIds,

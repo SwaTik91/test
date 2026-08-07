@@ -42,7 +42,7 @@ class MonstersCatalog {
     final biomeReward = biome == Biome.forest ? 2 : 0;
 
     final baseHp = 18 + (wave * 3) + biomeHp;
-    final baseDamage = 7 + wave + biomeDamage;
+    final baseDamage = 18 + wave + biomeDamage;
     final baseXp = 5 + wave + biomeReward;
     final jobXp = 3 + (wave ~/ 2) + biomeReward;
     final gold = 4 + (wave ~/ 3) + biomeReward;
@@ -66,7 +66,7 @@ class MonstersCatalog {
     return MonsterSpec(
       biome: biome,
       isBoss: true,
-      maxHp: baseHp * 5,
+      maxHp: baseHp * 10,
       touchDamage: baseDamage * 2,
       baseXp: baseXp * 4,
       jobXp: jobXp * 4,
