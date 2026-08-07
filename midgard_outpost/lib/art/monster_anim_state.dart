@@ -1,0 +1,4 @@
+enum MonsterAnimName {
+  walk,
+  hurt,
+}
