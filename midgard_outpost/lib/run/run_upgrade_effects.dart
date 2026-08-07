@@ -161,7 +161,8 @@ class RunUpgradeEffects {
     }
 
     for (final entry in _skillDamageMultipliers.entries) {
-      if (entry.key.startsWith('${skillId}__') && upgrades.contains(entry.key)) {
+      if (entry.key.startsWith('${skillId}__') &&
+          upgrades.contains(entry.key)) {
         multiplier *= entry.value;
       }
     }
@@ -181,7 +182,8 @@ class RunUpgradeEffects {
       multiplier *= 0.85;
     }
     for (final entry in _cooldownMultipliers.entries) {
-      if (entry.key.startsWith('${skillId}__') && upgrades.contains(entry.key)) {
+      if (entry.key.startsWith('${skillId}__') &&
+          upgrades.contains(entry.key)) {
         multiplier *= entry.value;
       }
     }
@@ -191,7 +193,8 @@ class RunUpgradeEffects {
   static double rangeMultiplier(String skillId, Set<String> upgrades) {
     var multiplier = 1.0;
     for (final entry in _rangeMultipliers.entries) {
-      if (entry.key.startsWith('${skillId}__') && upgrades.contains(entry.key)) {
+      if (entry.key.startsWith('${skillId}__') &&
+          upgrades.contains(entry.key)) {
         multiplier *= entry.value;
       }
     }
@@ -201,7 +204,8 @@ class RunUpgradeEffects {
   static int targetCountBonus(String skillId, Set<String> upgrades) {
     var bonus = upgrades.contains('double_cast') ? 1 : 0;
     for (final entry in _targetCountBonuses.entries) {
-      if (entry.key.startsWith('${skillId}__') && upgrades.contains(entry.key)) {
+      if (entry.key.startsWith('${skillId}__') &&
+          upgrades.contains(entry.key)) {
         bonus += entry.value;
       }
     }
