@@ -196,6 +196,11 @@ Wave 2 добавляет покадровые PNG-анимации для за�
 
 План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md). Дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md).
 
+## Витрина сторов (App Gallery / RuStore)
+
+Материалы для публикации: [store/](../store/) — иконки, скриншоты, RU-тексты и чеклисты.
+Спека: [docs/.../store-listing-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-store-listing-design.md).
+
 ## Связанные документы
 
 - [Дизайн-спека MVP](../docs/superpowers/specs/2026-08-07-midgard-outpost-design.md)
