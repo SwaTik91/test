@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'hub/create_hero_screen.dart';
 import 'hub/game_controller.dart';
-import 'hub/hub_screen.dart';
+import 'hub/hub_shell.dart';
 import 'iap/store_billing_port.dart';
 import 'iap/store_iap_service.dart';
 import 'save/cloud_save_port.dart';
@@ -101,7 +101,7 @@ class _GameRoot extends StatelessWidget {
         if (controller.hero == null) {
           return CreateHeroScreen(controller: controller);
         }
-        return HubScreen(controller: controller);
+        return HubShell(controller: controller);
       },
     );
   }

@@ -4,9 +4,14 @@ import '../core/ids.dart';
 import 'game_controller.dart';
 
 class StatsScreen extends StatelessWidget {
-  const StatsScreen({super.key, required this.controller});
+  const StatsScreen({
+    super.key,
+    required this.controller,
+    this.embedded = false,
+  });
 
   final GameController controller;
+  final bool embedded;
 
   static const _statLabels = {
     StatId.str: 'STR',
@@ -25,6 +30,34 @@ class StatsScreen extends StatelessWidget {
         final hero = controller.hero!;
         final canAllocate = hero.unspentStatPoints > 0;
 
+        final body = ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (canAllocate) Text('Очков статов: ${hero.unspentStatPoints}'),
+            ...StatId.values.map((stat) {
+              final value = hero.stats[stat] ?? 1;
+              return ListTile(
+                title: Text(_statLabels[stat]!),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$value'),
+                    if (canAllocate)
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () => controller.allocateStat(stat),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+
+        if (embedded) {
+          return body;
+        }
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('Статы'),
@@ -33,30 +66,7 @@ class StatsScreen extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (canAllocate)
-                Text('Очков статов: ${hero.unspentStatPoints}'),
-              ...StatId.values.map((stat) {
-                final value = hero.stats[stat] ?? 1;
-                return ListTile(
-                  title: Text(_statLabels[stat]!),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('$value'),
-                      if (canAllocate)
-                        IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: () => controller.allocateStat(stat),
-                        ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
+          body: body,
         );
       },
     );

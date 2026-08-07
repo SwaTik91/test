@@ -4,9 +4,14 @@ import '../iap/iap_product.dart';
 import 'game_controller.dart';
 
 class ShopScreen extends StatefulWidget {
-  const ShopScreen({super.key, required this.controller});
+  const ShopScreen({
+    super.key,
+    required this.controller,
+    this.embedded = false,
+  });
 
   final GameController controller;
+  final bool embedded;
 
   @override
   State<ShopScreen> createState() => _ShopScreenState();
@@ -53,6 +58,40 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   Widget build(BuildContext context) {
     final crystals = widget.controller.hero?.crystals ?? 0;
+    final body = _products == null
+        ? const Center(child: CircularProgressIndicator())
+        : ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                'Кристаллы: $crystals',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              ..._products!.map((product) {
+                final isPurchasing = _purchasingId == product.id;
+                return Card(
+                  child: ListTile(
+                    title: Text(product.title),
+                    subtitle: Text(product.description),
+                    trailing: isPurchasing
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(product.priceLabel),
+                    onTap: isPurchasing ? null : () => _purchase(product),
+                  ),
+                );
+              }),
+            ],
+          );
+
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Магазин'),
@@ -61,35 +100,7 @@ class _ShopScreenState extends State<ShopScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: _products == null
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Кристаллы: $crystals',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                ..._products!.map((product) {
-                  final isPurchasing = _purchasingId == product.id;
-                  return Card(
-                    child: ListTile(
-                      title: Text(product.title),
-                      subtitle: Text(product.description),
-                      trailing: isPurchasing
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(product.priceLabel),
-                      onTap: isPurchasing ? null : () => _purchase(product),
-                    ),
-                  );
-                }),
-              ],
-            ),
+      body: body,
     );
   }
 }
