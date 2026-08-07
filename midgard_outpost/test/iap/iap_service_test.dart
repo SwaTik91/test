@@ -75,4 +75,10 @@ void main() {
     expect(products.length, IapCatalog.productIds.length);
     expect(await service.purchase('crystals_100'), isTrue);
   });
+
+  test('StoreIapService rejects unknown product ids before billing', () async {
+    final service = StoreIapService();
+
+    expect(await service.purchase('unknown_product'), isFalse);
+  });
 }

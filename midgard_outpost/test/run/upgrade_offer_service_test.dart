@@ -5,6 +5,7 @@ import 'package:midgard_outpost/core/ids.dart';
 import 'package:midgard_outpost/run/upgrade_offer_service.dart';
 import 'package:midgard_outpost/run/run_state.dart';
 import 'package:midgard_outpost/content/balance.dart';
+import 'package:midgard_outpost/run/run_upgrade_effects.dart';
 
 void main() {
   test('rollOffer returns 3 unique upgrades not already owned', () {
@@ -71,6 +72,33 @@ void main() {
     final rng = _FakeChanceRng(true);
     expect(UpgradeOfferService.shouldDropFromMonster(rng), isTrue);
   });
+
+  test('active drop boost raises monster upgrade drop chance', () {
+    const rollBetweenBaseAndBoostedChance = Balance.monsterUpgradeDropChance + 0.02;
+
+    expect(
+      UpgradeOfferService.shouldDropFromMonster(
+        _FixedDoubleRng(rollBetweenBaseAndBoostedChance),
+      ),
+      isFalse,
+    );
+    expect(
+      UpgradeOfferService.shouldDropFromMonster(
+        _FixedDoubleRng(rollBetweenBaseAndBoostedChance),
+        dropChanceMultiplier: Balance.iapDropBoostMultiplier,
+      ),
+      isTrue,
+    );
+  });
+
+  test('every catalog run upgrade has a runtime consumer', () {
+    final unwired = RunUpgradesCatalog.all
+        .where((upgrade) => !RunUpgradeEffects.wiredIds.contains(upgrade.id))
+        .map((upgrade) => upgrade.id)
+        .toList();
+
+    expect(unwired, isEmpty);
+  });
 }
 
 class _FakeChanceRng implements Random {
@@ -85,4 +113,18 @@ class _FakeChanceRng implements Random {
 
   @override
   bool nextBool() => value;
+}
+
+class _FixedDoubleRng implements Random {
+  _FixedDoubleRng(this.value);
+  final double value;
+
+  @override
+  double nextDouble() => value;
+
+  @override
+  int nextInt(int max) => 0;
+
+  @override
+  bool nextBool() => value < 0.5;
 }

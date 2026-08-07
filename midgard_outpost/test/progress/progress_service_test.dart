@@ -38,6 +38,39 @@ void main() {
     expect(hero.unspentSkillPoints, 1);
   });
 
+  test('active base/job xp boost multiplies applied run rewards', () {
+    final hero = HeroProgress.createNew(HeroClassId.mage).copyWith(
+      activeBoosts: {
+        'boost_base_job_xp': DateTime(2099).millisecondsSinceEpoch,
+      },
+    );
+
+    final updated = ProgressService.applyRunRewards(
+      hero,
+      const RunRewards(baseXp: 10, jobXp: 10, gold: 5),
+    );
+
+    expect(updated.baseXp, 15);
+    expect(updated.jobXp, 15);
+    expect(updated.gold, 5);
+  });
+
+  test('expired base/job xp boost does not affect applied run rewards', () {
+    final hero = HeroProgress.createNew(HeroClassId.mage).copyWith(
+      activeBoosts: {
+        'boost_base_job_xp': DateTime(2000).millisecondsSinceEpoch,
+      },
+    );
+
+    final updated = ProgressService.applyRunRewards(
+      hero,
+      const RunRewards(baseXp: 10, jobXp: 10, gold: 5),
+    );
+
+    expect(updated.baseXp, 10);
+    expect(updated.jobXp, 10);
+  });
+
   test('toJson roundtrips through fromJson', () {
     final original = HeroProgress.createNew(HeroClassId.paladin)
         .copyWith(
