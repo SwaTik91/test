@@ -53,22 +53,33 @@ class UpgradeOfferService {
   static bool shouldDropFromMonster(Random rng) =>
       rng.nextDouble() < Balance.monsterUpgradeDropChance;
 
-  static ({RunState state, bool offerReady}) addTempXp(
+  /// Boss kills always qualify; otherwise temp XP threshold or monster RNG drop.
+  static bool shouldTriggerOfferFromKill({
+    required bool isBoss,
+    required bool tempXpThresholdReached,
+    required Random rng,
+  }) {
+    if (isBoss) {
+      return true;
+    }
+    if (tempXpThresholdReached) {
+      return true;
+    }
+    return shouldDropFromMonster(rng);
+  }
+
+  static ({RunState state, bool thresholdReached}) addTempXp(
     RunState state,
     int amount,
   ) {
-    var tempXp = state.tempXp + amount;
-    var offerReady = false;
-
-    while (tempXp >= Balance.tempXpPerUpgrade) {
-      tempXp -= Balance.tempXpPerUpgrade;
-      offerReady = true;
-      break;
-    }
-
+    final tempXp = state.tempXp + amount;
     return (
       state: state.copyWith(tempXp: tempXp),
-      offerReady: offerReady,
+      thresholdReached: tempXp >= Balance.tempXpPerUpgrade,
     );
+  }
+
+  static RunState consumeTempXpThreshold(RunState state) {
+    return state.copyWith(tempXp: state.tempXp - Balance.tempXpPerUpgrade);
   }
 }

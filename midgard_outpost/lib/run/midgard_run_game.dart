@@ -60,6 +60,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   RunState _runState;
   List<RunUpgradeDef> _pendingUpgradeOffers = const [];
+  final List<_PendingOfferRequest> _queuedOfferRequests = [];
   bool _leftPressed = false;
   bool _rightPressed = false;
   bool _finished = false;
@@ -236,12 +237,17 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _spawnMilestonesIfNeeded() {
-    while (player.position.x + 920 > _nextChestX) {
-      _spawnChest(_nextChestX);
+    final aheadDistance = player.position.x + 920;
+    while (_nextChestX <= aheadDistance) {
+      if (SpawnSystem.shouldSpawnChest(_nextChestX.round())) {
+        _spawnChest(_nextChestX);
+      }
       _nextChestX += Balance.chestEveryDistancePx;
     }
-    while (player.position.x + 920 > _nextBossX) {
-      _spawnMonster(spawnX: _nextBossX, isBoss: true);
+    while (_nextBossX <= aheadDistance) {
+      if (SpawnSystem.shouldSpawnBoss(_nextBossX.round())) {
+        _spawnMonster(spawnX: _nextBossX, isBoss: true);
+      }
       _nextBossX += Balance.bossEveryDistancePx;
     }
   }
@@ -440,11 +446,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _handleChestContact() {
+    if (_isUpgradePickerActive) {
+      return;
+    }
+
     for (final chest in _chests.toList(growable: false)) {
       if (!chest.isCollected && chest.bounds.overlaps(player.bounds)) {
-        chest.collect();
-        _chests.remove(chest);
-        _openUpgradeOffer();
+        _requestUpgradeOffer(_PendingOfferRequest.chest(chest));
+        break;
       }
     }
   }
@@ -462,13 +471,20 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _runState,
       _tempXpFor(monster),
     );
-    _setRunState(xpResult.state);
-
-    final dropReady = monster.isBoss
-        ? _rng.nextDouble() < monster.upgradeDropChance
-        : UpgradeOfferService.shouldDropFromMonster(_rng);
-    if (dropReady || xpResult.offerReady) {
-      _openUpgradeOffer();
+    final shouldOffer = UpgradeOfferService.shouldTriggerOfferFromKill(
+      isBoss: monster.isBoss,
+      tempXpThresholdReached: xpResult.thresholdReached,
+      rng: _rng,
+    );
+    if (shouldOffer) {
+      _setRunState(xpResult.state);
+      _requestUpgradeOffer(
+        _PendingOfferRequest.kill(
+          consumeTempXpThreshold: xpResult.thresholdReached,
+        ),
+      );
+    } else {
+      _setRunState(xpResult.state);
     }
 
     _publishHud();
@@ -482,24 +498,57 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     return amount.round().clamp(1, Balance.tempXpPerUpgrade).toInt();
   }
 
-  void _openUpgradeOffer() {
-    if (_finished || _pendingUpgradeOffers.isNotEmpty) {
+  bool get _isUpgradePickerActive => _pendingUpgradeOffers.isNotEmpty;
+
+  void _requestUpgradeOffer(_PendingOfferRequest request) {
+    if (_finished) {
       return;
     }
+    if (_isUpgradePickerActive) {
+      _queuedOfferRequests.add(request);
+      return;
+    }
+    _tryPresentUpgradeOffer(request);
+  }
 
+  void _tryPresentUpgradeOffer(_PendingOfferRequest request) {
     final offers = UpgradeOfferService.rollOffer(
       classId: hero.classId,
       owned: ownedRunUpgradeIds,
       rng: _rng,
     );
     if (offers.isEmpty) {
+      _applyOfferRequestWithoutOffer(request);
       return;
     }
 
+    _applyOfferRequestWithOffer(request);
     _pendingUpgradeOffers = offers;
     pauseEngine();
     overlays.add(upgradePickerOverlayKey);
     _publishHud();
+  }
+
+  void _applyOfferRequestWithoutOffer(_PendingOfferRequest request) {
+    // Kill temp XP is already applied; chest stays uncollected on empty offers.
+  }
+
+  void _applyOfferRequestWithOffer(_PendingOfferRequest request) {
+    final chest = request.chest;
+    if (chest != null && !chest.isCollected) {
+      chest.collect();
+      _chests.remove(chest);
+    }
+
+    if (request.consumeTempXpThreshold) {
+      _setRunState(UpgradeOfferService.consumeTempXpThreshold(_runState));
+    }
+  }
+
+  void _drainQueuedOfferRequests() {
+    while (!_finished && !_isUpgradePickerActive && _queuedOfferRequests.isNotEmpty) {
+      _tryPresentUpgradeOffer(_queuedOfferRequests.removeAt(0));
+    }
   }
 
   void chooseUpgrade(String id) {
@@ -513,6 +562,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     overlays.remove(upgradePickerOverlayKey);
     if (!_finished) {
       resumeEngine();
+      _drainQueuedOfferRequests();
     }
     _publishHud();
   }
@@ -550,4 +600,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     pauseEngine();
     onDeath(rewards.toRewards());
   }
+}
+
+class _PendingOfferRequest {
+  const _PendingOfferRequest.chest(this.chest) : consumeTempXpThreshold = false;
+
+  const _PendingOfferRequest.kill({required this.consumeTempXpThreshold})
+    : chest = null;
+
+  final ChestComponent? chest;
+  final bool consumeTempXpThreshold;
 }

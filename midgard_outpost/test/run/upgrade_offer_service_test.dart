@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:midgard_outpost/content/run_upgrades.dart';
 import 'package:midgard_outpost/core/ids.dart';
 import 'package:midgard_outpost/run/upgrade_offer_service.dart';
 import 'package:midgard_outpost/run/run_state.dart';
@@ -18,16 +19,52 @@ void main() {
     expect(offer.any((e) => e.id == 'sharp_tips'), isFalse);
   });
 
-  test('temp xp reaches threshold and flags offer', () {
+  test('temp xp reaches threshold without consuming it', () {
     var state = RunState.initial();
-    var ready = false;
-    while (!ready) {
+    var thresholdReached = false;
+    while (!thresholdReached) {
       final result = UpgradeOfferService.addTempXp(state, 40);
       state = result.state;
-      ready = result.offerReady;
+      thresholdReached = result.thresholdReached;
     }
-    expect(state.tempXp, lessThan(Balance.tempXpPerUpgrade));
-    expect(ready, isTrue);
+    expect(state.tempXp, greaterThanOrEqualTo(Balance.tempXpPerUpgrade));
+    final consumed = UpgradeOfferService.consumeTempXpThreshold(state);
+    expect(consumed.tempXp, lessThan(Balance.tempXpPerUpgrade));
+    expect(thresholdReached, isTrue);
+  });
+
+  test('boss kills always trigger upgrade offer', () {
+    expect(
+      UpgradeOfferService.shouldTriggerOfferFromKill(
+        isBoss: true,
+        tempXpThresholdReached: false,
+        rng: Random(99),
+      ),
+      isTrue,
+    );
+  });
+
+  test('monster drop ignores rng when boss', () {
+    expect(
+      UpgradeOfferService.shouldTriggerOfferFromKill(
+        isBoss: true,
+        tempXpThresholdReached: false,
+        rng: _FakeChanceRng(false),
+      ),
+      isTrue,
+    );
+  });
+
+  test('empty offer pool returns no upgrades', () {
+    final allIds = RunUpgradesCatalog.forClass(HeroClassId.archer)
+        .map((upgrade) => upgrade.id)
+        .toSet();
+    final offer = UpgradeOfferService.rollOffer(
+      classId: HeroClassId.archer,
+      owned: allIds,
+      rng: Random(1),
+    );
+    expect(offer, isEmpty);
   });
 
   test('monster drop uses configured chance', () {

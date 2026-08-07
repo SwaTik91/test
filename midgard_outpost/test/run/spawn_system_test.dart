@@ -19,6 +19,23 @@ void main() {
       isFalse,
     );
     expect(SpawnSystem.shouldSpawnChest(Balance.chestEveryDistancePx), isTrue);
+    expect(
+      SpawnSystem.shouldSpawnChest(Balance.chestEveryDistancePx * 2),
+      isTrue,
+    );
+  });
+
+  test('milestone helpers align with balance intervals', () {
+    for (var i = 1; i <= 3; i += 1) {
+      final chestDistance = Balance.chestEveryDistancePx * i;
+      final bossDistance = Balance.bossEveryDistancePx * i;
+      expect(SpawnSystem.shouldSpawnChest(chestDistance), isTrue);
+      expect(SpawnSystem.shouldSpawnBoss(bossDistance), isTrue);
+      expect(
+        SpawnSystem.shouldSpawnChest(chestDistance + 1),
+        isFalse,
+      );
+    }
   });
 
   test('biome switches to forest', () {
