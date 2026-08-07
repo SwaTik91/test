@@ -69,6 +69,7 @@ flutter:
     - assets/images/world/
     - assets/images/hub/
     - assets/images/ui/
+    - assets/images/vfx/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
