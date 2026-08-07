@@ -72,7 +72,7 @@ class MonstersCatalog {
       jobXp: jobXp * 4,
       gold: gold * 5,
       tempXp: 100,
-      moveSpeed: 36 + wave,
+      moveSpeed: 36 + wave.toDouble(),
       width: 72,
       height: 76,
     );
