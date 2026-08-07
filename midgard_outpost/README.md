@@ -109,6 +109,41 @@ flutter run --dart-define=STORE_TARGET=fake
 - [ ] Облачный backend или RuStore-совместимый провайдер
 - [ ] Тестовые покупки, review build
 
+## Art Wave 1 (статичные спрайты)
+
+Wave 1 заменяет цветные прямоугольники на пиксель-арт PNG. Пути централизованы в `lib/art/art_atlas.dart`; Flame загружает спрайты через `ArtAtlas.loadSprite`, hub — через `Image.asset`.
+
+### Папки ассетов
+
+| Папка | Содержимое |
+|-------|------------|
+| `assets/images/heroes/` | `archer.png`, `mage.png`, `paladin.png` (64×64, idle, прозрачный фон) |
+| `assets/images/enemies/` | `mob_goblin.png` (64×64), `boss_ogre.png` (96×96) |
+| `assets/images/props/` | `chest.png` |
+| `assets/images/projectiles/` | `arrow.png`, `fireball.png`, `holy_bolt.png` |
+| `assets/images/world/` | `ground_tile.png`, `bg_fields.png`, `bg_forest.png` |
+| `assets/images/hub/` | `town_bg.png`, `icon_archer.png`, `icon_mage.png`, `icon_paladin.png` |
+| `assets/images/ui/` | `hp_bar_frame.png`, `btn_jump.png`, `btn_ult.png` |
+| `assets/images/_style/` | `style_bible.png` — референс, **не** грузится в игру |
+
+### Как генерировали
+
+1. **GenerateImage** — 16-bit RO-light пиксель-арт по промптам из art spec (герои, мобы, мир, hub, UI).
+2. **PIL post-process** — RGBA, flood-fill удаления белого/серого фона (где нужен alpha), tight crop, `Image.NEAREST` resize до целевого размера.
+3. **Проверка** — `flutter test test/art/` (пути `ArtAtlas` + `rootBundle` load всех `ArtAtlas.allPaths`).
+
+Стиль: светлая RO-like фантазия, персонажи смотрят вправо, **без анимаций** в Wave 1. Масштабирование в рантайме — nearest-neighbor (Flame `Paint` / `FilterQuality.none`).
+
+### Как перегенерировать
+
+1. Сгенерировать новый PNG (тот же стиль/размер/ориентация).
+2. Положить файл по пути из `ArtAtlas` (имя файла не менять без правки `art_atlas.dart`).
+3. Прогнать PIL-пайплайн (crop → NEAREST resize → alpha key при необходимости).
+4. `flutter test test/art/` — убедиться, что все пути грузятся.
+5. Визуально: `flutter run -d linux` (hub + забег) или смотреть превью в `/opt/cursor/artifacts/art-wave1-collage.png`.
+
+План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave1.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave1.md).
+
 ## Связанные документы
 
 - [Дизайн-спека MVP](../docs/superpowers/specs/2026-08-07-midgard-outpost-design.md)
