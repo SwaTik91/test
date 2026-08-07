@@ -9,6 +9,18 @@ void main() {
     expect(ArtAtlas.heroPath(HeroClassId.paladin), 'heroes/paladin.png');
   });
 
+  test('Flame sprite paths omit assets/images prefix (Flame adds it)', () {
+    expect(ArtAtlas.flameAsset(ArtAtlas.groundTile), 'world/ground_tile.png');
+    expect(
+      ArtAtlas.flutterAsset(ArtAtlas.groundTile),
+      'assets/images/world/ground_tile.png',
+    );
+    expect(
+      ArtAtlas.flameAsset(ArtAtlas.groundTile),
+      isNot(contains('assets/images/assets/images/')),
+    );
+  });
+
   test('world and enemy paths are registered', () {
     expect(ArtAtlas.groundTile, 'world/ground_tile.png');
     expect(ArtAtlas.bgFields, 'world/bg_fields.png');
