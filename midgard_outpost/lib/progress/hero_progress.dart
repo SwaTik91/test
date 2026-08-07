@@ -30,6 +30,15 @@ class HeroProgress {
   final int crystals;
   final Map<String, int> activeBoosts;
 
+  bool hasActiveBoost(String id, {DateTime? now}) {
+    final expiresAtMs = activeBoosts[id];
+    if (expiresAtMs == null) {
+      return false;
+    }
+    final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    return expiresAtMs > nowMs;
+  }
+
   factory HeroProgress.createNew(HeroClassId classId) {
     return HeroProgress(
       classId: classId,
@@ -77,19 +86,19 @@ class HeroProgress {
   }
 
   Map<String, dynamic> toJson() => {
-        'classId': classId.name,
-        'baseLevel': baseLevel,
-        'jobLevel': jobLevel,
-        'baseXp': baseXp,
-        'jobXp': jobXp,
-        'unspentStatPoints': unspentStatPoints,
-        'unspentSkillPoints': unspentSkillPoints,
-        'stats': Stats.statsToJson(stats),
-        'skillRanks': skillRanks,
-        'gold': gold,
-        'crystals': crystals,
-        'activeBoosts': activeBoosts,
-      };
+    'classId': classId.name,
+    'baseLevel': baseLevel,
+    'jobLevel': jobLevel,
+    'baseXp': baseXp,
+    'jobXp': jobXp,
+    'unspentStatPoints': unspentStatPoints,
+    'unspentSkillPoints': unspentSkillPoints,
+    'stats': Stats.statsToJson(stats),
+    'skillRanks': skillRanks,
+    'gold': gold,
+    'crystals': crystals,
+    'activeBoosts': activeBoosts,
+  };
 
   factory HeroProgress.fromJson(Map<String, dynamic> json) {
     final skillRanksRaw = json['skillRanks'] as Map<String, dynamic>? ?? {};

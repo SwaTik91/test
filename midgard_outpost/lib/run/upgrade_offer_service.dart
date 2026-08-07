@@ -21,9 +21,9 @@ class UpgradeOfferService {
     required Set<String> owned,
     required Random rng,
   }) {
-    final available = RunUpgradesCatalog.forClass(classId)
-        .where((u) => !owned.contains(u.id))
-        .toList();
+    final available = RunUpgradesCatalog.forClass(
+      classId,
+    ).where((u) => !owned.contains(u.id)).toList();
 
     final count = Balance.upgradeOfferCount;
     if (available.length <= count) return available;
@@ -50,14 +50,24 @@ class UpgradeOfferService {
     return pool.last;
   }
 
-  static bool shouldDropFromMonster(Random rng) =>
-      rng.nextDouble() < Balance.monsterUpgradeDropChance;
+  static bool shouldDropFromMonster(
+    Random rng, {
+    double monsterDropChance = Balance.monsterUpgradeDropChance,
+    double dropChanceMultiplier = 1.0,
+  }) {
+    final chance = (monsterDropChance * dropChanceMultiplier)
+        .clamp(0, 1)
+        .toDouble();
+    return rng.nextDouble() < chance;
+  }
 
   /// Boss kills always qualify; otherwise temp XP threshold or monster RNG drop.
   static bool shouldTriggerOfferFromKill({
     required bool isBoss,
     required bool tempXpThresholdReached,
     required Random rng,
+    double monsterDropChance = Balance.monsterUpgradeDropChance,
+    double dropChanceMultiplier = 1.0,
   }) {
     if (isBoss) {
       return true;
@@ -65,7 +75,11 @@ class UpgradeOfferService {
     if (tempXpThresholdReached) {
       return true;
     }
-    return shouldDropFromMonster(rng);
+    return shouldDropFromMonster(
+      rng,
+      monsterDropChance: monsterDropChance,
+      dropChanceMultiplier: dropChanceMultiplier,
+    );
   }
 
   static ({RunState state, bool thresholdReached}) addTempXp(

@@ -1,6 +1,6 @@
-import '../../content/run_upgrades.dart';
 import '../../content/skills.dart';
 import '../../core/ids.dart';
+import '../run_upgrade_effects.dart';
 
 enum SkillCastKind { auto, ultimate }
 
@@ -37,7 +37,7 @@ class AutoSkillSystem {
   final HeroClassId classId;
   final Map<String, int> ranks;
   final Set<String> upgrades;
-  final int maxSp;
+  int maxSp;
 
   int sp;
   final Map<String, double> _cooldowns = {};
@@ -45,6 +45,11 @@ class AutoSkillSystem {
   double _spRegenAccumulator = 0;
 
   double get ultimateCooldownRemaining => _ultimateCooldownRemaining;
+
+  void setMaxSp(int value) {
+    maxSp = value;
+    sp = sp.clamp(0, maxSp).toInt();
+  }
 
   List<SkillCastEvent> tick(
     double dt, {
@@ -153,7 +158,10 @@ class AutoSkillSystem {
   ) {
     final tuning = _tuningFor(skill.id, kind);
     final rank = _rank(skill.id);
-    final targetCount = tuning.targetCount.clamp(1, enemiesInRange).toInt();
+    final upgradedTargetCount =
+        tuning.targetCount +
+        RunUpgradeEffects.targetCountBonus(skill.id, upgrades);
+    final targetCount = upgradedTargetCount.clamp(1, enemiesInRange).toInt();
     final damage = (tuning.baseDamage + (rank * tuning.rankDamage)).toDouble();
 
     return SkillCastEvent(
@@ -161,7 +169,8 @@ class AutoSkillSystem {
       kind: kind,
       damage: (damage * _damageMultiplierFor(skill.id)).round(),
       spCost: _spCostFor(skill.id, tuning.spCost),
-      range: tuning.range,
+      range:
+          tuning.range * RunUpgradeEffects.rangeMultiplier(skill.id, upgrades),
       targetCount: targetCount,
       projectile: tuning.projectile,
     );
@@ -190,7 +199,9 @@ class AutoSkillSystem {
       return;
     }
 
-    final regen = 2 + (_rank('meditation') * 0.8);
+    final regen =
+        (2 + (_rank('meditation') * 0.8)) *
+        RunUpgradeEffects.spRegenMultiplier(upgrades);
     _spRegenAccumulator += regen * dt;
     final wholeSp = _spRegenAccumulator.floor();
     if (wholeSp <= 0) {
@@ -214,56 +225,36 @@ class AutoSkillSystem {
       return enemiesInRange;
     }
 
-    final range = _tuningFor(skill.id, kind).range;
+    final range =
+        _tuningFor(skill.id, kind).range *
+        RunUpgradeEffects.rangeMultiplier(skill.id, upgrades);
     return enemyDistances.where((distance) => distance <= range).length;
   }
 
   int _rank(String skillId) => ranks[skillId] ?? 0;
 
   int _spCostFor(String skillId, int baseCost) {
-    var cost = baseCost.toDouble();
-    if (upgrades.contains('meditation__mana_economy')) {
-      cost *= 0.85;
-    }
-    if (upgrades.contains('lightning__overload') && skillId == 'lightning') {
-      cost *= 1.2;
-    }
+    var cost =
+        baseCost.toDouble() *
+        RunUpgradeEffects.spCostMultiplier(skillId, upgrades);
     return cost.round().clamp(0, maxSp).toInt();
   }
 
   double _cooldownFor(String skillId, SkillCastKind kind) {
-    var cooldown = _tuningFor(skillId, kind).cooldown;
-    if (kind == SkillCastKind.ultimate && upgrades.contains('ult_charge')) {
-      cooldown *= 0.85;
-    }
-    for (final upgrade in RunUpgradesCatalog.forSkill(skillId)) {
-      if (upgrades.contains(upgrade.id) &&
-          _cooldownUpgradeIds.contains(upgrade.id)) {
-        cooldown *= 0.8;
-      }
-    }
-    return cooldown;
+    return _tuningFor(skillId, kind).cooldown *
+        RunUpgradeEffects.cooldownMultiplier(
+          skillId: skillId,
+          isUltimate: kind == SkillCastKind.ultimate,
+          upgrades: upgrades,
+        );
   }
 
-  double _damageMultiplierFor(String skillId) {
-    var multiplier = 1.0;
-    if (upgrades.contains('sharp_tips') && classId != HeroClassId.mage) {
-      multiplier *= 1.12;
-    }
-    if (upgrades.contains('hot_magic') && classId == HeroClassId.mage) {
-      multiplier *= 1.12;
-    }
-    if (upgrades.contains('lightning__overload') && skillId == 'lightning') {
-      multiplier *= 1.25;
-    }
-    for (final upgrade in RunUpgradesCatalog.forSkill(skillId)) {
-      if (upgrades.contains(upgrade.id) &&
-          _damageUpgradeIds.contains(upgrade.id)) {
-        multiplier *= 1.25;
-      }
-    }
-    return multiplier;
-  }
+  double _damageMultiplierFor(String skillId) =>
+      RunUpgradeEffects.skillDamageMultiplier(
+        classId: classId,
+        skillId: skillId,
+        upgrades: upgrades,
+      );
 
   _SkillTuning _tuningFor(String skillId, SkillCastKind kind) {
     if (kind == SkillCastKind.ultimate) {
@@ -388,26 +379,6 @@ class AutoSkillSystem {
       ),
     };
   }
-
-  static const Set<String> _damageUpgradeIds = {
-    'double_strafe__heavy_tips',
-    'wind_arrow__cutting_wind',
-    'trap__spiked_trap',
-    'fire_bolt__white_heat',
-    'frost__ice_shards',
-    'shield_bash__ram',
-    'holy_strike__smite',
-    'arrow_shower__armor_piercing_hail',
-    'meteor__melting_strike',
-  };
-
-  static const Set<String> _cooldownUpgradeIds = {
-    'double_strafe__rapid_fire',
-    'shield_bash__shield_series',
-    'arrow_shower__quick_quiver',
-    'meteor__quick_ritual',
-    'heaven_wrath__swift_wrath',
-  };
 }
 
 class _SkillTuning {

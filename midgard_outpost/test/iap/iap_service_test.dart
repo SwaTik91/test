@@ -62,9 +62,9 @@ void main() {
   });
 
   test('activeBoosts roundtrips through hero JSON', () {
-    final hero = HeroProgress.createNew(HeroClassId.archer).copyWith(
-      activeBoosts: const {'boost_run_start': 1_700_000_000_000},
-    );
+    final hero = HeroProgress.createNew(
+      HeroClassId.archer,
+    ).copyWith(activeBoosts: const {'boost_run_start': 1_700_000_000_000});
     final restored = HeroProgress.fromJson(hero.toJson());
     expect(restored.activeBoosts, hero.activeBoosts);
   });

@@ -18,9 +18,9 @@ class PlayerComponent extends RectangleComponent {
   static const double _gravity = 1200;
   static const double _jumpVelocity = -520;
 
-  final int maxHp;
-  final int maxSp;
-  final double moveSpeed;
+  int maxHp;
+  int maxSp;
+  double moveSpeed;
   final double groundY;
 
   int currentHp;
@@ -40,10 +40,12 @@ class PlayerComponent extends RectangleComponent {
     _horizontal = axis.clamp(-1, 1).toDouble();
   }
 
-  void jump() {
+  bool jump() {
     if (isGrounded) {
       _verticalVelocity = _jumpVelocity;
+      return true;
     }
+    return false;
   }
 
   void takeDamage(int amount) {
@@ -55,8 +57,37 @@ class PlayerComponent extends RectangleComponent {
     paint.color = Colors.redAccent;
   }
 
+  void heal(int amount) {
+    if (amount <= 0 || isDead) {
+      return;
+    }
+    currentHp = (currentHp + amount).clamp(0, maxHp).toInt();
+  }
+
   void setSp(int amount) {
     currentSp = amount.clamp(0, maxSp).toInt();
+  }
+
+  void setMaxHp(int value) {
+    final previousMaxHp = maxHp;
+    maxHp = value;
+    if (maxHp > previousMaxHp) {
+      currentHp += maxHp - previousMaxHp;
+    }
+    currentHp = currentHp.clamp(0, maxHp).toInt();
+  }
+
+  void setMaxSp(int value) {
+    final previousMaxSp = maxSp;
+    maxSp = value;
+    if (maxSp > previousMaxSp) {
+      currentSp += maxSp - previousMaxSp;
+    }
+    currentSp = currentSp.clamp(0, maxSp).toInt();
+  }
+
+  void setMoveSpeed(double value) {
+    moveSpeed = value;
   }
 
   @override

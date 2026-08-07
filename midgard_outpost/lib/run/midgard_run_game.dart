@@ -20,6 +20,7 @@ import 'components/player_component.dart';
 import 'components/projectile_component.dart';
 import 'run_rewards.dart';
 import 'run_state.dart';
+import 'run_upgrade_effects.dart';
 import 'upgrade_offer_service.dart';
 import 'systems/auto_skill_system.dart';
 import 'systems/spawn_system.dart' hide Biome;
@@ -70,6 +71,9 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double _nextSpawnX = 520;
   double _nextChestX = Balance.chestEveryDistancePx.toDouble();
   double _nextBossX = Balance.bossEveryDistancePx.toDouble();
+  double _regenAccumulator = 0;
+  double _jumpShieldTimer = 0;
+  bool _secondWindConsumed = false;
 
   double get distance => player.position.x;
 
@@ -100,9 +104,12 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     autoSkillName = _autoSkillNameForHero();
 
     player = PlayerComponent(
-      maxHp: CombatMath.maxHp(hero),
-      maxSp: CombatMath.maxSp(hero),
-      moveSpeed: CombatMath.moveSpeed(hero),
+      maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      moveSpeed: CombatMath.moveSpeed(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+      ),
       groundY: _groundY,
     );
     autoSkillSystem = AutoSkillSystem(
@@ -137,6 +144,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _handleAutoAttack();
     _handleChestContact();
     _handleMonsterContact();
+    _tickPlayerUpgradeTimers(dt);
+    _applyPlayerRegen(dt);
     _publishHudIfNeeded();
   }
 
@@ -156,7 +165,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (keysPressed.contains(LogicalKeyboardKey.space) ||
         keysPressed.contains(LogicalKeyboardKey.keyW) ||
         keysPressed.contains(LogicalKeyboardKey.arrowUp)) {
-      player.jump();
+      _jumpPlayer();
     }
 
     return KeyEventResult.handled;
@@ -173,7 +182,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void jump() {
-    player.jump();
+    _jumpPlayer();
+  }
+
+  void _jumpPlayer() {
+    if (!player.jump()) {
+      return;
+    }
+    final shieldSeconds = RunUpgradeEffects.jumpShieldSeconds(
+      ownedRunUpgradeIds,
+    );
+    if (shieldSeconds > 0) {
+      _jumpShieldTimer = shieldSeconds;
+    }
   }
 
   void tryCastUltimate() {
@@ -242,7 +263,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       if (SpawnSystem.shouldSpawnChest(_nextChestX.round())) {
         _spawnChest(_nextChestX);
       }
-      _nextChestX += Balance.chestEveryDistancePx;
+      _nextChestX += _chestDistanceIntervalPx;
     }
     while (_nextBossX <= aheadDistance) {
       if (SpawnSystem.shouldSpawnBoss(_nextBossX.round())) {
@@ -269,15 +290,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final monster = MonsterComponent(
       target: player,
       position: Vector2(x, _groundY - spec.height),
-      maxHp: spec.maxHp,
-      touchDamage: spec.touchDamage,
+      maxHp: _monsterMaxHp(spec),
+      touchDamage: _monsterTouchDamage(spec),
       baseXp: spec.baseXp,
       jobXp: spec.jobXp,
       gold: spec.gold,
       tempXp: spec.tempXp,
-      upgradeDropChance: spec.isBoss
-          ? Balance.bossUpgradeDropChance
-          : Balance.monsterUpgradeDropChance,
+      upgradeDropChance: _upgradeDropChanceFor(spec),
       isBoss: spec.isBoss,
       moveSpeed: spec.moveSpeed,
       size: Vector2(spec.width, spec.height),
@@ -288,6 +307,42 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
     _monsters.add(monster);
     world.add(monster);
+  }
+
+  double get _chestDistanceIntervalPx =>
+      Balance.chestEveryDistancePx *
+      RunUpgradeEffects.chestDistanceMultiplier(ownedRunUpgradeIds);
+
+  int _monsterMaxHp(MonsterSpec spec) {
+    var maxHp = spec.maxHp.toDouble();
+    if (spec.isBoss) {
+      maxHp *= RunUpgradeEffects.bossMaxHpMultiplier(ownedRunUpgradeIds);
+    }
+    return maxHp.round().clamp(1, double.infinity).toInt();
+  }
+
+  int _monsterTouchDamage(MonsterSpec spec) {
+    var touchDamage = spec.touchDamage.toDouble();
+    if (spec.isBoss) {
+      touchDamage *= RunUpgradeEffects.bossTouchDamageMultiplier(
+        ownedRunUpgradeIds,
+      );
+    }
+    return touchDamage.round().clamp(1, double.infinity).toInt();
+  }
+
+  double _upgradeDropChanceFor(MonsterSpec spec) {
+    if (spec.isBoss) {
+      return Balance.bossUpgradeDropChance;
+    }
+    final boostMultiplier = hero.hasActiveBoost('boost_drop')
+        ? Balance.iapDropBoostMultiplier
+        : 1.0;
+    return (Balance.monsterUpgradeDropChance *
+            boostMultiplier *
+            RunUpgradeEffects.monsterDropChanceMultiplier(ownedRunUpgradeIds))
+        .clamp(0, 1)
+        .toDouble();
   }
 
   Color _monsterColor(MonsterSpec spec) {
@@ -311,7 +366,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       return;
     }
 
-    target.takeDamage(
+    _damageMonster(
+      target,
       CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
     );
     if (!target.isAlive) {
@@ -345,10 +401,27 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     ).take(event.targetCount).toList(growable: false);
     for (final target in targets) {
       _spawnSkillVisual(event, target);
-      target.takeDamage(event.damage);
+      _damageMonster(target, event.damage, skillId: event.skillId);
       if (!target.isAlive) {
         _collectKill(target);
       }
+    }
+  }
+
+  void _damageMonster(MonsterComponent target, int amount, {String? skillId}) {
+    final before = target.currentHp;
+    target.takeDamage(amount);
+    final damageDealt = before - target.currentHp;
+    if (damageDealt <= 0) {
+      return;
+    }
+
+    final healFraction = RunUpgradeEffects.lifestealFraction(
+      skillId,
+      ownedRunUpgradeIds,
+    );
+    if (healFraction > 0) {
+      player.heal((damageDealt * healFraction).round());
     }
   }
 
@@ -436,12 +509,63 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
 
     _collisionTimer = 0;
-    player.takeDamage(
-      touching.fold<int>(0, (sum, monster) => sum + monster.touchDamage),
+    final touchingMonsters = touching.toList(growable: false);
+    final rawDamage = touchingMonsters.fold<int>(
+      0,
+      (sum, monster) => sum + monster.touchDamage,
     );
+    final effectiveDamage = _incomingDamage(rawDamage);
+    _applyThorns(touchingMonsters, effectiveDamage);
+    _damagePlayer(effectiveDamage);
     _publishHud();
     if (player.isDead) {
       _finishRun();
+    }
+  }
+
+  int _incomingDamage(int rawDamage) {
+    if (_jumpShieldTimer > 0) {
+      return 0;
+    }
+    return (rawDamage *
+            RunUpgradeEffects.incomingDamageMultiplier(ownedRunUpgradeIds))
+        .round()
+        .clamp(0, double.infinity)
+        .toInt();
+  }
+
+  void _damagePlayer(int amount) {
+    if (amount <= 0) {
+      return;
+    }
+    if (!_secondWindConsumed &&
+        RunUpgradeEffects.hasSecondWind(ownedRunUpgradeIds) &&
+        amount >= player.currentHp) {
+      _secondWindConsumed = true;
+      player.currentHp = 1;
+      return;
+    }
+    player.takeDamage(amount);
+  }
+
+  void _applyThorns(List<MonsterComponent> touchingMonsters, int damageTaken) {
+    final thornsFraction = RunUpgradeEffects.thornsFraction(ownedRunUpgradeIds);
+    if (thornsFraction <= 0 || damageTaken <= 0) {
+      return;
+    }
+
+    final reflectedDamage = (damageTaken * thornsFraction).round().clamp(
+      1,
+      9999,
+    );
+    for (final monster in touchingMonsters) {
+      if (!monster.isAlive) {
+        continue;
+      }
+      monster.takeDamage(reflectedDamage.toInt());
+      if (!monster.isAlive) {
+        _collectKill(monster);
+      }
     }
   }
 
@@ -462,7 +586,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     rewards.addKill(
       baseXp: monster.baseXp,
       jobXp: monster.jobXp,
-      gold: monster.gold,
+      gold: _goldFor(monster),
     );
     monster.removeFromParent();
     _monsters.remove(monster);
@@ -475,6 +599,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       isBoss: monster.isBoss,
       tempXpThresholdReached: xpResult.thresholdReached,
       rng: _rng,
+      monsterDropChance: monster.upgradeDropChance,
     );
     if (shouldOffer) {
       _setRunState(xpResult.state);
@@ -491,11 +616,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   int _tempXpFor(MonsterComponent monster) {
-    var amount = monster.tempXp.toDouble();
-    if (ownedRunUpgradeIds.contains('temp_xp_boost')) {
-      amount *= 1.25;
-    }
+    var amount =
+        monster.tempXp.toDouble() *
+        RunUpgradeEffects.tempXpMultiplier(ownedRunUpgradeIds);
     return amount.round().clamp(1, Balance.tempXpPerUpgrade).toInt();
+  }
+
+  int _goldFor(MonsterComponent monster) {
+    return (monster.gold *
+            RunUpgradeEffects.goldMultiplier(
+              ownedRunUpgradeIds,
+              isBoss: monster.isBoss,
+            ))
+        .round();
   }
 
   bool get _isUpgradePickerActive => _pendingUpgradeOffers.isNotEmpty;
@@ -546,7 +679,9 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _drainQueuedOfferRequests() {
-    while (!_finished && !_isUpgradePickerActive && _queuedOfferRequests.isNotEmpty) {
+    while (!_finished &&
+        !_isUpgradePickerActive &&
+        _queuedOfferRequests.isNotEmpty) {
       _tryPresentUpgradeOffer(_queuedOfferRequests.removeAt(0));
     }
   }
@@ -557,6 +692,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
 
     ownedRunUpgradeIds.add(id);
+    _syncPlayerUpgradeStats();
     _setRunState(_runState.copyWith(ownedUpgradeIds: {...ownedRunUpgradeIds}));
     _pendingUpgradeOffers = const [];
     overlays.remove(upgradePickerOverlayKey);
@@ -565,6 +701,43 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _drainQueuedOfferRequests();
     }
     _publishHud();
+  }
+
+  void _syncPlayerUpgradeStats() {
+    player.setMaxHp(
+      CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    );
+    player.setMaxSp(
+      CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    );
+    player.setMoveSpeed(
+      CombatMath.moveSpeed(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    );
+    autoSkillSystem.setMaxSp(player.maxSp);
+  }
+
+  void _tickPlayerUpgradeTimers(double dt) {
+    if (_jumpShieldTimer > 0) {
+      _jumpShieldTimer = (_jumpShieldTimer - dt)
+          .clamp(0, double.infinity)
+          .toDouble();
+    }
+  }
+
+  void _applyPlayerRegen(double dt) {
+    final hpPerSecond = RunUpgradeEffects.hpRegenPerSecond(ownedRunUpgradeIds);
+    if (hpPerSecond <= 0 || player.currentHp >= player.maxHp) {
+      _regenAccumulator = 0;
+      return;
+    }
+
+    _regenAccumulator += hpPerSecond * dt;
+    final healing = _regenAccumulator.floor();
+    if (healing <= 0) {
+      return;
+    }
+    player.heal(healing);
+    _regenAccumulator -= healing;
   }
 
   void _publishHudIfNeeded() {

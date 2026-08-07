@@ -8,4 +8,8 @@ class Balance {
   static const int tempXpPerUpgrade = 100;
   static const int chestEveryDistancePx = 1200;
   static const int bossEveryDistancePx = 4000;
+  static const double iapBaseJobXpBoostMultiplier = 1.5;
+  static const double iapDropBoostMultiplier = 1.5;
+  static const double iapRunStartResourceMultiplier = 1.2;
+  static const int totemStatBonus = 2;
 }

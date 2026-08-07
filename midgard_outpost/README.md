@@ -89,9 +89,9 @@ flutter run --dart-define=STORE_TARGET=fake
 |------------|-----|
 | `crystals_100` | Кристаллы ×100 |
 | `crystals_550` | Кристаллы ×550 |
-| `boost_base_xp_24h` | Буст Base XP 24ч |
-| `boost_job_xp_24h` | Буст Job XP 24ч |
-| `boost_drop_24h` | Буст дропа сундуков 24ч |
+| `boost_base_job_xp` | Буст Base/Job XP 24ч |
+| `boost_drop` | Буст дропа 24ч |
+| `boost_run_start` | Буст старта забега 24ч |
 
 Каталог: `lib/iap/iap_catalog.dart`.
 

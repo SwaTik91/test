@@ -57,9 +57,9 @@ void main() {
   });
 
   test('empty offer pool returns no upgrades', () {
-    final allIds = RunUpgradesCatalog.forClass(HeroClassId.archer)
-        .map((upgrade) => upgrade.id)
-        .toSet();
+    final allIds = RunUpgradesCatalog.forClass(
+      HeroClassId.archer,
+    ).map((upgrade) => upgrade.id).toSet();
     final offer = UpgradeOfferService.rollOffer(
       classId: HeroClassId.archer,
       owned: allIds,
@@ -74,7 +74,8 @@ void main() {
   });
 
   test('active drop boost raises monster upgrade drop chance', () {
-    const rollBetweenBaseAndBoostedChance = Balance.monsterUpgradeDropChance + 0.02;
+    const rollBetweenBaseAndBoostedChance =
+        Balance.monsterUpgradeDropChance + 0.02;
 
     expect(
       UpgradeOfferService.shouldDropFromMonster(

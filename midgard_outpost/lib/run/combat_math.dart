@@ -1,51 +1,87 @@
 import '../core/ids.dart';
 import '../progress/hero_progress.dart';
+import 'run_upgrade_effects.dart';
 
 class CombatMath {
   CombatMath._();
 
-  static int maxHp(HeroProgress hero) => 100 + (_stat(hero, StatId.vit) * 12);
+  static int maxHp(
+    HeroProgress hero, {
+    Set<String> ownedUpgradeIds = const {},
+  }) {
+    final base = 100 + (_stat(hero, StatId.vit, ownedUpgradeIds) * 12);
+    return (base *
+            RunUpgradeEffects.maxHpMultiplier(
+              ownedUpgradeIds,
+              runStartBoostActive: hero.hasActiveBoost('boost_run_start'),
+            ))
+        .round();
+  }
 
-  static int maxSp(HeroProgress hero) => 50 + (_stat(hero, StatId.intStat) * 8);
+  static int maxSp(
+    HeroProgress hero, {
+    Set<String> ownedUpgradeIds = const {},
+  }) {
+    final base = 50 + (_stat(hero, StatId.intStat, ownedUpgradeIds) * 8);
+    return (base *
+            RunUpgradeEffects.maxSpMultiplier(
+              runStartBoostActive: hero.hasActiveBoost('boost_run_start'),
+            ))
+        .round();
+  }
 
-  static double moveSpeed(HeroProgress hero) =>
-      190 + (_stat(hero, StatId.agi) * 18);
+  static double moveSpeed(
+    HeroProgress hero, {
+    Set<String> ownedUpgradeIds = const {},
+  }) =>
+      (190 + (_stat(hero, StatId.agi, ownedUpgradeIds) * 18)) *
+      RunUpgradeEffects.moveSpeedMultiplier(ownedUpgradeIds);
 
   static int basicAttackDamage(
     HeroProgress hero, {
     Set<String> ownedUpgradeIds = const {},
   }) {
-    final baseDamage = _baseAttackDamage(hero);
+    final baseDamage = _baseAttackDamage(
+      hero,
+      ownedUpgradeIds: ownedUpgradeIds,
+    );
     final expectedCritBonus =
         1 + (critChance(hero, ownedUpgradeIds: ownedUpgradeIds) * 0.5);
-    return (baseDamage * expectedCritBonus).round();
+    return (baseDamage *
+            expectedCritBonus *
+            RunUpgradeEffects.basicAttackDamageMultiplier(
+              hero.classId,
+              ownedUpgradeIds,
+            ))
+        .round();
   }
 
   static double critChance(
     HeroProgress hero, {
     Set<String> ownedUpgradeIds = const {},
   }) {
-    var chance = 0.05 + (_stat(hero, StatId.luk) * 0.008);
+    var chance = 0.05 + (_stat(hero, StatId.luk, ownedUpgradeIds) * 0.008);
     chance += (hero.skillRanks['eagle_eye'] ?? 0) * 0.025;
     chance += (hero.skillRanks['meditation'] ?? 0) * 0.015;
-    if (ownedUpgradeIds.contains('crit_luck')) {
-      chance += 0.08;
-    }
-    if (ownedUpgradeIds.contains('eagle_eye__hawk_focus')) {
-      chance += 0.06;
-    }
-    if (ownedUpgradeIds.contains('meditation__clarity')) {
-      chance += 0.05;
-    }
+    chance += RunUpgradeEffects.critChanceBonus(ownedUpgradeIds);
     return chance.clamp(0, 0.6).toDouble();
   }
 
-  static int _baseAttackDamage(HeroProgress hero) {
+  static int _baseAttackDamage(
+    HeroProgress hero, {
+    Set<String> ownedUpgradeIds = const {},
+  }) {
     if (hero.classId == HeroClassId.mage) {
-      return 5 + (_stat(hero, StatId.intStat) * 3);
+      return 5 + (_stat(hero, StatId.intStat, ownedUpgradeIds) * 3);
     }
-    return 5 + (_stat(hero, StatId.str) * 2) + _stat(hero, StatId.dex);
+    return 5 +
+        (_stat(hero, StatId.str, ownedUpgradeIds) * 2) +
+        _stat(hero, StatId.dex, ownedUpgradeIds);
   }
 
-  static int _stat(HeroProgress hero, StatId stat) => hero.stats[stat] ?? 1;
+  static int _stat(
+    HeroProgress hero,
+    StatId stat,
+    Set<String> ownedUpgradeIds,
+  ) => (hero.stats[stat] ?? 1) + RunUpgradeEffects.statBonus(ownedUpgradeIds);
 }

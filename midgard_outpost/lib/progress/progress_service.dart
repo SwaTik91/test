@@ -11,11 +11,18 @@ class ProgressService {
 
   static int xpToNextJob(int level) => 15 + (level * 12);
 
-  static HeroProgress applyRunRewards(HeroProgress hero, RunRewards rewards) {
+  static HeroProgress applyRunRewards(
+    HeroProgress hero,
+    RunRewards rewards, {
+    DateTime? now,
+  }) {
+    final xpMultiplier = hero.hasActiveBoost('boost_base_job_xp', now: now)
+        ? Balance.iapBaseJobXpBoostMultiplier
+        : 1.0;
     var updated = hero.copyWith(
       gold: hero.gold + rewards.gold,
-      baseXp: hero.baseXp + rewards.baseXp,
-      jobXp: hero.jobXp + rewards.jobXp,
+      baseXp: hero.baseXp + (rewards.baseXp * xpMultiplier).round(),
+      jobXp: hero.jobXp + (rewards.jobXp * xpMultiplier).round(),
     );
 
     var unspentStatPoints = updated.unspentStatPoints;

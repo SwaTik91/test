@@ -26,5 +26,10 @@ class StoreIapService implements IapService {
   Future<List<IapProduct>> listProducts() async => IapCatalog.products;
 
   @override
-  Future<bool> purchase(String productId) => _billing.buy(productId);
+  Future<bool> purchase(String productId) {
+    if (IapCatalog.find(productId) == null) {
+      return Future.value(false);
+    }
+    return _billing.buy(productId);
+  }
 }
