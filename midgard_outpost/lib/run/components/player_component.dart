@@ -1,4 +1,5 @@
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../art/art_atlas.dart';
@@ -39,6 +40,28 @@ class PlayerComponent extends SpriteComponent {
     );
   }
 
+  @visibleForTesting
+  PlayerComponent.forTest({
+    required this.groundY,
+    required Sprite sprite,
+    Vector2? position,
+    int maxHp = 100,
+    int maxSp = 50,
+    double moveSpeed = 200,
+  }) : maxHp = maxHp,
+       maxSp = maxSp,
+       moveSpeed = moveSpeed,
+       currentHp = maxHp,
+       currentSp = maxSp,
+       super(
+         sprite: sprite,
+         position: position ?? Vector2(120, groundY),
+         size: Vector2(48, 64),
+         anchor: Anchor.bottomCenter,
+       ) {
+    paint.color = Colors.white;
+  }
+
   static const double _gravity = 1200;
   static const double _jumpVelocity = -520;
 
@@ -56,7 +79,7 @@ class PlayerComponent extends SpriteComponent {
 
   bool get isDead => currentHp <= 0;
 
-  bool get isGrounded => position.y >= groundY - size.y - 0.5;
+  bool get isGrounded => position.y >= groundY - 0.5;
 
   Rect get bounds => Rect.fromLTWH(
     position.x - size.x * anchor.x,
