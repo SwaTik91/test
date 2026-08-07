@@ -21,7 +21,9 @@ HERO_TARGET = 280
 SCREEN_W = 1920
 SCREEN_H = 1080
 CAPTION_BAR_H = 96
-CAPTION_FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+TOOLS_DIR = Path(__file__).resolve().parent
+BUNDLED_CAPTION_FONT = TOOLS_DIR / "fonts" / "DejaVuSans-Bold.ttf"
+SYSTEM_CAPTION_FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 MIPMAP_SIZES: dict[str, int] = {
     "mdpi": 48,
@@ -72,10 +74,26 @@ def load_rgb(path: Path) -> Image.Image:
     return Image.open(path).convert("RGB")
 
 
-def caption_font(size: int = 52) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    if CAPTION_FONT_PATH.exists():
-        return ImageFont.truetype(str(CAPTION_FONT_PATH), size)
-    return ImageFont.load_default()
+def resolve_caption_font_path(*, required: bool = False) -> Path | None:
+    if BUNDLED_CAPTION_FONT.exists():
+        return BUNDLED_CAPTION_FONT
+    if SYSTEM_CAPTION_FONT.exists():
+        return SYSTEM_CAPTION_FONT
+    if required:
+        print(
+            "ERROR: DejaVu Sans Bold is required for RU screenshot captions.\n"
+            f"  Bundled font missing: {BUNDLED_CAPTION_FONT}\n"
+            f"  System fallback missing: {SYSTEM_CAPTION_FONT}\n"
+            "  Copy DejaVuSans-Bold.ttf into store/tools/fonts/ and retry.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return None
+
+
+def caption_font(size: int = 52) -> ImageFont.FreeTypeFont:
+    font_path = resolve_caption_font_path(required=True)
+    return ImageFont.truetype(str(font_path), size)
 
 
 def draw_caption(canvas: Image.Image, text: str) -> None:
@@ -162,6 +180,7 @@ def compose_boss_chest_screenshot() -> Image.Image:
 
 
 def compose_screenshots() -> None:
+    resolve_caption_font_path(required=True)
     STORE_SCREENSHOTS.mkdir(parents=True, exist_ok=True)
 
     specs: list[tuple[str, Image.Image]] = [
