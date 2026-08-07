@@ -26,6 +26,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
           image: DecorationImage(
             image: AssetImage('${ArtAtlas.assetRoot}${ArtAtlas.townBg}'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.none,
           ),
         ),
         child: Padding(
@@ -51,6 +52,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
                           '${ArtAtlas.assetRoot}${ArtAtlas.heroIconPath(classDef.id)}',
                           width: 24,
                           height: 24,
+                          filterQuality: FilterQuality.none,
                         ),
                         const SizedBox(width: 8),
                         Text(classDef.name),

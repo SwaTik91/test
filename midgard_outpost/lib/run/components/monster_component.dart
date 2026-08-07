@@ -27,6 +27,9 @@ class MonsterComponent extends SpriteComponent {
     paint.color = Colors.white;
   }
 
+  static const double _damageFlashDuration = 0.16;
+  static const double _deathFlashDuration = 0.2;
+
   final PlayerComponent target;
   final int maxHp;
   final int touchDamage;
@@ -39,8 +42,12 @@ class MonsterComponent extends SpriteComponent {
   final double moveSpeed;
 
   int currentHp;
+  double _damageFlashSeconds = 0;
+  double _deathFlashSeconds = 0;
 
   bool get isAlive => currentHp > 0;
+
+  bool get canCollect => !isAlive && _deathFlashSeconds <= 0;
 
   Rect get bounds => Rect.fromLTWH(position.x, position.y, size.x, size.y);
 
@@ -49,12 +56,32 @@ class MonsterComponent extends SpriteComponent {
       return;
     }
     currentHp = (currentHp - amount).clamp(0, maxHp).toInt();
-    paint.color = currentHp > 0 ? Colors.orangeAccent : Colors.grey;
+    if (currentHp > 0) {
+      _damageFlashSeconds = _damageFlashDuration;
+      paint.color = Colors.orangeAccent;
+      return;
+    }
+
+    _damageFlashSeconds = 0;
+    _deathFlashSeconds = _deathFlashDuration;
+    paint.color = Colors.grey;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
+
+    if (_damageFlashSeconds > 0) {
+      _damageFlashSeconds -= dt;
+      if (_damageFlashSeconds <= 0 && isAlive) {
+        paint.color = Colors.white;
+      }
+    }
+
+    if (_deathFlashSeconds > 0) {
+      _deathFlashSeconds -= dt;
+    }
+
     if (!isAlive) {
       return;
     }
