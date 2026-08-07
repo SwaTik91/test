@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../iap/iap_product.dart';
 import 'game_controller.dart';
+import 'hub_theme.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({
@@ -58,34 +59,33 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   Widget build(BuildContext context) {
     final crystals = widget.controller.hero?.crystals ?? 0;
+    final theme = Theme.of(context).textTheme;
+
     final body = _products == null
-        ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Кристаллы: $crystals',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              ..._products!.map((product) {
-                final isPurchasing = _purchasingId == product.id;
-                return Card(
-                  child: ListTile(
-                    title: Text(product.title),
-                    subtitle: Text(product.description),
-                    trailing: isPurchasing
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(product.priceLabel),
-                    onTap: isPurchasing ? null : () => _purchase(product),
+        ? const Center(
+            child: CircularProgressIndicator(color: HubTheme.goldAccent),
+          )
+        : HubTabBody(
+            child: ListView(
+              children: [
+                HubCard(
+                  child: Text(
+                    'Кристаллы: $crystals',
+                    style: HubTheme.cardTitleStyle(theme),
                   ),
-                );
-              }),
-            ],
+                ),
+                const SizedBox(height: 12),
+                for (final product in _products!) ...[
+                  _ProductCard(
+                    product: product,
+                    isPurchasing: _purchasingId == product.id,
+                    onPurchase: () => _purchase(product),
+                    theme: theme,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
           );
 
     if (widget.embedded) {
@@ -101,6 +101,62 @@ class _ShopScreenState extends State<ShopScreen> {
         ),
       ),
       body: body,
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  const _ProductCard({
+    required this.product,
+    required this.isPurchasing,
+    required this.onPurchase,
+    required this.theme,
+  });
+
+  final IapProduct product;
+  final bool isPurchasing;
+  final VoidCallback onPurchase;
+  final TextTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return HubCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(product.title, style: HubTheme.cardTitleStyle(theme)),
+          const SizedBox(height: 4),
+          Text(
+            product.description,
+            style: HubTheme.cardSubtitleStyle(theme),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                product.priceLabel,
+                style: HubTheme.cardSubtitleStyle(theme),
+              ),
+              const Spacer(),
+              if (isPurchasing)
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: HubTheme.goldAccent,
+                  ),
+                )
+              else
+                FilledButton(
+                  style: HubTheme.goldButtonStyle(),
+                  onPressed: onPurchase,
+                  child: const Text('Купить'),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

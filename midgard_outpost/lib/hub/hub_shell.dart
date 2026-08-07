@@ -6,6 +6,7 @@ import 'hub_home_tab.dart';
 import 'run_screen.dart';
 import 'shop_screen.dart';
 import 'skills_screen.dart';
+import 'hub_theme.dart';
 import 'stats_screen.dart';
 
 enum HubTab { home, stats, skills, shop }
@@ -124,12 +125,15 @@ class _HubContentPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+      child: DecoratedBox(
+        decoration: HubTheme.panelDecoration(radius: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: child,
+        ),
       ),
-      child: child,
     );
   }
 }
