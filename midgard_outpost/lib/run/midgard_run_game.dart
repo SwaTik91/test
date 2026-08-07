@@ -542,7 +542,23 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     VfxComponent.create(
       kind: VfxComponent.forClass(hero.classId),
       position: position,
-    ).then((vfx) => world.add(vfx));
+    ).then(
+      (vfx) {
+        if (vfx != null) {
+          world.add(vfx);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'MidgardRunGame',
+            context: ErrorDescription('while spawning skill VFX'),
+          ),
+        );
+      },
+    );
   }
 
   void _handleMonsterContact() {

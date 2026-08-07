@@ -24,24 +24,36 @@ class VfxComponent extends SpriteAnimationComponent {
          anchor: Anchor.center,
        );
 
-  static Future<VfxComponent> create({
+  static Future<VfxComponent?> create({
     required VfxKind kind,
     required Vector2 position,
     Vector2? size,
   }) async {
-    final frames = _framesFor(kind);
-    final animation = await AnimationAtlas.load(
-      frames,
-      AnimationAtlas.vfxStepTime,
-      loop: false,
-    );
-    final duration = frames.length * AnimationAtlas.vfxStepTime;
-    return VfxComponent._(
-      animation: animation,
-      position: position,
-      size: size ?? Vector2.all(64),
-      duration: duration,
-    );
+    try {
+      final frames = _framesFor(kind);
+      final animation = await AnimationAtlas.load(
+        frames,
+        AnimationAtlas.vfxStepTime,
+        loop: false,
+      );
+      final duration = frames.length * AnimationAtlas.vfxStepTime;
+      return VfxComponent._(
+        animation: animation,
+        position: position,
+        size: size ?? Vector2.all(64),
+        duration: duration,
+      );
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'VfxComponent',
+          context: ErrorDescription('while loading VFX for $kind'),
+        ),
+      );
+      return null;
+    }
   }
 
   static VfxKind forClass(HeroClassId classId) => switch (classId) {
