@@ -25,6 +25,7 @@ class HubScreen extends StatelessWidget {
           image: DecorationImage(
             image: AssetImage('${ArtAtlas.assetRoot}${ArtAtlas.townBg}'),
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.none,
           ),
         ),
         child: Padding(

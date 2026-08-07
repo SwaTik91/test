@@ -171,9 +171,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (viewportSize.x <= 0 || viewportSize.y <= 0) {
       return;
     }
+    const bgBottomCrop = 32.0;
     background
-      ..size = viewportSize.clone()
-      ..position = viewportSize / 2;
+      ..size = Vector2(viewportSize.x, viewportSize.y + bgBottomCrop)
+      ..position = Vector2(
+        viewportSize.x / 2,
+        viewportSize.y / 2 - bgBottomCrop / 2,
+      );
   }
 
   @override
@@ -195,6 +199,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _handleAutoAttack();
     _handleChestContact();
     _handleMonsterContact();
+    _collectReadyKills();
     _tickPlayerUpgradeTimers(dt);
     _applyPlayerRegen(dt);
     _publishHudIfNeeded();
@@ -423,9 +428,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       target,
       CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
     );
-    if (!target.isAlive) {
-      _collectKill(target);
-    }
+    _tryCollectKill(target);
   }
 
   void _handleAutoSkills(double dt) {
@@ -455,9 +458,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     for (final target in targets) {
       _spawnSkillVisual(event, target);
       _damageMonster(target, event.damage, skillId: event.skillId);
-      if (!target.isAlive) {
-        _collectKill(target);
-      }
+      _tryCollectKill(target);
     }
   }
 
@@ -605,7 +606,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         continue;
       }
       monster.takeDamage(reflectedDamage.toInt());
-      if (!monster.isAlive) {
+      _tryCollectKill(monster);
+    }
+  }
+
+  void _tryCollectKill(MonsterComponent monster) {
+    if (monster.canCollect) {
+      _collectKill(monster);
+    }
+  }
+
+  void _collectReadyKills() {
+    for (final monster in _monsters.toList(growable: false)) {
+      if (monster.canCollect) {
         _collectKill(monster);
       }
     }

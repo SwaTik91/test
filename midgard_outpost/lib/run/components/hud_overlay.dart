@@ -131,6 +131,7 @@ class _HpBar extends StatelessWidget {
               '${ArtAtlas.assetRoot}${ArtAtlas.hpBarFrame}',
               height: 24,
               fit: BoxFit.fitWidth,
+              filterQuality: FilterQuality.none,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -212,6 +213,7 @@ class _ImageTapButton extends StatelessWidget {
             width: 64,
             height: 64,
             fit: BoxFit.contain,
+            filterQuality: FilterQuality.none,
           ),
           if (label != null)
             Text(
