@@ -7,16 +7,21 @@ import argparse
 import sys
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIDGARD = REPO_ROOT / "midgard_outpost"
 ASSETS = MIDGARD / "assets" / "images"
 STORE_ICONS = REPO_ROOT / "store" / "icons"
+STORE_SCREENSHOTS = REPO_ROOT / "store" / "screenshots"
 MIPMAP_DIR = MIDGARD / "android" / "app" / "src" / "main" / "res"
 
 ICON_SIZE = 512
 HERO_TARGET = 280
+SCREEN_W = 1920
+SCREEN_H = 1080
+CAPTION_BAR_H = 96
+CAPTION_FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 MIPMAP_SIZES: dict[str, int] = {
     "mdpi": 48,
@@ -37,6 +42,144 @@ def cover_scale(image: Image.Image, size: int) -> Image.Image:
     left = (new_w - size) // 2
     top = (new_h - size) // 2
     return scaled.crop((left, top, left + size, top + size))
+
+
+def cover_scale_rect(image: Image.Image, width: int, height: int) -> Image.Image:
+    """Scale image to cover a rectangular canvas, then center-crop."""
+    w, h = image.size
+    scale = max(width / w, height / h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    scaled = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    left = (new_w - width) // 2
+    top = (new_h - height) // 2
+    return scaled.crop((left, top, left + width, top + height))
+
+
+def scale_sprite(image: Image.Image, target: int) -> Image.Image:
+    """Upscale a sprite with nearest-neighbor to at least `target` px on the long edge."""
+    w, h = image.size
+    scale = target / max(w, h)
+    new_size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+    return image.resize(new_size, Image.Resampling.NEAREST)
+
+
+def load_rgba(path: Path) -> Image.Image:
+    return Image.open(path).convert("RGBA")
+
+
+def load_rgb(path: Path) -> Image.Image:
+    return Image.open(path).convert("RGB")
+
+
+def caption_font(size: int = 52) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    if CAPTION_FONT_PATH.exists():
+        return ImageFont.truetype(str(CAPTION_FONT_PATH), size)
+    return ImageFont.load_default()
+
+
+def draw_caption(canvas: Image.Image, text: str) -> None:
+    """Draw a high-contrast caption bar along the bottom."""
+    draw = ImageDraw.Draw(canvas)
+    bar_top = SCREEN_H - CAPTION_BAR_H
+    draw.rectangle((0, bar_top, SCREEN_W, SCREEN_H), fill=(16, 16, 24, 220))
+    font = caption_font()
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    x = (SCREEN_W - text_w) // 2
+    y = bar_top + (CAPTION_BAR_H - text_h) // 2
+    draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0))
+    draw.text((x, y), text, font=font, fill=(255, 240, 200))
+
+
+def new_screenshot_canvas(bg_path: Path) -> Image.Image:
+    bg = load_rgb(bg_path)
+    content_h = SCREEN_H - CAPTION_BAR_H
+    bg_layer = cover_scale_rect(bg, SCREEN_W, content_h)
+    canvas = Image.new("RGBA", (SCREEN_W, SCREEN_H), (16, 16, 24, 255))
+    canvas.paste(bg_layer, (0, 0))
+    return canvas
+
+
+def paste_centered(canvas: Image.Image, sprite: Image.Image, cx: int, cy: int) -> None:
+    x = cx - sprite.width // 2
+    y = cy - sprite.height // 2
+    canvas.paste(sprite, (x, y), sprite)
+
+
+def compose_hub_screenshot() -> Image.Image:
+    canvas = new_screenshot_canvas(ASSETS / "hub" / "town_bg.png")
+    content_h = SCREEN_H - CAPTION_BAR_H
+    icons = [
+        load_rgba(ASSETS / "hub" / "icon_archer.png"),
+        load_rgba(ASSETS / "hub" / "icon_mage.png"),
+        load_rgba(ASSETS / "hub" / "icon_paladin.png"),
+    ]
+    scaled = [scale_sprite(icon, 220) for icon in icons]
+    gap = SCREEN_W // (len(scaled) + 1)
+    cy = content_h // 2 + 20
+    for i, icon in enumerate(scaled):
+        paste_centered(canvas, icon, gap * (i + 1), cy)
+    draw_caption(canvas, "Выбери класс")
+    return canvas
+
+
+def compose_run_screenshot(
+    bg_name: str,
+    hero_name: str,
+    caption: str,
+    *,
+    enemy_name: str | None = None,
+) -> Image.Image:
+    canvas = new_screenshot_canvas(ASSETS / "world" / bg_name)
+    content_h = SCREEN_H - CAPTION_BAR_H
+    ground_y = int(content_h * 0.78)
+
+    hero = scale_sprite(load_rgba(ASSETS / "heroes" / f"{hero_name}.png"), 360)
+    paste_centered(canvas, hero, SCREEN_W // 2 - 120, ground_y - hero.height // 2)
+
+    if enemy_name:
+        enemy = scale_sprite(load_rgba(ASSETS / "enemies" / f"{enemy_name}.png"), 300)
+        paste_centered(canvas, enemy, SCREEN_W // 2 + 280, ground_y - enemy.height // 2)
+
+    draw_caption(canvas, caption)
+    return canvas
+
+
+def compose_boss_chest_screenshot() -> Image.Image:
+    canvas = new_screenshot_canvas(ASSETS / "world" / "bg_forest.png")
+    content_h = SCREEN_H - CAPTION_BAR_H
+    ground_y = int(content_h * 0.78)
+
+    boss = scale_sprite(load_rgba(ASSETS / "enemies" / "boss_ogre.png"), 420)
+    chest = scale_sprite(load_rgba(ASSETS / "props" / "chest.png"), 260)
+    paste_centered(canvas, boss, SCREEN_W // 2 - 100, ground_y - boss.height // 2)
+    paste_centered(canvas, chest, SCREEN_W // 2 + 320, ground_y - chest.height // 2 + 20)
+
+    draw_caption(canvas, "Боссы и сундуки")
+    return canvas
+
+
+def compose_screenshots() -> None:
+    STORE_SCREENSHOTS.mkdir(parents=True, exist_ok=True)
+
+    specs: list[tuple[str, Image.Image]] = [
+        ("01_hub.png", compose_hub_screenshot()),
+        (
+            "02_run_archer.png",
+            compose_run_screenshot("bg_fields.png", "archer", "Лучник", enemy_name="mob_goblin"),
+        ),
+        ("03_run_mage.png", compose_run_screenshot("bg_forest.png", "mage", "Маг")),
+        ("04_run_paladin.png", compose_run_screenshot("bg_fields.png", "paladin", "Паладин")),
+        ("05_boss_chest.png", compose_boss_chest_screenshot()),
+    ]
+
+    for filename, image in specs:
+        out_path = STORE_SCREENSHOTS / filename
+        rgb = image.convert("RGB")
+        rgb.save(out_path, format="PNG")
+        print(f"Wrote {out_path.relative_to(REPO_ROOT)}")
 
 
 def compose_launcher_icon() -> Image.Image:
@@ -77,23 +220,27 @@ def write_icons() -> None:
         print(f"Wrote {rel.relative_to(REPO_ROOT)}")
 
 
-def compose_screenshots() -> None:
-    # TODO(Task 3): generate Play Store / RuStore screenshots via --screenshots
-    raise NotImplementedError("Screenshot generation is implemented in Store Task 3")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compose Midgard Outpost store art assets.")
     parser.add_argument("--icons", action="store_true", help="Generate launcher icon master and mipmaps")
     parser.add_argument(
         "--screenshots",
         action="store_true",
-        help="Generate store screenshots (Task 3 — not yet implemented)",
+        help="Generate landscape store screenshots (1920×1080)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Generate icons and screenshots",
     )
     args = parser.parse_args(argv)
 
+    if args.all:
+        args.icons = True
+        args.screenshots = True
+
     if not args.icons and not args.screenshots:
-        parser.error("Specify at least one of --icons or --screenshots")
+        parser.error("Specify at least one of --icons, --screenshots, or --all")
 
     if args.icons:
         write_icons()

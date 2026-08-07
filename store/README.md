@@ -24,10 +24,18 @@
 Иконки и скриншоты собираются скриптом из игровых ассетов:
 
 ```bash
-python3 store/tools/compose_store_art.py
+python3 store/tools/compose_store_art.py --icons
+python3 store/tools/compose_store_art.py --screenshots
+python3 store/tools/compose_store_art.py --all
 ```
 
-Скрипт (Tasks 2–3) создаёт `store/icons/ic_launcher_512.png`, mipmap-экспорты и `store/screenshots/*.png` из `midgard_outpost/assets/images/`.
+Флаги:
+
+- `--icons` — master 512×512 и mipmap-экспорты в `midgard_outpost/android/.../mipmap-*`
+- `--screenshots` — landscape PNG 1920×1080 в `store/screenshots/`
+- `--all` — оба режима
+
+Скрипт читает `midgard_outpost/assets/images/` (hub, heroes, enemies, props, world).
 
 ## Чеклисты
 
