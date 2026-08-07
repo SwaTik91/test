@@ -7,9 +7,9 @@ import 'hero_progress.dart';
 class ProgressService {
   ProgressService._();
 
-  static int xpToNextBase(int level) => 20 + (level * 15);
+  static int xpToNextBase(int level) => 15 + (level * 12);
 
-  static int xpToNextJob(int level) => 15 + (level * 12);
+  static int xpToNextJob(int level) => 12 + (level * 10);
 
   static HeroProgress applyRunRewards(
     HeroProgress hero,

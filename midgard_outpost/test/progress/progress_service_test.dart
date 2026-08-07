@@ -6,13 +6,13 @@ import 'package:midgard_outpost/run/run_rewards.dart';
 
 void main() {
   test('xpToNextBase follows curve', () {
-    expect(ProgressService.xpToNextBase(1), 35);
-    expect(ProgressService.xpToNextBase(5), 95);
+    expect(ProgressService.xpToNextBase(1), 27);
+    expect(ProgressService.xpToNextBase(5), 75);
   });
 
   test('xpToNextJob follows curve', () {
-    expect(ProgressService.xpToNextJob(1), 27);
-    expect(ProgressService.xpToNextJob(5), 75);
+    expect(ProgressService.xpToNextJob(1), 22);
+    expect(ProgressService.xpToNextJob(5), 62);
   });
 
   test('run rewards can grant multiple base levels at once', () {

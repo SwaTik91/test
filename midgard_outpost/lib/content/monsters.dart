@@ -45,7 +45,7 @@ class MonstersCatalog {
     final baseDamage = 7 + wave + biomeDamage;
     final baseXp = 5 + wave + biomeReward;
     final jobXp = 3 + (wave ~/ 2) + biomeReward;
-    final gold = 2 + (wave ~/ 3) + biomeReward;
+    final gold = 4 + (wave ~/ 3) + biomeReward;
 
     if (!isBoss) {
       return MonsterSpec(
