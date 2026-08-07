@@ -40,6 +40,19 @@ flutter build apk --debug
 
 **Цикл:** `GameController` загружает героя через `SaveService` → hub-экраны → `RunScreen` (Flame) → смерть → `RunSummaryScreen` → начисление наград → возврат в hub.
 
+## Баланс (Balance Pass 1 — medium)
+
+Где крутить числа для следующего прохода баланса:
+
+| Файл | Что менять |
+|------|------------|
+| `lib/content/balance.dart` | Дроп улучшений (0.11), temp XP за оффер (90), интервалы сундука/босса (1000 / 4000 px), IAP-множители |
+| `lib/run/combat_math.dart` | Базовые HP/SP/урон/скорость героя от статов, крит, множители run-upgrades |
+| `lib/content/monsters.dart` (`MonstersCatalog`) | HP/урон/награды мобов и боссов по волне и биому |
+| `lib/progress/progress_service.dart` | Кривые XP: `xpToNextBase` (15 + level×12), `xpToNextJob` (12 + level×10) |
+
+Sanity-тесты medium difficulty: `test/balance/balance_sanity_test.dart` (L1 HP/TTK/TTD, дроп, XP за ~3 мин пакет). Прогон всего набора: `flutter test`.
+
 ## StoreTarget и cloud save
 
 Порты выбираются в `main.dart` через `--dart-define` (см. `resolveCloudSavePort`, `resolveStoreTarget`).
