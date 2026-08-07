@@ -381,6 +381,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _nextSpawnX += 430;
     }
     MonsterComponent.create(
+      kind: spec.kind,
       isBoss: spec.isBoss,
       target: player,
       position: Vector2(x, _groundY - spec.height),
