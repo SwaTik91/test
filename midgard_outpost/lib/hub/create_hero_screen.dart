@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../art/art_atlas.dart';
 import '../content/classes.dart';
 import '../core/ids.dart';
 import 'game_controller.dart';
@@ -20,7 +21,14 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Мидгард: Аванпост')),
-      body: Padding(
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('${ArtAtlas.assetRoot}${ArtAtlas.townBg}'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,7 +44,18 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: ChoiceChip(
-                    label: Text(classDef.name),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          '${ArtAtlas.assetRoot}${ArtAtlas.heroIconPath(classDef.id)}',
+                          width: 24,
+                          height: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(classDef.name),
+                      ],
+                    ),
                     selected: isSelected,
                     onSelected: (_) {
                       setState(() => _selectedClass = classDef.id);
@@ -56,6 +75,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
               child: const Text('Создать героя'),
             ),
           ],
+        ),
         ),
       ),
     );

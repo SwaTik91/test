@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../art/art_atlas.dart';
 import '../content/classes.dart';
 import 'game_controller.dart';
 import 'run_screen.dart';
@@ -19,7 +20,14 @@ class HubScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Мидгард: Аванпост')),
-      body: Padding(
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('${ArtAtlas.assetRoot}${ArtAtlas.townBg}'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,6 +66,7 @@ class HubScreen extends StatelessWidget {
               ],
             ),
           ],
+        ),
         ),
       ),
     );
