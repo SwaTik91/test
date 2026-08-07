@@ -54,7 +54,7 @@ class HudOverlay extends StatelessWidget {
                               style: const TextStyle(color: Colors.white),
                             ),
                             Text(
-                              'Base ${rewards.baseXp} / Job ${rewards.jobXp} / Gold ${rewards.gold}',
+                              'Базовый опыт: ${rewards.baseXp} / Проф. опыт: ${rewards.jobXp} / Золото: ${rewards.gold}',
                               style: const TextStyle(color: Colors.white),
                             ),
                             Text(
