@@ -78,3 +78,35 @@ Linux desktop device was detected by `flutter devices`; I did not launch `flutte
 
 - Ultimate is intentionally a cooldown stub for Task 8.
 - MVP visuals are colored rectangles; no pixel art in this task.
+
+## Review Fixes (Task 7)
+
+### Changes
+
+1. **Russian HUD labels** — `hud_overlay.dart` now shows `Базовый опыт / Проф. опыт / Золото` instead of English `Base / Job / Gold`.
+2. **RunSummaryScreen guarded exit** — Converted to `StatefulWidget` with `PopScope(canPop: false)`, shared `_finishAndLeave()` for continue/AppBar back/system back, and `_isLeaving` flag to prevent double reward application.
+
+### Tests
+
+Added `test/hub/run_summary_test.dart` (4 cases):
+
+- System back (`handlePopRoute`) applies rewards and pops
+- «Продолжить» applies rewards and returns
+- AppBar back applies rewards before leaving
+- Double continue invokes `onContinue` only once
+
+Command:
+
+```
+export PATH="/opt/flutter/bin:$PATH" && cd /workspace/midgard_outpost && flutter test test/hub/ test/run/
+```
+
+Result:
+
+```
+00:03 +16: All tests passed!
+```
+
+### Commits
+
+- `fix: Russian HUD labels and guarded RunSummaryScreen exit`
