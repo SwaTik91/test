@@ -144,6 +144,45 @@ Wave 1 заменяет цветные прямоугольники на пик�
 
 План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave1.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave1.md).
 
+## Art Wave 2 (покадровые анимации)
+
+Wave 2 добавляет покадровые PNG-анимации для забега: герои (idle/run/jump/cast), моб и босс (walk/hurt), сундук (open), VFX скиллов. Пути и `stepTime` — в `lib/art/animation_atlas.dart`; Flame грузит через `SpriteAnimation` / `AnimationAtlas.load`. Статичные PNG волны 1 остаются fallback, если анимация не загрузилась.
+
+### Папки анимаций
+
+| Папка | Содержимое |
+|-------|------------|
+| `assets/images/heroes/{archer,mage,paladin}/` | `idle_0..1`, `run_0..3`, `jump_0..1`, `cast_0..2` (64×64) |
+| `assets/images/enemies/goblin/` | `walk_0..2`, `hurt_0..1` (64×64) |
+| `assets/images/enemies/ogre/` | `walk_0..2`, `hurt_0..1` (96×96) |
+| `assets/images/props/chest/` | `open_0..2` (64×64) |
+| `assets/images/vfx/` | `slash_0..2`, `flame_0..2`, `holy_0..2` (64×64) |
+
+### Триггеры в рантайме
+
+| Анимация | Компонент | Условие |
+|----------|-----------|---------|
+| idle / run / jump / cast | `PlayerComponent` | grounded + velocity; `!isGrounded`; one-shot cast on skill |
+| walk / hurt | `MonsterComponent` | alive + moving; one-shot after damage |
+| open | `ChestComponent` | on collect; loop false, last frame held |
+| slash / flame / holy | `VfxComponent` | archer / mage / paladin on auto-skill or ult |
+
+### Как генерировали
+
+1. **GenerateImage** — кадры в том же RO-light стиле, что Wave 1 (силуэт класса узнаваем).
+2. **PIL post-process** — RGBA, flood-fill magenta→alpha, tight crop, `Image.NEAREST` resize до 64×64 (ogre 96×96), corner alpha check.
+3. **Проверка** — `flutter test test/art/` (`AnimationAtlas.allFramePaths` + `rootBundle`; unit-тесты `HeroAnimState` / atlas paths).
+
+### Как перегенерировать
+
+1. Сгенерировать новый кадр (тот же стиль/размер; ogre смотрит влево).
+2. Положить по пути из `AnimationAtlas` (имя `{anim}_{index}.png` без смены индексов).
+3. PIL-пайплайн (crop → NEAREST resize → alpha key).
+4. `flutter test test/art/` — все 55 frame paths грузятся.
+5. Визуально: `flutter run -d linux` или превью `/opt/cursor/artifacts/art-wave2-collage.png` (strips: archer run, goblin walk, chest open, VFX slash).
+
+План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md). Дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md).
+
 ## Связанные документы
 
 - [Дизайн-спека MVP](../docs/superpowers/specs/2026-08-07-midgard-outpost-design.md)
