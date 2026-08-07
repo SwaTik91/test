@@ -19,10 +19,7 @@ class RunPlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Забег скоро',
-              style: TextStyle(fontSize: 24),
-            ),
+            const Text('Забег скоро', style: TextStyle(fontSize: 24)),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -36,14 +33,10 @@ class RunPlaceholderScreen extends StatelessWidget {
 }
 
 class RunSummaryScreen extends StatelessWidget {
-  const RunSummaryScreen({
-    super.key,
-    required this.rewards,
-    this.onContinue,
-  });
+  const RunSummaryScreen({super.key, required this.rewards, this.onContinue});
 
   final RunRewards rewards;
-  final VoidCallback? onContinue;
+  final Future<void> Function()? onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +52,11 @@ class RunSummaryScreen extends StatelessWidget {
             Text('Золото: ${rewards.gold}'),
             const Spacer(),
             FilledButton(
-              onPressed: () {
-                onContinue?.call();
+              onPressed: () async {
+                await onContinue?.call();
+                if (!context.mounted) {
+                  return;
+                }
                 Navigator.of(context).pop();
               },
               child: const Text('Продолжить'),
