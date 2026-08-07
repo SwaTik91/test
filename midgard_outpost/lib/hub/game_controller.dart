@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/ids.dart';
+import '../iap/iap_purchase_applier.dart';
 import '../iap/fake_iap_service.dart';
 import '../iap/iap_service.dart';
 import '../progress/hero_progress.dart';
@@ -68,5 +69,22 @@ class GameController extends ChangeNotifier {
     _runState = RunState.initial();
     await _save.persist(_hero!);
     notifyListeners();
+  }
+
+  Future<bool> purchaseProduct(String productId) async {
+    final current = _hero;
+    if (current == null) {
+      return false;
+    }
+
+    final ok = await _iap.purchase(productId);
+    if (!ok) {
+      return false;
+    }
+
+    _hero = IapPurchaseApplier.apply(current, productId);
+    await _save.persist(_hero!);
+    notifyListeners();
+    return true;
   }
 }

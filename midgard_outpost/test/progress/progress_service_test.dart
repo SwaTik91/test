@@ -40,12 +40,18 @@ void main() {
 
   test('toJson roundtrips through fromJson', () {
     final original = HeroProgress.createNew(HeroClassId.paladin)
-        .copyWith(gold: 100, crystals: 5, unspentStatPoints: 2);
+        .copyWith(
+          gold: 100,
+          crystals: 5,
+          unspentStatPoints: 2,
+          activeBoosts: const {'boost_drop': 1_700_000_000_000},
+        );
     final restored = HeroProgress.fromJson(original.toJson());
     expect(restored.classId, original.classId);
     expect(restored.baseLevel, original.baseLevel);
     expect(restored.gold, original.gold);
     expect(restored.crystals, original.crystals);
     expect(restored.unspentStatPoints, original.unspentStatPoints);
+    expect(restored.activeBoosts, original.activeBoosts);
   });
 }

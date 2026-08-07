@@ -14,6 +14,7 @@ class HeroProgress {
     required this.skillRanks,
     required this.gold,
     required this.crystals,
+    this.activeBoosts = const {},
   });
 
   final HeroClassId classId;
@@ -27,6 +28,7 @@ class HeroProgress {
   final Map<String, int> skillRanks;
   final int gold;
   final int crystals;
+  final Map<String, int> activeBoosts;
 
   factory HeroProgress.createNew(HeroClassId classId) {
     return HeroProgress(
@@ -56,6 +58,7 @@ class HeroProgress {
     Map<String, int>? skillRanks,
     int? gold,
     int? crystals,
+    Map<String, int>? activeBoosts,
   }) {
     return HeroProgress(
       classId: classId ?? this.classId,
@@ -69,6 +72,7 @@ class HeroProgress {
       skillRanks: skillRanks ?? this.skillRanks,
       gold: gold ?? this.gold,
       crystals: crystals ?? this.crystals,
+      activeBoosts: activeBoosts ?? this.activeBoosts,
     );
   }
 
@@ -84,10 +88,12 @@ class HeroProgress {
         'skillRanks': skillRanks,
         'gold': gold,
         'crystals': crystals,
+        'activeBoosts': activeBoosts,
       };
 
   factory HeroProgress.fromJson(Map<String, dynamic> json) {
     final skillRanksRaw = json['skillRanks'] as Map<String, dynamic>? ?? {};
+    final activeBoostsRaw = json['activeBoosts'] as Map<String, dynamic>? ?? {};
     return HeroProgress(
       classId: HeroClassId.values.byName(json['classId'] as String),
       baseLevel: (json['baseLevel'] as num).toInt(),
@@ -105,6 +111,10 @@ class HeroProgress {
       },
       gold: (json['gold'] as num).toInt(),
       crystals: (json['crystals'] as num).toInt(),
+      activeBoosts: {
+        for (final entry in activeBoostsRaw.entries)
+          entry.key: (entry.value as num).toInt(),
+      },
     );
   }
 }

@@ -14,6 +14,7 @@ class ShopScreen extends StatefulWidget {
 
 class _ShopScreenState extends State<ShopScreen> {
   List<IapProduct>? _products;
+  String? _purchasingId;
 
   @override
   void initState() {
@@ -28,8 +29,30 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  Future<void> _purchase(IapProduct product) async {
+    setState(() => _purchasingId = product.id);
+    final ok = await widget.controller.purchaseProduct(product.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _purchasingId = null);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Покупка не удалась')),
+      );
+      return;
+    }
+    final message = product.kind == IapProductKind.crystals
+        ? 'Получено: ${product.crystals} кристаллов'
+        : 'Буст активирован на 24 часа';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final crystals = widget.controller.hero?.crystals ?? 0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Магазин'),
@@ -42,17 +65,30 @@ class _ShopScreenState extends State<ShopScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
-              children: _products!.map((product) {
-                return Card(
-                  child: ListTile(
-                    title: Text(product.title),
-                    subtitle: product.crystals > 0
-                        ? Text('${product.crystals} кристаллов')
-                        : const Text('Скоро'),
-                    trailing: Text(product.priceLabel),
-                  ),
-                );
-              }).toList(),
+              children: [
+                Text(
+                  'Кристаллы: $crystals',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                ..._products!.map((product) {
+                  final isPurchasing = _purchasingId == product.id;
+                  return Card(
+                    child: ListTile(
+                      title: Text(product.title),
+                      subtitle: Text(product.description),
+                      trailing: isPurchasing
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(product.priceLabel),
+                      onTap: isPurchasing ? null : () => _purchase(product),
+                    ),
+                  );
+                }),
+              ],
             ),
     );
   }
