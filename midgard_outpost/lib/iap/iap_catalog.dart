@@ -31,7 +31,7 @@ class IapCatalog {
     IapProduct(
       id: 'boost_base_job_xp',
       title: 'Буст опыта базы и профессии',
-      description: '×2 опыт базы и профессии на 24 часа',
+      description: '×1.5 опыт базы и профессии на 24 часа',
       crystals: 0,
       priceLabel: '149 ₽',
       kind: IapProductKind.boost,
