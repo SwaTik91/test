@@ -60,9 +60,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   final List<MonsterComponent> _monsters = [];
   final List<ChestComponent> _chests = [];
 
-  late final Sprite _mobSprite;
-  late final Sprite _bossSprite;
-  late final Sprite _chestSprite;
   late final Sprite _projectileSprite;
   late final Sprite _bgFieldsSprite;
   late final Sprite _bgForestSprite;
@@ -116,9 +113,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
     _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
     _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
-    _mobSprite = await ArtAtlas.loadSprite(ArtAtlas.mobGoblin);
-    _bossSprite = await ArtAtlas.loadSprite(ArtAtlas.bossOgre);
-    _chestSprite = await ArtAtlas.loadSprite(ArtAtlas.chest);
     _projectileSprite = await ArtAtlas.loadSprite(
       ArtAtlas.projectilePath(hero.classId),
     );
@@ -339,12 +333,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _spawnChest(double x) {
-    final chest = ChestComponent(
-      sprite: _chestSprite,
-      position: Vector2(x, _groundY - 34),
-    );
-    _chests.add(chest);
-    world.add(chest);
+    ChestComponent.create(position: Vector2(x, _groundY - 34)).then((chest) {
+      _chests.add(chest);
+      world.add(chest);
+    });
   }
 
   void _spawnMonster({double? spawnX, bool isBoss = false}) {
@@ -355,8 +347,11 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       biome: monsterBiome,
       isBoss: isBoss,
     );
-    final monster = MonsterComponent(
-      sprite: spec.isBoss ? _bossSprite : _mobSprite,
+    if (!isBoss) {
+      _nextSpawnX += 430;
+    }
+    MonsterComponent.create(
+      isBoss: spec.isBoss,
       target: player,
       position: Vector2(x, _groundY - spec.height),
       maxHp: _monsterMaxHp(spec),
@@ -366,15 +361,12 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       gold: spec.gold,
       tempXp: spec.tempXp,
       upgradeDropChance: _upgradeDropChanceFor(spec),
-      isBoss: spec.isBoss,
       moveSpeed: spec.moveSpeed,
       size: Vector2(spec.width, spec.height),
-    );
-    if (!isBoss) {
-      _nextSpawnX += 430;
-    }
-    _monsters.add(monster);
-    world.add(monster);
+    ).then((monster) {
+      _monsters.add(monster);
+      world.add(monster);
+    });
   }
 
   double get _chestDistanceIntervalPx =>
