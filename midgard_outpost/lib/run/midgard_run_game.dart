@@ -19,6 +19,7 @@ import 'components/chest_component.dart';
 import 'components/monster_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
+import 'components/vfx_component.dart';
 import 'run_rewards.dart';
 import 'run_state.dart';
 import 'run_upgrade_effects.dart';
@@ -448,10 +449,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final targets = _targetsInRange(
       event.range,
     ).take(event.targetCount).toList(growable: false);
-    for (final target in targets) {
-      _spawnSkillVisual(event, target);
-      _damageMonster(target, event.damage, skillId: event.skillId);
-      _tryCollectKill(target);
+    if (targets.isEmpty) {
+      _spawnSkillVfx(player.center);
+    } else {
+      for (final target in targets) {
+        _spawnSkillVisual(event, target);
+        _spawnSkillVfx(target.center);
+        _damageMonster(target, event.damage, skillId: event.skillId);
+        _tryCollectKill(target);
+      }
     }
   }
 
@@ -530,6 +536,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
       ),
     );
+  }
+
+  void _spawnSkillVfx(Vector2 position) {
+    VfxComponent.create(
+      kind: VfxComponent.forClass(hero.classId),
+      position: position,
+    ).then((vfx) => world.add(vfx));
   }
 
   void _handleMonsterContact() {
