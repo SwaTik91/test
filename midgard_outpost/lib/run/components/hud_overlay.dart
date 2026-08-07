@@ -89,7 +89,7 @@ class HudOverlay extends StatelessWidget {
                         label: ultimateReady
                             ? 'Ульт'
                             : 'Ульт ${game.ultimateCooldownRemaining.ceil()}',
-                        onTap: game.triggerUltimateStub,
+                        onTap: game.tryCastUltimate,
                       ),
                     ],
                   ),

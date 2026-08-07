@@ -55,6 +55,10 @@ class PlayerComponent extends RectangleComponent {
     paint.color = Colors.redAccent;
   }
 
+  void setSp(int amount) {
+    currentSp = amount.clamp(0, maxSp).toInt();
+  }
+
   @override
   void update(double dt) {
     super.update(dt);

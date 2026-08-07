@@ -12,24 +12,31 @@ import '../progress/hero_progress.dart';
 import 'combat_math.dart';
 import 'components/monster_component.dart';
 import 'components/player_component.dart';
+import 'components/projectile_component.dart';
 import 'run_rewards.dart';
+import 'systems/auto_skill_system.dart';
 
 class MidgardRunGame extends FlameGame with KeyboardEvents {
-  MidgardRunGame({required this.hero, required this.onDeath});
+  MidgardRunGame({
+    required this.hero,
+    required this.onDeath,
+    this.ownedRunUpgradeIds = const {},
+  });
 
   static const String hudOverlayKey = 'hud';
   static const double _groundY = 330;
   static const double _tileWidth = 360;
   static const double _attackInterval = 0.75;
   static const double _collisionInterval = 0.65;
-  static const double _ultimateCooldown = 8;
 
   final HeroProgress hero;
   final void Function(RunRewards rewards) onDeath;
+  final Set<String> ownedRunUpgradeIds;
   final RunRewardsAccumulator rewards = RunRewardsAccumulator();
   final ValueNotifier<int> hudRevision = ValueNotifier<int>(0);
 
   late final PlayerComponent player;
+  late final AutoSkillSystem autoSkillSystem;
   late final String autoSkillName;
 
   final List<RectangleComponent> _groundTiles = [];
@@ -42,13 +49,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double _collisionTimer = 0;
   double _hudTimer = 0;
   double _nextSpawnX = 520;
-  double ultimateCooldownRemaining = 0;
 
   double get distance => player.position.x;
 
   double get hpFraction => player.currentHp / player.maxHp;
 
   double get spFraction => player.currentSp / player.maxSp;
+
+  double get ultimateCooldownRemaining =>
+      autoSkillSystem.ultimateCooldownRemaining;
 
   RunRewards get currentRewards => rewards.toRewards();
 
@@ -59,15 +68,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   FutureOr<void> onLoad() async {
     await super.onLoad();
 
-    autoSkillName = SkillsCatalog.forClass(
-      hero.classId,
-    ).firstWhere((skill) => skill.kind == SkillKind.auto).name;
+    autoSkillName = _autoSkillNameForHero();
 
     player = PlayerComponent(
       maxHp: CombatMath.maxHp(hero),
       maxSp: CombatMath.maxSp(hero),
       moveSpeed: CombatMath.moveSpeed(hero),
       groundY: _groundY,
+    );
+    autoSkillSystem = AutoSkillSystem(
+      classId: hero.classId,
+      ranks: hero.skillRanks,
+      upgrades: ownedRunUpgradeIds,
+      maxSp: player.maxSp,
     );
 
     _addGroundTiles();
@@ -87,14 +100,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _attackTimer += dt;
     _collisionTimer += dt;
     _hudTimer += dt;
-    if (ultimateCooldownRemaining > 0) {
-      ultimateCooldownRemaining = (ultimateCooldownRemaining - dt)
-          .clamp(0, _ultimateCooldown)
-          .toDouble();
-    }
 
     _recycleGroundTiles();
     _spawnAheadIfNeeded();
+    _handleAutoSkills(dt);
     _handleAutoAttack();
     _handleMonsterContact();
     _publishHudIfNeeded();
@@ -136,12 +145,28 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     player.jump();
   }
 
-  void triggerUltimateStub() {
-    if (ultimateCooldownRemaining > 0) {
-      return;
+  void tryCastUltimate() {
+    autoSkillSystem.sp = player.currentSp;
+    final event = autoSkillSystem.tryCastUltimate(
+      enemiesInRange: _targetsInRange(_skillTriggerRangeForClass()).length,
+    );
+    player.setSp(autoSkillSystem.sp);
+    if (event != null) {
+      _applySkillEvent(event);
     }
-    ultimateCooldownRemaining = _ultimateCooldown;
     _publishHud();
+  }
+
+  String _autoSkillNameForHero() {
+    final autoSkills = SkillsCatalog.forClass(
+      hero.classId,
+    ).where((skill) => skill.kind == SkillKind.auto);
+    return autoSkills
+        .firstWhere(
+          (skill) => (hero.skillRanks[skill.id] ?? 0) > 0,
+          orElse: () => autoSkills.first,
+        )
+        .name;
   }
 
   void _syncMovement() {
@@ -207,28 +232,49 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       return;
     }
 
-    target.takeDamage(CombatMath.basicAttackDamage(hero));
+    target.takeDamage(
+      CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    );
     if (!target.isAlive) {
       _collectKill(target);
     }
   }
 
-  MonsterComponent? _nearestTargetInRange() {
-    final range = _attackRangeForClass(hero.classId);
-    MonsterComponent? nearest;
-    var nearestDistance = double.infinity;
-    for (final monster in _monsters) {
-      if (!monster.isAlive) {
-        continue;
-      }
-      final dx = (monster.position.x - player.position.x).abs();
-      final dy = (monster.position.y - player.position.y).abs();
-      if (dx <= range && dy < 90 && dx < nearestDistance) {
-        nearest = monster;
-        nearestDistance = dx;
+  void _handleAutoSkills(double dt) {
+    autoSkillSystem.sp = player.currentSp;
+    final events = autoSkillSystem.tick(
+      dt,
+      enemiesInRange: _targetsInRange(_skillTriggerRangeForClass()).length,
+    );
+    player.setSp(autoSkillSystem.sp);
+
+    if (events.isEmpty) {
+      return;
+    }
+
+    for (final event in events) {
+      _applySkillEvent(event);
+    }
+    _publishHud();
+  }
+
+  void _applySkillEvent(SkillCastEvent event) {
+    final targets = _targetsInRange(
+      event.range,
+    ).take(event.targetCount).toList(growable: false);
+    for (final target in targets) {
+      _spawnSkillVisual(event, target);
+      target.takeDamage(event.damage);
+      if (!target.isAlive) {
+        _collectKill(target);
       }
     }
-    return nearest;
+  }
+
+  MonsterComponent? _nearestTargetInRange() {
+    final range = _attackRangeForClass(hero.classId);
+    final targets = _targetsInRange(range);
+    return targets.isEmpty ? null : targets.first;
   }
 
   double _attackRangeForClass(HeroClassId classId) {
@@ -236,6 +282,56 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       HeroClassId.archer => 320,
       HeroClassId.mage => 280,
       HeroClassId.paladin => 72,
+    };
+  }
+
+  double _skillTriggerRangeForClass() {
+    return switch (hero.classId) {
+      HeroClassId.archer => 380,
+      HeroClassId.mage => 340,
+      HeroClassId.paladin => 150,
+    };
+  }
+
+  List<MonsterComponent> _targetsInRange(double range) {
+    final targets = _monsters.where((monster) {
+      if (!monster.isAlive) {
+        return false;
+      }
+      final dx = (monster.position.x - player.position.x).abs();
+      final dy = (monster.position.y - player.position.y).abs();
+      return dx <= range && dy < 130;
+    }).toList();
+    targets.sort(
+      (a, b) => (a.position.x - player.position.x).abs().compareTo(
+        (b.position.x - player.position.x).abs(),
+      ),
+    );
+    return targets;
+  }
+
+  void _spawnSkillVisual(SkillCastEvent event, MonsterComponent target) {
+    final start = player.center;
+    final end = target.center;
+    world.add(
+      ProjectileComponent(
+        start: event.projectile ? start : end,
+        end: end,
+        duration: event.projectile ? 0.18 : 0.14,
+        radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
+        color: _skillColor(event),
+      ),
+    );
+  }
+
+  Color _skillColor(SkillCastEvent event) {
+    if (event.kind == SkillCastKind.ultimate) {
+      return Colors.amberAccent;
+    }
+    return switch (hero.classId) {
+      HeroClassId.archer => Colors.lightGreenAccent,
+      HeroClassId.mage => Colors.deepPurpleAccent,
+      HeroClassId.paladin => Colors.white,
     };
   }
 
