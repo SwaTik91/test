@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'app.dart';
+import 'iap/store_billing_port.dart';
+import 'save/cloud_save_port.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -8,5 +11,9 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  runApp(const MidgardApp());
+
+  final cloud = resolveCloudSavePort();
+  final storeTarget = resolveStoreTarget();
+
+  runApp(MidgardApp(cloud: cloud, storeTarget: storeTarget));
 }

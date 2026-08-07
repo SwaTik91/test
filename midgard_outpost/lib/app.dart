@@ -3,14 +3,23 @@ import 'package:flutter/material.dart';
 import 'hub/create_hero_screen.dart';
 import 'hub/game_controller.dart';
 import 'hub/hub_screen.dart';
+import 'iap/store_billing_port.dart';
+import 'iap/store_iap_service.dart';
 import 'save/cloud_save_port.dart';
 import 'save/local_save_repository.dart';
 import 'save/save_service.dart';
 
 class MidgardApp extends StatelessWidget {
-  const MidgardApp({super.key, this.controller});
+  const MidgardApp({
+    super.key,
+    this.controller,
+    this.cloud,
+    this.storeTarget,
+  });
 
   final GameController? controller;
+  final CloudSavePort? cloud;
+  final StoreTarget? storeTarget;
 
   @override
   Widget build(BuildContext context) {
@@ -23,13 +32,16 @@ class MidgardApp extends StatelessWidget {
       ),
       home: controller != null
           ? _GameRoot(controller: controller!)
-          : const _BootstrapRoot(),
+          : _BootstrapRoot(cloud: cloud, storeTarget: storeTarget),
     );
   }
 }
 
 class _BootstrapRoot extends StatefulWidget {
-  const _BootstrapRoot();
+  const _BootstrapRoot({this.cloud, this.storeTarget});
+
+  final CloudSavePort? cloud;
+  final StoreTarget? storeTarget;
 
   @override
   State<_BootstrapRoot> createState() => _BootstrapRootState();
@@ -45,11 +57,14 @@ class _BootstrapRootState extends State<_BootstrapRoot> {
   }
 
   Future<void> _init() async {
+    final cloud = widget.cloud ?? resolveCloudSavePort();
+    final storeTarget = widget.storeTarget ?? resolveStoreTarget();
     final controller = GameController(
       save: SaveService(
         local: LocalSaveRepository(),
-        cloud: NoopCloudSavePort(),
+        cloud: cloud,
       ),
+      iap: StoreIapService(target: storeTarget),
     );
     await controller.bootstrap();
     if (mounted) {
