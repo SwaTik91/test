@@ -452,6 +452,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _applySkillEvent(SkillCastEvent event) {
+    player.playCastAnimation();
     final targets = _targetsInRange(
       event.range,
     ).take(event.targetCount).toList(growable: false);

@@ -2,26 +2,37 @@ import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../art/animation_atlas.dart';
 import '../../art/art_atlas.dart';
+import '../../art/hero_anim_state.dart';
 import '../../core/ids.dart';
 
-class PlayerComponent extends SpriteComponent {
+class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   PlayerComponent._({
     required this.maxHp,
     required this.maxSp,
     required this.moveSpeed,
     required this.groundY,
-    required Sprite sprite,
+    required Map<HeroAnimName, SpriteAnimation> animations,
   }) : currentHp = maxHp,
        currentSp = maxSp,
        super(
-         sprite: sprite,
+         animations: animations,
+         current: HeroAnimName.idle,
          position: Vector2(120, groundY),
          size: Vector2(48, 64),
          anchor: Anchor.bottomCenter,
+         autoResize: false,
        ) {
     paint.color = Colors.white;
   }
+
+  static const double _gravity = 1200;
+  static const double _jumpVelocity = -520;
+
+  static double get _castDuration =>
+      AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast).length *
+      AnimationAtlas.heroStepTime(HeroAnimName.cast);
 
   static Future<PlayerComponent> create({
     required HeroClassId classId,
@@ -30,14 +41,50 @@ class PlayerComponent extends SpriteComponent {
     required double moveSpeed,
     required double groundY,
   }) async {
-    final sprite = await ArtAtlas.loadSprite(ArtAtlas.heroPath(classId));
+    final animations = await _loadAnimations(classId);
     return PlayerComponent._(
       maxHp: maxHp,
       maxSp: maxSp,
       moveSpeed: moveSpeed,
       groundY: groundY,
-      sprite: sprite,
+      animations: animations,
     );
+  }
+
+  static Future<Map<HeroAnimName, SpriteAnimation>> _loadAnimations(
+    HeroClassId classId,
+  ) async {
+    try {
+      final animations = <HeroAnimName, SpriteAnimation>{};
+      for (final anim in HeroAnimName.values) {
+        animations[anim] = await AnimationAtlas.load(
+          AnimationAtlas.heroFrames(classId, anim),
+          AnimationAtlas.heroStepTime(anim),
+          loop: anim != HeroAnimName.cast,
+        );
+      }
+      return animations;
+    } catch (_) {
+      return _staticFallbackAnimations(classId);
+    }
+  }
+
+  static Future<Map<HeroAnimName, SpriteAnimation>> _staticFallbackAnimations(
+    HeroClassId classId,
+  ) async {
+    final sprite = await ArtAtlas.loadSprite(ArtAtlas.heroPath(classId));
+    return _singleSpriteAnimations(sprite);
+  }
+
+  static Map<HeroAnimName, SpriteAnimation> _singleSpriteAnimations(
+    Sprite sprite,
+  ) {
+    final staticAnim = SpriteAnimation.spriteList(
+      [sprite],
+      stepTime: 1.0,
+      loop: true,
+    );
+    return {for (final anim in HeroAnimName.values) anim: staticAnim};
   }
 
   @visibleForTesting
@@ -54,16 +101,15 @@ class PlayerComponent extends SpriteComponent {
        currentHp = maxHp,
        currentSp = maxSp,
        super(
-         sprite: sprite,
+         animations: _singleSpriteAnimations(sprite),
+         current: HeroAnimName.idle,
          position: position ?? Vector2(120, groundY),
          size: Vector2(48, 64),
          anchor: Anchor.bottomCenter,
+         autoResize: false,
        ) {
     paint.color = Colors.white;
   }
-
-  static const double _gravity = 1200;
-  static const double _jumpVelocity = -520;
 
   int maxHp;
   int maxSp;
@@ -76,6 +122,7 @@ class PlayerComponent extends SpriteComponent {
   double _horizontal = 0;
   double _verticalVelocity = 0;
   double _damageFlashSeconds = 0;
+  double _castTimer = 0;
 
   bool get isDead => currentHp <= 0;
 
@@ -98,6 +145,10 @@ class PlayerComponent extends SpriteComponent {
       return true;
     }
     return false;
+  }
+
+  void playCastAnimation() {
+    _castTimer = _castDuration;
   }
 
   void takeDamage(int amount) {
@@ -156,6 +207,19 @@ class PlayerComponent extends SpriteComponent {
     if (position.y > floorY) {
       position.y = floorY;
       _verticalVelocity = 0;
+    }
+
+    if (_castTimer > 0) {
+      _castTimer = (_castTimer - dt).clamp(0, double.infinity).toDouble();
+    }
+
+    final anim = selectHeroAnim(
+      grounded: isGrounded,
+      vx: _horizontal * moveSpeed,
+      casting: _castTimer > 0,
+    );
+    if (current != anim) {
+      current = anim;
     }
 
     if (_damageFlashSeconds > 0) {
