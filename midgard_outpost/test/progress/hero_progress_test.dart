@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:midgard_outpost/core/ids.dart';
 import 'package:midgard_outpost/progress/hero_progress.dart';
 import 'package:midgard_outpost/progress/progress_service.dart';
-import 'package:midgard_outpost/progress/stats.dart';
 import 'package:midgard_outpost/run/run_rewards.dart';
 
 void main() {
@@ -28,16 +27,18 @@ void main() {
   });
 
   test('allocateStat spends one point', () {
-    var hero = HeroProgress.createNew(HeroClassId.paladin)
-        .copyWith(unspentStatPoints: 1);
+    var hero = HeroProgress.createNew(
+      HeroClassId.paladin,
+    ).copyWith(unspentStatPoints: 1);
     hero = ProgressService.allocateStat(hero, StatId.vit);
     expect(hero.unspentStatPoints, 0);
     expect(hero.stats[StatId.vit], 2);
   });
 
   test('allocateSkill increases rank and spends job point', () {
-    var hero = HeroProgress.createNew(HeroClassId.archer)
-        .copyWith(unspentSkillPoints: 1);
+    var hero = HeroProgress.createNew(
+      HeroClassId.archer,
+    ).copyWith(unspentSkillPoints: 1);
     hero = ProgressService.allocateSkill(hero, 'double_strafe');
     expect(hero.unspentSkillPoints, 0);
     expect(hero.skillRanks['double_strafe'], 1);

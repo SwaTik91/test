@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:midgard_outpost/content/classes.dart';
 import 'package:midgard_outpost/content/skills.dart';
 import 'package:midgard_outpost/content/run_upgrades.dart';
 import 'package:midgard_outpost/core/ids.dart';
@@ -38,6 +37,9 @@ void main() {
       ),
       isTrue,
     );
-    expect(archerPool.where((u) => u.kind == RunUpgradeKind.skill), hasLength(15));
+    expect(
+      archerPool.where((u) => u.kind == RunUpgradeKind.skill),
+      hasLength(15),
+    );
   });
 }
