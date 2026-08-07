@@ -21,12 +21,34 @@ void main() {
     );
   });
 
-  test('world and enemy paths are registered', () {
+  test('world paths are registered', () {
     expect(ArtAtlas.groundTile, 'world/ground_tile.png');
     expect(ArtAtlas.bgFields, 'world/bg_fields.png');
     expect(ArtAtlas.bgForest, 'world/bg_forest.png');
-    expect(ArtAtlas.mobGoblin, 'enemies/mob_goblin.png');
-    expect(ArtAtlas.bossOgre, 'enemies/boss_ogre.png');
+  });
+
+  test('canon enemy paths are registered', () {
+    expect(ArtAtlas.mobSlime, 'enemies/slime.png');
+    expect(ArtAtlas.mobLunatic, 'enemies/lunatic.png');
+    expect(ArtAtlas.mobWolf, 'enemies/wolf.png');
+    expect(ArtAtlas.mobMushroom, 'enemies/mushroom.png');
+    expect(ArtAtlas.mobBee, 'enemies/bee.png');
+    expect(ArtAtlas.mobCrab, 'enemies/crab.png');
+    expect(ArtAtlas.mobGhost, 'enemies/ghost.png');
+    expect(ArtAtlas.mobPlant, 'enemies/plant.png');
+    expect(ArtAtlas.bossDemon, 'enemies/boss_demon.png');
+    expect(ArtAtlas.bossSpider, 'enemies/boss_spider.png');
+    expect(ArtAtlas.bossUndead, 'enemies/boss_undead.png');
+    expect(ArtAtlas.bossGolem, 'enemies/boss_golem.png');
+    expect(ArtAtlas.allPaths, contains(ArtAtlas.mobWolf));
+    expect(ArtAtlas.allPaths, isNot(contains('enemies/mob_goblin.png')));
+  });
+
+  test('deprecated enemy aliases point at canon defaults', () {
+    expect(ArtAtlas.enemyMobPath, ArtAtlas.mobSlime);
+    expect(ArtAtlas.enemyBossPath, ArtAtlas.bossDemon);
+    expect(ArtAtlas.mobGoblin, ArtAtlas.mobSlime);
+    expect(ArtAtlas.bossOgre, ArtAtlas.bossDemon);
   });
 
   test('props, projectiles, hub, and ui paths are registered', () {
@@ -52,8 +74,18 @@ void main() {
       'heroes/archer.png',
       'heroes/mage.png',
       'heroes/paladin.png',
-      'enemies/mob_goblin.png',
-      'enemies/boss_ogre.png',
+      'enemies/slime.png',
+      'enemies/lunatic.png',
+      'enemies/wolf.png',
+      'enemies/mushroom.png',
+      'enemies/bee.png',
+      'enemies/crab.png',
+      'enemies/ghost.png',
+      'enemies/plant.png',
+      'enemies/boss_demon.png',
+      'enemies/boss_spider.png',
+      'enemies/boss_undead.png',
+      'enemies/boss_golem.png',
       'props/chest.png',
       'projectiles/arrow.png',
       'projectiles/fireball.png',
