@@ -7,6 +7,7 @@ import 'package:flame/input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../art/art_atlas.dart';
 import '../content/balance.dart';
 import '../content/monsters.dart';
 import '../content/run_upgrades.dart';
@@ -55,9 +56,18 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   late final AutoSkillSystem autoSkillSystem;
   late final String autoSkillName;
 
-  final List<RectangleComponent> _groundTiles = [];
+  final List<SpriteComponent> _groundTiles = [];
   final List<MonsterComponent> _monsters = [];
   final List<ChestComponent> _chests = [];
+
+  late final Sprite _mobSprite;
+  late final Sprite _bossSprite;
+  late final Sprite _chestSprite;
+  late final Sprite _projectileSprite;
+  late final Sprite _bgFieldsSprite;
+  late final Sprite _bgForestSprite;
+  SpriteComponent? _biomeBackground;
+  Biome _displayedBiome = Biome.fields;
 
   RunState _runState;
   List<RunUpgradeDef> _pendingUpgradeOffers = const [];
@@ -103,7 +113,28 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
     autoSkillName = _autoSkillNameForHero();
 
-    player = PlayerComponent(
+    final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
+    _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
+    _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
+    _mobSprite = await ArtAtlas.loadSprite(ArtAtlas.mobGoblin);
+    _bossSprite = await ArtAtlas.loadSprite(ArtAtlas.bossOgre);
+    _chestSprite = await ArtAtlas.loadSprite(ArtAtlas.chest);
+    _projectileSprite = await ArtAtlas.loadSprite(
+      ArtAtlas.projectilePath(hero.classId),
+    );
+
+    _biomeBackground = SpriteComponent(
+      sprite: _bgFieldsSprite,
+      anchor: Anchor.center,
+    );
+    camera.backdrop.add(_biomeBackground!);
+    _syncBiomeBackgroundLayout();
+    _displayedBiome = biome;
+
+    _addGroundTiles(groundSprite);
+
+    player = await PlayerComponent.create(
+      classId: hero.classId,
       maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
       maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
       moveSpeed: CombatMath.moveSpeed(
@@ -119,11 +150,30 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       maxSp: player.maxSp,
     );
 
-    _addGroundTiles();
     world.add(player);
     _spawnMonster();
     _spawnMonster();
     camera.follow(player, horizontalOnly: true, snap: true);
+  }
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    _syncBiomeBackgroundLayout();
+  }
+
+  void _syncBiomeBackgroundLayout() {
+    final background = _biomeBackground;
+    if (background == null) {
+      return;
+    }
+    final viewportSize = camera.viewport.virtualSize;
+    if (viewportSize.x <= 0 || viewportSize.y <= 0) {
+      return;
+    }
+    background
+      ..size = viewportSize.clone()
+      ..position = viewportSize / 2;
   }
 
   @override
@@ -138,6 +188,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _hudTimer += dt;
 
     _recycleGroundTiles();
+    _syncBiomeIfNeeded();
     _spawnAheadIfNeeded();
     _spawnMilestonesIfNeeded();
     _handleAutoSkills(dt);
@@ -228,19 +279,28 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     player.setHorizontal(axis.toDouble());
   }
 
-  void _addGroundTiles() {
+  void _addGroundTiles(Sprite groundSprite) {
     for (var i = 0; i < 8; i += 1) {
-      final tile = RectangleComponent(
+      final tile = SpriteComponent(
+        sprite: groundSprite,
         position: Vector2(i * _tileWidth, _groundY),
         size: Vector2(_tileWidth, 72),
-        paint: Paint()
-          ..color = i.isEven
-              ? const Color(0xFF2E5E3E)
-              : const Color(0xFF294F36),
       );
       _groundTiles.add(tile);
       world.add(tile);
     }
+  }
+
+  void _syncBiomeIfNeeded() {
+    final currentBiome = biome;
+    if (currentBiome == _displayedBiome) {
+      return;
+    }
+    _displayedBiome = currentBiome;
+    _biomeBackground?.sprite = switch (currentBiome) {
+      Biome.fields => _bgFieldsSprite,
+      Biome.forest => _bgForestSprite,
+    };
   }
 
   void _recycleGroundTiles() {
@@ -274,7 +334,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _spawnChest(double x) {
-    final chest = ChestComponent(position: Vector2(x, _groundY - 34));
+    final chest = ChestComponent(
+      sprite: _chestSprite,
+      position: Vector2(x, _groundY - 34),
+    );
     _chests.add(chest);
     world.add(chest);
   }
@@ -288,6 +351,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       isBoss: isBoss,
     );
     final monster = MonsterComponent(
+      sprite: spec.isBoss ? _bossSprite : _mobSprite,
       target: player,
       position: Vector2(x, _groundY - spec.height),
       maxHp: _monsterMaxHp(spec),
@@ -300,7 +364,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       isBoss: spec.isBoss,
       moveSpeed: spec.moveSpeed,
       size: Vector2(spec.width, spec.height),
-      color: _monsterColor(spec),
     );
     if (!isBoss) {
       _nextSpawnX += 430;
@@ -343,16 +406,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
             RunUpgradeEffects.monsterDropChanceMultiplier(ownedRunUpgradeIds))
         .clamp(0, 1)
         .toDouble();
-  }
-
-  Color _monsterColor(MonsterSpec spec) {
-    if (spec.isBoss) {
-      return Colors.purpleAccent;
-    }
-    return switch (spec.biome) {
-      Biome.fields => Colors.deepOrangeAccent,
-      Biome.forest => Colors.greenAccent,
-    };
   }
 
   void _handleAutoAttack() {
@@ -476,24 +529,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final end = target.center;
     world.add(
       ProjectileComponent(
+        sprite: _projectileSprite,
         start: event.projectile ? start : end,
         end: end,
         duration: event.projectile ? 0.18 : 0.14,
         radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
-        color: _skillColor(event),
       ),
     );
-  }
-
-  Color _skillColor(SkillCastEvent event) {
-    if (event.kind == SkillCastKind.ultimate) {
-      return Colors.amberAccent;
-    }
-    return switch (hero.classId) {
-      HeroClassId.archer => Colors.lightGreenAccent,
-      HeroClassId.mage => Colors.deepPurpleAccent,
-      HeroClassId.paladin => Colors.white,
-    };
   }
 
   void _handleMonsterContact() {

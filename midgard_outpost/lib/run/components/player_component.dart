@@ -1,19 +1,43 @@
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
-class PlayerComponent extends RectangleComponent {
-  PlayerComponent({
+import '../../art/art_atlas.dart';
+import '../../core/ids.dart';
+
+class PlayerComponent extends SpriteComponent {
+  PlayerComponent._({
     required this.maxHp,
     required this.maxSp,
     required this.moveSpeed,
     required this.groundY,
+    required Sprite sprite,
   }) : currentHp = maxHp,
        currentSp = maxSp,
        super(
-         position: Vector2(120, groundY - 56),
-         size: Vector2(36, 56),
-         paint: Paint()..color = Colors.lightBlueAccent,
-       );
+         sprite: sprite,
+         position: Vector2(120, groundY),
+         size: Vector2(48, 64),
+         anchor: Anchor.bottomCenter,
+       ) {
+    paint.color = Colors.white;
+  }
+
+  static Future<PlayerComponent> create({
+    required HeroClassId classId,
+    required int maxHp,
+    required int maxSp,
+    required double moveSpeed,
+    required double groundY,
+  }) async {
+    final sprite = await ArtAtlas.loadSprite(ArtAtlas.heroPath(classId));
+    return PlayerComponent._(
+      maxHp: maxHp,
+      maxSp: maxSp,
+      moveSpeed: moveSpeed,
+      groundY: groundY,
+      sprite: sprite,
+    );
+  }
 
   static const double _gravity = 1200;
   static const double _jumpVelocity = -520;
@@ -34,7 +58,12 @@ class PlayerComponent extends RectangleComponent {
 
   bool get isGrounded => position.y >= groundY - size.y - 0.5;
 
-  Rect get bounds => Rect.fromLTWH(position.x, position.y, size.x, size.y);
+  Rect get bounds => Rect.fromLTWH(
+    position.x - size.x * anchor.x,
+    position.y - size.y * anchor.y,
+    size.x,
+    size.y,
+  );
 
   void setHorizontal(double axis) {
     _horizontal = axis.clamp(-1, 1).toDouble();
@@ -100,7 +129,7 @@ class PlayerComponent extends RectangleComponent {
 
     _verticalVelocity += _gravity * dt;
     position.y += _verticalVelocity * dt;
-    final floorY = groundY - size.y;
+    final floorY = groundY;
     if (position.y > floorY) {
       position.y = floorY;
       _verticalVelocity = 0;
@@ -109,7 +138,7 @@ class PlayerComponent extends RectangleComponent {
     if (_damageFlashSeconds > 0) {
       _damageFlashSeconds -= dt;
       if (_damageFlashSeconds <= 0) {
-        paint.color = Colors.lightBlueAccent;
+        paint.color = Colors.white;
       }
     }
   }

@@ -1,12 +1,13 @@
-import 'package:flame/components.dart';
-import 'package:flutter/material.dart';
+import 'dart:ui';
 
-class ChestComponent extends RectangleComponent {
-  ChestComponent({required Vector2 position})
+import 'package:flame/components.dart';
+
+class ChestComponent extends SpriteComponent {
+  ChestComponent({required Sprite sprite, required Vector2 position})
     : super(
+        sprite: sprite,
         position: position,
         size: Vector2(42, 34),
-        paint: Paint()..color = const Color(0xFFD8A431),
       );
 
   bool isCollected = false;
@@ -18,7 +19,6 @@ class ChestComponent extends RectangleComponent {
       return;
     }
     isCollected = true;
-    paint.color = Colors.grey;
     removeFromParent();
   }
 }

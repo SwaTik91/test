@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'player_component.dart';
 
-class MonsterComponent extends RectangleComponent {
+class MonsterComponent extends SpriteComponent {
   MonsterComponent({
+    required Sprite sprite,
     required this.target,
     required Vector2 position,
     required this.maxHp,
@@ -17,13 +18,14 @@ class MonsterComponent extends RectangleComponent {
     this.isBoss = false,
     this.moveSpeed = 58,
     Vector2? size,
-    Color? color,
   }) : currentHp = maxHp,
        super(
+         sprite: sprite,
          position: position,
          size: size ?? Vector2(40, 44),
-         paint: Paint()..color = color ?? Colors.deepOrangeAccent,
-       );
+       ) {
+    paint.color = Colors.white;
+  }
 
   final PlayerComponent target;
   final int maxHp;

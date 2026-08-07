@@ -1,20 +1,19 @@
 import 'package:flame/components.dart';
-import 'package:flutter/material.dart';
 
-class ProjectileComponent extends CircleComponent {
+class ProjectileComponent extends SpriteComponent {
   ProjectileComponent({
+    required Sprite sprite,
     required Vector2 start,
     required Vector2 end,
     required this.duration,
-    required Color color,
     this.radiusSize = 6,
   }) : _start = start.clone(),
        _end = end.clone(),
        _elapsed = 0,
        super(
+         sprite: sprite,
          position: start,
-         radius: radiusSize,
-         paint: Paint()..color = color,
+         size: Vector2.all(radiusSize * 2),
          anchor: Anchor.center,
        );
 

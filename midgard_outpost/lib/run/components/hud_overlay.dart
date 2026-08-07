@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../art/art_atlas.dart';
 import '../midgard_run_game.dart';
 
 class HudOverlay extends StatelessWidget {
@@ -35,11 +36,10 @@ class HudOverlay extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _Bar(
+                            _HpBar(
                               label:
                                   'HP ${game.player.currentHp}/${game.player.maxHp}',
                               value: game.hpFraction,
-                              color: Colors.redAccent,
                             ),
                             const SizedBox(height: 8),
                             _Bar(
@@ -87,12 +87,16 @@ class HudOverlay extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _TapButton(label: 'Прыжок', onTap: game.jump),
+                      _ImageTapButton(
+                        assetPath: ArtAtlas.btnJump,
+                        onTap: game.jump,
+                      ),
                       const SizedBox(width: 12),
-                      _TapButton(
+                      _ImageTapButton(
+                        assetPath: ArtAtlas.btnUlt,
                         label: ultimateReady
-                            ? 'Ульт'
-                            : 'Ульт ${game.ultimateCooldownRemaining.ceil()}',
+                            ? null
+                            : game.ultimateCooldownRemaining.ceil().toString(),
                         onTap: game.tryCastUltimate,
                       ),
                     ],
@@ -103,6 +107,43 @@ class HudOverlay extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HpBar extends StatelessWidget {
+  const _HpBar({required this.label, required this.value});
+
+  final String label;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white)),
+        const SizedBox(height: 4),
+        Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            Image.asset(
+              '${ArtAtlas.assetRoot}${ArtAtlas.hpBarFrame}',
+              height: 24,
+              fit: BoxFit.fitWidth,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: LinearProgressIndicator(
+                value: value.clamp(0, 1).toDouble(),
+                color: Colors.redAccent,
+                backgroundColor: Colors.transparent,
+                minHeight: 12,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -148,17 +189,41 @@ class _HoldButton extends StatelessWidget {
   }
 }
 
-class _TapButton extends StatelessWidget {
-  const _TapButton({required this.label, required this.onTap});
+class _ImageTapButton extends StatelessWidget {
+  const _ImageTapButton({
+    required this.assetPath,
+    required this.onTap,
+    this.label,
+  });
 
-  final String label;
+  final String assetPath;
   final VoidCallback onTap;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: _ControlSurface(label: label),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Image.asset(
+            '${ArtAtlas.assetRoot}$assetPath',
+            width: 64,
+            height: 64,
+            fit: BoxFit.contain,
+          ),
+          if (label != null)
+            Text(
+              label!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
