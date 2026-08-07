@@ -20,8 +20,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   MidgardRunGame({
     required this.hero,
     required this.onDeath,
-    this.ownedRunUpgradeIds = const {},
-  });
+    Set<String> ownedRunUpgradeIds = const {},
+  }) : ownedRunUpgradeIds = {...ownedRunUpgradeIds};
 
   static const String hudOverlayKey = 'hud';
   static const double _groundY = 330;
@@ -147,8 +147,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void tryCastUltimate() {
     autoSkillSystem.sp = player.currentSp;
+    final enemyDistances = _targetDistances();
     final event = autoSkillSystem.tryCastUltimate(
-      enemiesInRange: _targetsInRange(_skillTriggerRangeForClass()).length,
+      enemiesInRange: enemyDistances.length,
+      enemyDistances: enemyDistances,
     );
     player.setSp(autoSkillSystem.sp);
     if (event != null) {
@@ -242,9 +244,11 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void _handleAutoSkills(double dt) {
     autoSkillSystem.sp = player.currentSp;
+    final enemyDistances = _targetDistances();
     final events = autoSkillSystem.tick(
       dt,
-      enemiesInRange: _targetsInRange(_skillTriggerRangeForClass()).length,
+      enemiesInRange: enemyDistances.length,
+      enemyDistances: enemyDistances,
     );
     player.setSp(autoSkillSystem.sp);
 
@@ -285,14 +289,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     };
   }
 
-  double _skillTriggerRangeForClass() {
-    return switch (hero.classId) {
-      HeroClassId.archer => 380,
-      HeroClassId.mage => 340,
-      HeroClassId.paladin => 150,
-    };
-  }
-
   List<MonsterComponent> _targetsInRange(double range) {
     final targets = _monsters.where((monster) {
       if (!monster.isAlive) {
@@ -308,6 +304,21 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       ),
     );
     return targets;
+  }
+
+  List<double> _targetDistances() {
+    final distances = _monsters
+        .where((monster) {
+          if (!monster.isAlive) {
+            return false;
+          }
+          final dy = (monster.position.y - player.position.y).abs();
+          return dy < 130;
+        })
+        .map((monster) => (monster.position.x - player.position.x).abs())
+        .toList();
+    distances.sort();
+    return distances;
   }
 
   void _spawnSkillVisual(SkillCastEvent event, MonsterComponent target) {

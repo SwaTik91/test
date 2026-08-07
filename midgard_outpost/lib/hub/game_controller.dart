@@ -6,22 +6,23 @@ import '../iap/iap_service.dart';
 import '../progress/hero_progress.dart';
 import '../progress/progress_service.dart';
 import '../run/run_rewards.dart';
+import '../run/run_state.dart';
 import '../save/save_service.dart';
 
 class GameController extends ChangeNotifier {
-  GameController({
-    required SaveService save,
-    IapService? iap,
-  })  : _save = save,
-        _iap = iap ?? FakeIapService();
+  GameController({required SaveService save, IapService? iap})
+    : _save = save,
+      _iap = iap ?? FakeIapService();
 
   final SaveService _save;
   final IapService _iap;
 
   HeroProgress? _hero;
+  RunState _runState = RunState.initial();
   bool _bootstrapped = false;
 
   HeroProgress? get hero => _hero;
+  RunState get runState => _runState;
   bool get isBootstrapped => _bootstrapped;
   IapService get iap => _iap;
 
@@ -34,6 +35,7 @@ class GameController extends ChangeNotifier {
   Future<void> createHero(HeroClassId classId) async {
     final hero = HeroProgress.createNew(classId);
     _hero = hero;
+    _runState = RunState.initial();
     await _save.persist(hero);
     notifyListeners();
   }
@@ -58,6 +60,7 @@ class GameController extends ChangeNotifier {
     final current = _hero;
     if (current == null) return;
     _hero = ProgressService.applyRunRewards(current, rewards);
+    _runState = RunState.initial();
     await _save.persist(_hero!);
     notifyListeners();
   }

@@ -22,10 +22,15 @@ class _RunScreenState extends State<RunScreen> {
   @override
   Widget build(BuildContext context) {
     final hero = widget.controller.hero!;
+    final runState = widget.controller.runState;
     return Scaffold(
       body: ClipRect(
         child: GameWidget<MidgardRunGame>.controlled(
-          gameFactory: () => MidgardRunGame(hero: hero, onDeath: _openSummary),
+          gameFactory: () => MidgardRunGame(
+            hero: hero,
+            onDeath: _openSummary,
+            ownedRunUpgradeIds: runState.ownedUpgradeIds,
+          ),
           overlayBuilderMap: {
             MidgardRunGame.hudOverlayKey: (context, game) =>
                 HudOverlay(game: game),

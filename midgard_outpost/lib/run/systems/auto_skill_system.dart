@@ -31,7 +31,7 @@ class AutoSkillSystem {
     required Set<String> upgrades,
     this.maxSp = 80,
   }) : ranks = Map.unmodifiable(ranks),
-       upgrades = Set.unmodifiable(upgrades),
+       upgrades = upgrades,
        sp = maxSp;
 
   final HeroClassId classId;
@@ -42,14 +42,21 @@ class AutoSkillSystem {
   int sp;
   final Map<String, double> _cooldowns = {};
   double _ultimateCooldownRemaining = 0;
+  double _spRegenAccumulator = 0;
 
   double get ultimateCooldownRemaining => _ultimateCooldownRemaining;
 
-  List<SkillCastEvent> tick(double dt, {required int enemiesInRange}) {
+  List<SkillCastEvent> tick(
+    double dt, {
+    required int enemiesInRange,
+    Iterable<double>? enemyDistances,
+  }) {
     _tickCooldowns(dt);
     _regenerateSp(dt);
 
-    if (enemiesInRange <= 0) {
+    final distances = enemyDistances?.toList(growable: false);
+    if ((distances == null && enemiesInRange <= 0) ||
+        (distances != null && distances.isEmpty)) {
       return const [];
     }
 
@@ -57,7 +64,16 @@ class AutoSkillSystem {
       if (skill.kind != SkillKind.auto || _rank(skill.id) <= 0) {
         continue;
       }
-      final event = _tryCast(skill, SkillCastKind.auto, enemiesInRange);
+      final skillEnemiesInRange = _enemyCountForSkill(
+        skill,
+        SkillCastKind.auto,
+        enemiesInRange,
+        distances,
+      );
+      if (skillEnemiesInRange <= 0) {
+        continue;
+      }
+      final event = _tryCast(skill, SkillCastKind.auto, skillEnemiesInRange);
       if (event != null) {
         return [event];
       }
@@ -66,21 +82,42 @@ class AutoSkillSystem {
     return const [];
   }
 
-  bool tryUltimate({int enemiesInRange = 1}) =>
-      tryCastUltimate(enemiesInRange: enemiesInRange) != null;
+  bool tryUltimate({
+    int enemiesInRange = 1,
+    Iterable<double>? enemyDistances,
+  }) =>
+      tryCastUltimate(
+        enemiesInRange: enemiesInRange,
+        enemyDistances: enemyDistances,
+      ) !=
+      null;
 
-  SkillCastEvent? tryCastUltimate({int enemiesInRange = 1}) {
-    if (enemiesInRange <= 0 || _ultimateCooldownRemaining > 0) {
-      return null;
-    }
+  SkillCastEvent? tryCastUltimate({
+    int enemiesInRange = 1,
+    Iterable<double>? enemyDistances,
+  }) {
     final skill = SkillsCatalog.forClass(
       classId,
     ).firstWhere((skill) => skill.kind == SkillKind.ultimate);
+    final distances = enemyDistances?.toList(growable: false);
+    final skillEnemiesInRange = _enemyCountForSkill(
+      skill,
+      SkillCastKind.ultimate,
+      enemiesInRange,
+      distances,
+    );
+    if (skillEnemiesInRange <= 0 || _ultimateCooldownRemaining > 0) {
+      return null;
+    }
     if (_rank(skill.id) <= 0) {
       return null;
     }
 
-    final event = _buildEvent(skill, SkillCastKind.ultimate, enemiesInRange);
+    final event = _buildEvent(
+      skill,
+      SkillCastKind.ultimate,
+      skillEnemiesInRange,
+    );
     if (event.spCost > sp) {
       return null;
     }
@@ -148,8 +185,37 @@ class AutoSkillSystem {
   }
 
   void _regenerateSp(double dt) {
+    if (sp >= maxSp) {
+      _spRegenAccumulator = 0;
+      return;
+    }
+
     final regen = 2 + (_rank('meditation') * 0.8);
-    sp = (sp + (regen * dt).floor()).clamp(0, maxSp).toInt();
+    _spRegenAccumulator += regen * dt;
+    final wholeSp = _spRegenAccumulator.floor();
+    if (wholeSp <= 0) {
+      return;
+    }
+
+    sp = (sp + wholeSp).clamp(0, maxSp).toInt();
+    _spRegenAccumulator -= wholeSp;
+    if (sp >= maxSp) {
+      _spRegenAccumulator = 0;
+    }
+  }
+
+  int _enemyCountForSkill(
+    SkillDef skill,
+    SkillCastKind kind,
+    int enemiesInRange,
+    List<double>? enemyDistances,
+  ) {
+    if (enemyDistances == null) {
+      return enemiesInRange;
+    }
+
+    final range = _tuningFor(skill.id, kind).range;
+    return enemyDistances.where((distance) => distance <= range).length;
   }
 
   int _rank(String skillId) => ranks[skillId] ?? 0;
