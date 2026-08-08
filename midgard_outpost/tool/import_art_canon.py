@@ -213,6 +213,15 @@ def lower_row_poses(rows: list[list[BBox]]) -> list[BBox]:
     return [pose for row in rows[1:] for pose in row]
 
 
+def walk_pose_from_sheet(components: list[BBox]) -> BBox | None:
+    """Best side-view walk pose on the lower row(s), if present."""
+    rows = group_rows(components)
+    lower = lower_row_poses(rows)
+    if not lower:
+        return None
+    return lower[-1]
+
+
 def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
     rows = group_rows(components)
     if not rows:
@@ -230,9 +239,10 @@ def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
             padded.append(pool[-1])
         return padded
 
+    # Run frames come from art-canon/walk/ (4-frame side-view cycles), not the hero sheet.
+    # The sheet top row is idle/reference poses; using it for run duplicated idle frames.
     return {
         "idle": pick(top, 2, fallback=top),
-        "run": pick(top, 4, fallback=top),
         "jump": pick(lower, 2, fallback=top),
         "cast": pick(lower, 3, fallback=top),
     }
@@ -261,6 +271,8 @@ def import_hero_sheet(src: Path, hero_name: str, out_dir: Path) -> list[tuple[Pa
             write_png(frame, dest)
             results.append((dest, frame.size))
             print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+
+    # Run frames are imported separately from art-canon/walk/ side-view cycles.
 
     preview = resize_max_edge(crop_component(sheet, pose_map["idle"][0]), 128)
     preview_rel = Path("heroes") / f"{hero_name}.png"
@@ -359,6 +371,21 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
         return out.size
 
 
+def import_walk_cycles_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
+    """Import run_0..3 from art-canon/walk/ when present."""
+    walk_dir = canon_dir / "walk"
+    if not walk_dir.is_dir():
+        return []
+
+    from import_walk_cycles import import_walk_cycles
+
+    results: list[tuple[Path, Path, tuple[int, int]]] = []
+    for src, dest in import_walk_cycles(walk_dir, out_dir):
+        with Image.open(dest) as img:
+            results.append((src, dest, img.size))
+    return results
+
+
 def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
     """Import all mapped canon PNGs. Returns [(src, dest, (w, h)), ...]."""
     results: list[tuple[Path, Path, tuple[int, int]]] = []
@@ -389,6 +416,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
             if mode != "creature":
                 print(f"{src.name} -> {rel_dest} ({size[0]}x{size[1]})")
 
+    results.extend(import_walk_cycles_if_present(canon_dir, out_dir))
     return results
 
 

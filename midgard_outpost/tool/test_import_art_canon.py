@@ -66,6 +66,28 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
         }
         self.assertEqual(len(hashes), 2, f"mage jump frames duplicated: {hashes}")
 
+    def test_hero_run_frames_are_unique_and_not_idle(self) -> None:
+        for hero in HERO_CLASSES:
+            idle_hashes = {
+                file_md5(ASSETS_DIR / "heroes" / hero / f"idle_{i}.png")
+                for i in range(2)
+            }
+            run_hashes = [
+                file_md5(ASSETS_DIR / "heroes" / hero / f"run_{i}.png")
+                for i in range(4)
+            ]
+            with self.subTest(hero=hero):
+                self.assertEqual(
+                    len(set(run_hashes)),
+                    4,
+                    f"{hero} run frames duplicated: {run_hashes}",
+                )
+                overlap = set(run_hashes) & idle_hashes
+                self.assertFalse(
+                    overlap,
+                    f"{hero} run frames duplicate idle: {overlap}",
+                )
+
     def test_hero_cutouts_have_transparent_corners(self) -> None:
         for hero in HERO_CLASSES:
             for anim in ("idle", "run", "jump", "cast"):
