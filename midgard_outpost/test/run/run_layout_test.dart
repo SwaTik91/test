@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flame/components.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:midgard_outpost/run/run_layout.dart';
@@ -46,6 +48,26 @@ void main() {
       );
       expect(cover.x, greaterThanOrEqualTo(1280));
       expect(cover.y, greaterThanOrEqualTo(layout.viewportHeight));
+    });
+
+    test('backdrop viewport bounds cover full region with bleed', () {
+      const srcW = 1536.0;
+      const srcH = 1024.0 * RunLayout.backdropSkyFraction;
+      const width = 1280.0;
+      final cover = layout.backdropCoverSize(
+        regionWidth: width,
+        regionHeight: layout.viewportHeight,
+        srcSize: Vector2(srcW, srcH),
+      );
+      final bounds = layout.backdropViewportBounds(
+        size: cover,
+        viewportWidth: width,
+        viewportHeight: layout.viewportHeight,
+      );
+      expect(bounds.left, lessThanOrEqualTo(0));
+      expect(bounds.top, lessThanOrEqualTo(0));
+      expect(bounds.right, greaterThanOrEqualTo(width));
+      expect(bounds.bottom, greaterThanOrEqualTo(layout.viewportHeight));
     });
 
     test('backdrop cover size fills viewport on narrow landscape widths', () {
@@ -123,6 +145,7 @@ void main() {
         final span = layout.groundWorldSpan(
           cameraCenterX: playerX,
           viewportWidth: viewportWidth,
+          extraLeftMarginTiles: 1,
         );
         final startX = layout.groundTileStartX(span.left);
         final count = layout.groundTileCountForSpan(
@@ -141,6 +164,21 @@ void main() {
           reason: 'height=$height',
         );
       }
+    });
+
+    test('ground span from visible rect extends extra margin on the left', () {
+      const height = 500.0;
+      final layout = RunLayout(height);
+      const visible = Rect.fromLTRB(-520, 0, 760, 500);
+      final span = layout.groundWorldSpanFromVisibleRect(
+        visibleWorldRect: visible,
+      );
+      final centerSpan = layout.groundWorldSpan(
+        cameraCenterX: 120,
+        viewportWidth: 1280,
+      );
+      expect(span.left, lessThan(centerSpan.left));
+      expect(span.right, closeTo(centerSpan.right, 0.01));
     });
   });
 }

@@ -56,6 +56,7 @@ Future<void> _expectInitialGroundCoverage(
 
   expect(game.isRunReady, isTrue, reason: 'stage=${game.loadStage}');
   expect(game.groundTilesForTest, isNotEmpty);
+  expect(game.leftEdgeCoveredAtStart(viewportWidth: width, viewportHeight: height), isTrue);
   expect(game.groundCoversVisibleSpan(viewportWidth: width), isTrue);
   expect(game.groundTilesAreContiguous(), isTrue);
 

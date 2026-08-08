@@ -76,16 +76,44 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       return false;
     }
     final width = viewportWidth ?? _viewportWidth;
-    final centerX = _groundCameraCenterX;
-    final visibleLeft = centerX - width / 2;
-    final visibleRight = centerX + width / 2;
+    final visible = _visibleWorldHorizontalSpan(width);
     final minX = _groundTiles
         .map((tile) => tile.position.x)
         .reduce(math.min);
     final maxX = _groundTiles
         .map((tile) => tile.position.x + tile.size.x)
         .reduce(math.max);
-    return minX <= visibleLeft && maxX >= visibleRight;
+    return minX <= visible.left && maxX >= visible.right;
+  }
+
+  @visibleForTesting
+  bool backdropCoversViewport({double? viewportWidth, double? viewportHeight}) {
+    final background = _biomeBackground;
+    if (background == null) {
+      return false;
+    }
+    final width = viewportWidth ?? _viewportWidth;
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    if (width <= 0 || height <= 0) {
+      return false;
+    }
+    final bounds = _layout.backdropViewportBounds(
+      size: background.size,
+      viewportWidth: width,
+      viewportHeight: height,
+    );
+    return bounds.left <= 0 &&
+        bounds.top <= 0 &&
+        bounds.right >= width &&
+        bounds.bottom >= height;
+  }
+
+  @visibleForTesting
+  bool leftEdgeCoveredAtStart({double? viewportWidth, double? viewportHeight}) {
+    final width = viewportWidth ?? _viewportWidth;
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    return groundCoversVisibleSpan(viewportWidth: width) &&
+        backdropCoversViewport(viewportWidth: width, viewportHeight: height);
   }
 
   @visibleForTesting
@@ -186,7 +214,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       loadStage = 'backdrop';
       _biomeBackground = SpriteComponent(
         sprite: _bgFieldsSkySprite,
-        anchor: Anchor.bottomCenter,
+        anchor: Anchor.bottomLeft,
       );
       ArtAtlas.applyNearestNeighbor(_biomeBackground!);
       camera.backdrop.add(_biomeBackground!);
@@ -255,6 +283,31 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double get _groundCameraCenterX =>
       isRunReady ? player.position.x : PlayerComponent.startX;
 
+  ({double left, double right}) _visibleWorldHorizontalSpan(double viewportWidth) {
+    if (isRunReady && camera.parent != null) {
+      final rect = camera.visibleWorldRect;
+      return (left: rect.left, right: rect.right);
+    }
+    final centerX = _groundCameraCenterX;
+    return (
+      left: centerX - viewportWidth / 2,
+      right: centerX + viewportWidth / 2,
+    );
+  }
+
+  ({double left, double right}) _groundSpanForLayout() {
+    if (isRunReady && camera.parent != null) {
+      return _layout.groundWorldSpanFromVisibleRect(
+        visibleWorldRect: camera.visibleWorldRect,
+      );
+    }
+    return _layout.groundWorldSpan(
+      cameraCenterX: _groundCameraCenterX,
+      viewportWidth: _viewportWidth,
+      extraLeftMarginTiles: 1,
+    );
+  }
+
   Sprite _skyBackdropCrop(Sprite full) {
     final skyHeight = full.srcSize.y * RunLayout.backdropSkyFraction;
     return Sprite(
@@ -309,7 +362,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     );
     background
       ..size = coverSize
-      ..position = Vector2(viewportSize.x / 2, viewportSize.y);
+      ..position = Vector2(-RunLayout.backdropBleedPx, viewportSize.y);
   }
 
   void _syncGroundTilesLayout() {
@@ -320,10 +373,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final groundY = _layout.groundY;
     final tileWidth = _layout.groundTileWidth;
     final tileHeight = _layout.groundTileHeight;
-    final span = _layout.groundWorldSpan(
-      cameraCenterX: _groundCameraCenterX,
-      viewportWidth: _viewportWidth,
-    );
+    final span = _groundSpanForLayout();
     final needed = _layout.groundTileCountForSpan(
       worldLeft: span.left,
       worldRight: span.right,
@@ -367,7 +417,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _collisionTimer += dt;
     _hudTimer += dt;
 
-    _recycleGroundTiles();
+    _syncGroundTilesLayout();
     _syncBiomeIfNeeded();
     _spawnAheadIfNeeded();
     _spawnMilestonesIfNeeded();
@@ -465,6 +515,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final span = _layout.groundWorldSpan(
       cameraCenterX: PlayerComponent.startX,
       viewportWidth: _viewportWidth,
+      extraLeftMarginTiles: 1,
     );
     final needed = _layout.groundTileCountForSpan(
       worldLeft: span.left,
@@ -493,22 +544,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       Biome.forest => _bgForestSkySprite,
     };
     _syncBiomeBackgroundLayout();
-  }
-
-  void _recycleGroundTiles() {
-    final tileWidth = _layout.groundTileWidth;
-    final span = _layout.groundWorldSpan(
-      cameraCenterX: _groundCameraCenterX,
-      viewportWidth: _viewportWidth,
-    );
-    final stride = _groundTiles.length * tileWidth;
-    for (final tile in _groundTiles) {
-      if (tile.position.x + tile.size.x < span.left) {
-        tile.position.x += stride;
-      } else if (tile.position.x > span.right) {
-        tile.position.x -= stride;
-      }
-    }
   }
 
   void _spawnAheadIfNeeded() {

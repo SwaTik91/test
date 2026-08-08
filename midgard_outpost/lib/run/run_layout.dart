@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'dart:ui';
+
 import 'package:flame/components.dart';
 
 /// Viewport-relative layout for the side-scroller run (spec §3).
@@ -16,6 +18,9 @@ class RunLayout {
 
   /// Backdrop source crop — sky/scenery only (excludes baked floor in art).
   static const double backdropSkyFraction = 0.72;
+
+  /// Extra viewport bleed so cover-fit backdrops never expose [Game.backgroundColor].
+  static const double backdropBleedPx = 2;
 
   static const double playerHeightFraction = 0.30;
   static const double mobHeightFraction = 0.21;
@@ -36,12 +41,28 @@ class RunLayout {
     required double cameraCenterX,
     required double viewportWidth,
     double marginTiles = 2,
+    double extraLeftMarginTiles = 0,
   }) {
     final width = viewportWidth > 0 ? viewportWidth : 1280;
     final margin = groundTileWidth * marginTiles;
+    final extraLeft = groundTileWidth * extraLeftMarginTiles;
     return (
-      left: cameraCenterX - width / 2 - margin,
+      left: cameraCenterX - width / 2 - margin - extraLeft,
       right: cameraCenterX + width / 2 + margin,
+    );
+  }
+
+  /// World-space span from the camera's visible rect plus tile margins.
+  ({double left, double right}) groundWorldSpanFromVisibleRect({
+    required Rect visibleWorldRect,
+    double marginTiles = 2,
+    double extraLeftMarginTiles = 1,
+  }) {
+    final margin = groundTileWidth * marginTiles;
+    final extraLeft = groundTileWidth * extraLeftMarginTiles;
+    return (
+      left: visibleWorldRect.left - margin - extraLeft,
+      right: visibleWorldRect.right + margin,
     );
   }
 
@@ -85,12 +106,31 @@ class RunLayout {
     required double regionWidth,
     required double regionHeight,
     required Vector2 srcSize,
+    double bleedPx = backdropBleedPx,
   }) {
     final scale = math.max(
       regionWidth / srcSize.x,
       regionHeight / srcSize.y,
     );
-    return Vector2(srcSize.x * scale, srcSize.y * scale);
+    return Vector2(
+      srcSize.x * scale + bleedPx * 2,
+      srcSize.y * scale + bleedPx * 2,
+    );
+  }
+
+  /// Viewport-space bounds for a bottom-left anchored backdrop.
+  ({double left, double top, double right, double bottom}) backdropViewportBounds({
+    required Vector2 size,
+    required double viewportWidth,
+    required double viewportHeight,
+    double bleedPx = backdropBleedPx,
+  }) {
+    return (
+      left: -bleedPx,
+      top: viewportHeight - size.y,
+      right: -bleedPx + size.x,
+      bottom: viewportHeight + bleedPx,
+    );
   }
 
   Vector2 _squareSize(double heightFraction) {

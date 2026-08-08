@@ -28,6 +28,18 @@ void main() {
     _createGame,
     (game) => _expectComposition(game, 414, 800),
   );
+
+  testWithGame(
+    'left edge covered at 500px height',
+    _createGame,
+    (game) => _expectLeftEdgeCoverage(game, 1280, 500),
+  );
+
+  testWithGame(
+    'left edge covered at 800px height',
+    _createGame,
+    (game) => _expectLeftEdgeCoverage(game, 1280, 800),
+  );
 }
 
 MidgardRunGame _createGame() {
@@ -65,8 +77,36 @@ Future<void> _expectComposition(
     Vector2(game.player.position.x, layout.groundY),
   );
 
-  expect(backdrop!.position.y, closeTo(height, 0.01));
+  expect(backdrop!.anchor, Anchor.bottomLeft);
+  expect(backdrop.position.x, closeTo(-RunLayout.backdropBleedPx, 0.01));
+  expect(backdrop.position.y, closeTo(height, 0.01));
   expect(backdrop.size.y, greaterThanOrEqualTo(height));
   expect(backdrop.position.y - backdrop.size.y, lessThanOrEqualTo(0));
+  expect(game.backdropCoversViewport(viewportWidth: width, viewportHeight: height), isTrue);
   expect(groundViewport.y, closeTo(layout.groundY, 0.5));
+}
+
+Future<void> _expectLeftEdgeCoverage(
+  MidgardRunGame game,
+  double width,
+  double height,
+) async {
+  game.onGameResize(Vector2(width, height));
+  game.update(0);
+
+  expect(game.isRunReady, isTrue, reason: 'stage=${game.loadStage}');
+  expect(game.leftEdgeCoveredAtStart(viewportWidth: width, viewportHeight: height), isTrue);
+
+  final visible = game.camera.visibleWorldRect;
+  final minX = game.groundTilesForTest
+      .map((tile) => tile.position.x)
+      .reduce((a, b) => a < b ? a : b);
+  expect(minX, lessThanOrEqualTo(visible.left));
+
+  game.player.position.x -= 180;
+  for (var i = 0; i < 10; i++) {
+    game.update(1 / 60);
+  }
+  expect(game.groundCoversVisibleSpan(viewportWidth: width), isTrue);
+  expect(game.backdropCoversViewport(viewportWidth: width, viewportHeight: height), isTrue);
 }
