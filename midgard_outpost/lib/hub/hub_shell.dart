@@ -30,6 +30,13 @@ class _HubShellState extends State<HubShell> {
     HubTab.shop: 'Магазин',
   };
 
+  static const _railIcons = {
+    HubTab.home: Icons.home_outlined,
+    HubTab.stats: Icons.bar_chart_outlined,
+    HubTab.skills: Icons.auto_awesome_outlined,
+    HubTab.shop: Icons.storefront_outlined,
+  };
+
   void _selectTab(HubTab tab) {
     setState(() => _tab = tab);
   }
@@ -61,34 +68,80 @@ class _HubShellState extends State<HubShell> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                flex: 62,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Image.asset(
-                        heroArt,
-                        filterQuality: FilterQuality.none,
-                        fit: BoxFit.contain,
-                        height: 280,
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: _HubContentPanel(child: _buildTabBody()),
-                    ),
-                  ],
+                flex: 58,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: constraints.maxWidth * 0.08,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  HubTheme.overlayEdge.withValues(alpha: 0),
+                                  HubTheme.overlayEdge.withValues(alpha: 0.55),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        ListenableBuilder(
+                          listenable: widget.controller,
+                          builder: (context, _) {
+                            final current = widget.controller.hero!;
+                            return Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Row(
+                                children: [
+                                  HubResourceChip(
+                                    icon: Icons.monetization_on,
+                                    iconColor: HubTheme.gold,
+                                    value: '${current.gold}',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  HubResourceChip(
+                                    icon: Icons.diamond_outlined,
+                                    iconColor: HubTheme.crystal,
+                                    value: '${current.crystals}',
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Image.asset(
+                            heroArt,
+                            filterQuality: FilterQuality.none,
+                            fit: BoxFit.contain,
+                            height: constraints.maxHeight * 0.55,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               Expanded(
-                flex: 38,
+                flex: 42,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-                  child: _HubRailPanel(
+                  child: _HubDockPanel(
                     selected: _tab,
                     onSelect: _selectTab,
                     onRun: _openRun,
                     labels: _railLabels,
+                    icons: _railIcons,
+                    body: _buildTabBody(),
                   ),
                 ),
               ),
@@ -118,68 +171,63 @@ class _HubShellState extends State<HubShell> {
   }
 }
 
-class _HubContentPanel extends StatelessWidget {
-  const _HubContentPanel({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
-      child: DecoratedBox(
-        decoration: HubTheme.panelDecoration(radius: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class _HubRailPanel extends StatelessWidget {
-  const _HubRailPanel({
+class _HubDockPanel extends StatelessWidget {
+  const _HubDockPanel({
     required this.selected,
     required this.onSelect,
     required this.onRun,
     required this.labels,
+    required this.icons,
+    required this.body,
   });
 
   final HubTab selected;
   final ValueChanged<HubTab> onSelect;
   final VoidCallback onRun;
   final Map<HubTab, String> labels;
+  final Map<HubTab, IconData> icons;
+  final Widget body;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: HubTheme.panelDecoration(),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: HubTheme.contentPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final tab in HubTab.values) ...[
-              _RailButton(
-                label: labels[tab]!,
-                selected: selected == tab,
-                onPressed: () => onSelect(tab),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: body,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: HubTheme.railWidth,
+                    child: _HubRail(
+                      selected: selected,
+                      onSelect: onSelect,
+                      labels: labels,
+                      icons: icons,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
-            const Spacer(),
+            ),
+            const SizedBox(height: 12),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.amber.shade700,
-                foregroundColor: Colors.black,
-                minimumSize: const Size.fromHeight(48),
-              ),
+              style: HubTheme.accentButtonStyle(height: HubTheme.ctaHeight),
               onPressed: onRun,
-              child: const Text('В поля'),
+              child: const Text(
+                'В поля',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -188,34 +236,90 @@ class _HubRailPanel extends StatelessWidget {
   }
 }
 
+class _HubRail extends StatelessWidget {
+  const _HubRail({
+    required this.selected,
+    required this.onSelect,
+    required this.labels,
+    required this.icons,
+  });
+
+  final HubTab selected;
+  final ValueChanged<HubTab> onSelect;
+  final Map<HubTab, String> labels;
+  final Map<HubTab, IconData> icons;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: HubTheme.railBg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          for (final tab in HubTab.values) ...[
+            _RailButton(
+              label: labels[tab]!,
+              icon: icons[tab]!,
+              selected: selected == tab,
+              onPressed: () => onSelect(tab),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _RailButton extends StatelessWidget {
   const _RailButton({
     required this.label,
+    required this.icon,
     required this.selected,
     required this.onPressed,
   });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      style: TextButton.styleFrom(
-        alignment: Alignment.centerLeft,
-        foregroundColor: Colors.white,
-        backgroundColor: selected
-            ? Colors.white.withValues(alpha: 0.12)
-            : Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      ),
-      onPressed: onPressed,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      child: Material(
+        color: selected ? HubTheme.accent : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

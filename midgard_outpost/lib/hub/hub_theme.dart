@@ -1,68 +1,96 @@
 import 'package:flutter/material.dart';
 
-/// Flat mobile hub palette — skills-canon reference.
+/// Dark dock hub palette — Living Stage + Side Command Dock (art direction canon).
 abstract final class HubTheme {
-  static const cardBackground = Color(0xFFFFF8E7);
-  static const cardBackgroundAlt = Color(0xFFF5E6C8);
-  static const panelBackground = Color(0xFFF5E6C8);
-  static const borderBrown = Color(0xFFC4A574);
-  static const borderBrownDark = Color(0xFF8B6914);
-  static const textBrown = Color(0xFF5C4033);
-  static const textMuted = Color(0xFF8B7355);
-  static const goldAccent = Color(0xFFD4A017);
-  static const goldAccentDark = Color(0xFFB8860B);
-  static const pipFilled = Color(0xFFE6A23C);
-  static const pipEmpty = Color(0xFFD4C4A8);
-  static const ultRed = Color(0xFFC0392B);
+  // §2 locked tokens
+  static const overlayEdge = Color(0xFF0F172A);
+  static const panelBg = Color(0xFF1E293B);
+  static const panelBgSolid = Color(0xFF1E293B);
+  static const railBg = Color(0xFF0F172A);
+  static const cardBg = Color(0xFF334155);
+  static const cardBgAlt = Color(0xFF475569);
+  static const border = Color(0xFF475569);
+  static const accent = Color(0xFFE69526);
+  static const accentPressed = Color(0xFFC47A1A);
+  static const accentMuted = Color(0x40E69526);
+  static const textPrimary = Color(0xFFF8FAFC);
+  static const textSecondary = Color(0xFFCBD5E1);
+  static const textMuted = Color(0xFF94A3B8);
+  static const danger = Color(0xFFDC2626);
+  static const hp = Color(0xFF22C55E);
+  static const sp = Color(0xFF38BDF8);
+  static const gold = Color(0xFFFBBF24);
+  static const crystal = Color(0xFF67E8F9);
+
+  // Legacy API aliases — keep tab code working until Task 2 restyle
+  static const cardBackground = cardBg;
+  static const cardBackgroundAlt = cardBgAlt;
+  static const panelBackground = panelBg;
+  static const borderBrown = border;
+  static const borderBrownDark = cardBgAlt;
+  static const textBrown = textPrimary;
+  static const goldAccent = accent;
+  static const goldAccentDark = accentPressed;
+  static const pipFilled = accent;
+  static const pipEmpty = cardBgAlt;
+  static const ultRed = danger;
 
   static const cardRadius = 12.0;
+  static const dockRadius = 16.0;
+  static const railWidth = 72.0;
+  static const ctaHeight = 56.0;
   static const contentPadding = EdgeInsets.all(12);
 
-  static BoxDecoration panelDecoration({double radius = 16}) => BoxDecoration(
-        color: panelBackground.withValues(alpha: 0.94),
+  static BoxDecoration panelDecoration({double radius = dockRadius}) => BoxDecoration(
+        color: panelBg.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderBrown, width: 1.5),
       );
 
   static BoxDecoration cardDecoration() => BoxDecoration(
-        color: cardBackground,
+        color: cardBg,
         borderRadius: BorderRadius.circular(cardRadius),
-        border: Border.all(color: borderBrown, width: 1),
+        border: Border.all(color: border, width: 1),
+      );
+
+  static BoxDecoration chipDecoration() => BoxDecoration(
+        color: overlayEdge.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(8),
       );
 
   static TextStyle pointsHeaderStyle(TextTheme theme) =>
       theme.titleMedium?.copyWith(
-        color: goldAccentDark,
+        color: accent,
         fontWeight: FontWeight.bold,
       ) ??
       const TextStyle(
-        color: goldAccentDark,
+        color: accent,
         fontWeight: FontWeight.bold,
-        fontSize: 16,
+        fontSize: 18,
       );
 
   static TextStyle cardTitleStyle(TextTheme theme) =>
       theme.titleSmall?.copyWith(
-        color: textBrown,
-        fontWeight: FontWeight.bold,
+        color: textPrimary,
+        fontWeight: FontWeight.w600,
       ) ??
       const TextStyle(
-        color: textBrown,
-        fontWeight: FontWeight.bold,
+        color: textPrimary,
+        fontWeight: FontWeight.w600,
         fontSize: 14,
       );
 
   static TextStyle cardSubtitleStyle(TextTheme theme) =>
-      theme.bodySmall?.copyWith(color: textMuted) ??
-      const TextStyle(color: textMuted, fontSize: 12);
+      theme.bodySmall?.copyWith(color: textSecondary) ??
+      const TextStyle(color: textSecondary, fontSize: 12);
 
-  static ButtonStyle goldButtonStyle({double? height}) =>
-      FilledButton.styleFrom(
-        backgroundColor: goldAccent,
-        foregroundColor: textBrown,
+  static ButtonStyle goldButtonStyle({double? height}) => accentButtonStyle(height: height);
+
+  static ButtonStyle accentButtonStyle({double? height}) => FilledButton.styleFrom(
+        backgroundColor: accent,
+        foregroundColor: overlayEdge,
         minimumSize: height != null ? Size.fromHeight(height) : null,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
       );
 }
@@ -77,7 +105,7 @@ class HubTabBody extends StatelessWidget {
     return Padding(
       padding: HubTheme.contentPadding,
       child: DefaultTextStyle(
-        style: const TextStyle(color: HubTheme.textBrown),
+        style: const TextStyle(color: HubTheme.textPrimary),
         child: child,
       ),
     );
@@ -144,7 +172,7 @@ class HubRankPips extends StatelessWidget {
                 color: i < rank ? HubTheme.pipFilled : HubTheme.pipEmpty,
                 borderRadius: BorderRadius.circular(2),
                 border: Border.all(
-                  color: HubTheme.borderBrown.withValues(alpha: 0.5),
+                  color: HubTheme.border.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -167,15 +195,15 @@ class HubIncrementButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: enabled ? HubTheme.goldAccent : HubTheme.pipEmpty,
-      borderRadius: BorderRadius.circular(6),
+      color: enabled ? HubTheme.accent : HubTheme.accentMuted,
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: enabled ? onPressed : null,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: const SizedBox(
           width: 32,
           height: 32,
-          child: Icon(Icons.add, size: 18, color: HubTheme.textBrown),
+          child: Icon(Icons.add, size: 18, color: HubTheme.overlayEdge),
         ),
       ),
     );
@@ -190,7 +218,7 @@ class HubUltBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: HubTheme.ultRed,
+        color: HubTheme.danger,
         borderRadius: BorderRadius.circular(4),
       ),
       child: const Text(
@@ -199,6 +227,44 @@ class HubUltBadge extends StatelessWidget {
           color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class HubResourceChip extends StatelessWidget {
+  const HubResourceChip({
+    super.key,
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: HubTheme.chipDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: iconColor),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                color: HubTheme.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
