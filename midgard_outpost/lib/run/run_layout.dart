@@ -45,14 +45,19 @@ class RunLayout {
   /// Vertical tolerance for combat targeting vs scaled actors.
   double get verticalCombatReach => playerSize.y * 0.55;
 
-  /// Cover-fit size for sky-only backdrop anchored at [groundY].
+  /// Cover-fit size for sky-only backdrop on the camera backdrop layer.
+  ///
+  /// Must cover the full viewport height so the scaled crop always reaches the
+  /// viewport bottom; the live ground strip paints over the lower band in world
+  /// space.
   Vector2 backdropCoverSize({
     required double regionWidth,
+    required double regionHeight,
     required Vector2 srcSize,
   }) {
     final scale = math.max(
       regionWidth / srcSize.x,
-      groundY / srcSize.y,
+      regionHeight / srcSize.y,
     );
     return Vector2(srcSize.x * scale, srcSize.y * scale);
   }

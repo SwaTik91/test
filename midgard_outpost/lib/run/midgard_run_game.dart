@@ -70,6 +70,9 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   List<SpriteComponent> get groundTilesForTest => _groundTiles;
 
   @visibleForTesting
+  SpriteComponent? get biomeBackgroundForTest => _biomeBackground;
+
+  @visibleForTesting
   void registerMonsterForTest(MonsterComponent monster) {
     _monsters.add(monster);
   }
@@ -258,11 +261,12 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
     final coverSize = _layout.backdropCoverSize(
       regionWidth: viewportSize.x,
+      regionHeight: viewportSize.y,
       srcSize: background.sprite!.srcSize,
     );
     background
       ..size = coverSize
-      ..position = Vector2(viewportSize.x / 2, _layout.groundY);
+      ..position = Vector2(viewportSize.x / 2, viewportSize.y);
   }
 
   void _syncGroundTilesLayout() {

@@ -36,15 +36,36 @@ void main() {
       expect(layout.mobSpawnSpacing, greaterThan(layout.mobSize().x * 2));
     });
 
-    test('backdrop cover size fills sky region', () {
+    test('backdrop cover size fills viewport height', () {
       const srcW = 1536.0;
       const srcH = 1024.0 * RunLayout.backdropSkyFraction;
       final cover = layout.backdropCoverSize(
         regionWidth: 1280,
+        regionHeight: layout.viewportHeight,
         srcSize: Vector2(srcW, srcH),
       );
       expect(cover.x, greaterThanOrEqualTo(1280));
-      expect(cover.y, greaterThanOrEqualTo(layout.groundY));
+      expect(cover.y, greaterThanOrEqualTo(layout.viewportHeight));
+    });
+
+    test('backdrop cover size fills viewport on narrow landscape widths', () {
+      const srcW = 1536.0;
+      const srcH = 1024.0 * RunLayout.backdropSkyFraction;
+      for (final height in [500.0, 800.0]) {
+        final layout = RunLayout(height);
+        for (final width in [414.0, 700.0, 1280.0]) {
+          final cover = layout.backdropCoverSize(
+            regionWidth: width,
+            regionHeight: height,
+            srcSize: Vector2(srcW, srcH),
+          );
+          expect(
+            cover.y,
+            greaterThanOrEqualTo(height),
+            reason: '${width}x$height',
+          );
+        }
+      }
     });
 
     test('ground top fraction matches camera anchor target', () {
