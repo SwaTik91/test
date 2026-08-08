@@ -4,6 +4,12 @@
 
 Полная дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-design.md)
 
+## UI Redesign Final (Living Stage + Side Dock)
+
+Hub: тёмный **Living Stage + Side Dock** — полноэкранный town bg, герой на сцене, панель справа (без оверлея на сцену), акцент `#E69526`. Забег: одна полоса земли на 72% высоты, читаемый масштаб акторов (герой ~30% H, мобы ~18–24%, боссы ~40–48%).
+
+Спека: [docs/superpowers/specs/2026-08-08-midgard-ui-art-direction-design.md](../docs/superpowers/specs/2026-08-08-midgard-ui-art-direction-design.md). План: [docs/superpowers/plans/2026-08-08-midgard-ui-redesign-final.md](../docs/superpowers/plans/2026-08-08-midgard-ui-redesign-final.md).
+
 ## Как запустить
 
 ```bash
