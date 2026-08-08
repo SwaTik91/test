@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:midgard_outpost/app.dart';
 import 'package:midgard_outpost/hub/game_controller.dart';
+import 'package:midgard_outpost/hub/hub_shell.dart';
 import 'package:midgard_outpost/hub/hub_theme.dart';
 import 'package:midgard_outpost/hub/run_screen.dart';
 import 'package:midgard_outpost/save/cloud_save_port.dart';
@@ -40,6 +41,50 @@ void main() {
     // Stage resource chips (gold + crystals)
     expect(find.byType(HubResourceChip), findsNWidgets(2));
 
+    // Living stage / dock split is locked at 58:42
+    final hubRow = tester.widget<Row>(
+      find.descendant(
+        of: find.byType(HubShell),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Row &&
+              widget.children.length == 2 &&
+              widget.children.every((child) => child is Expanded),
+        ),
+      ),
+    );
+    final stagePane = hubRow.children[0] as Expanded;
+    final dockPane = hubRow.children[1] as Expanded;
+    expect(stagePane.flex, 58);
+    expect(dockPane.flex, 42);
+
+    // Rail width uses locked token (72dp)
+    final railSizer = tester.widget<SizedBox>(
+      find.descendant(
+        of: find.byType(HubShell),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is SizedBox && widget.width == HubTheme.railWidth,
+        ),
+      ),
+    );
+    expect(railSizer.width, HubTheme.railWidth);
+    expect(HubTheme.railWidth, 72);
+
+    // Stage subtree must not host a full-bleed content overlay
+    final stageSubtree = find.descendant(
+      of: find.byType(HubShell),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Expanded && widget.flex == 58,
+      ),
+    );
+    final fillOverlays = tester
+        .widgetList<Positioned>(
+          find.descendant(of: stageSubtree, matching: find.byType(Positioned)),
+        )
+        .where(_isPositionedFillStyle)
+        .toList();
+    expect(fillOverlays, isEmpty);
+
     // Tab body lives in dock — skills content not duplicated on stage overlay
     await tester.tap(find.text('Умения'));
     await tester.pumpAndSettle();
@@ -69,4 +114,13 @@ void main() {
 
     expect(find.byType(RunScreen), findsOneWidget);
   });
+}
+
+bool _isPositionedFillStyle(Positioned positioned) {
+  return positioned.left == 0.0 &&
+      positioned.top == 0.0 &&
+      positioned.right == 0.0 &&
+      positioned.bottom == 0.0 &&
+      positioned.width == null &&
+      positioned.height == null;
 }

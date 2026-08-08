@@ -16,10 +16,28 @@ void main() {
         Color(0xFFF5E6C8),
         Color(0xFF5C4033),
       ];
-      for (final color in forbidden) {
-        expect(HubTheme.cardBackground, isNot(color));
-        expect(HubTheme.panelBackground, isNot(color));
-        expect(HubTheme.textBrown, isNot(color));
+      const mainTokens = [
+        HubTheme.overlayEdge,
+        HubTheme.panelBg,
+        HubTheme.panelBgSolid,
+        HubTheme.panelBackground,
+        HubTheme.railBg,
+        HubTheme.cardBg,
+        HubTheme.cardBackground,
+        HubTheme.cardBgAlt,
+        HubTheme.cardBackgroundAlt,
+        HubTheme.border,
+        HubTheme.borderBrown,
+        HubTheme.borderBrownDark,
+        HubTheme.textPrimary,
+        HubTheme.textBrown,
+        HubTheme.textSecondary,
+        HubTheme.textMuted,
+      ];
+      for (final token in mainTokens) {
+        for (final color in forbidden) {
+          expect(token, isNot(color), reason: '$token must not regress to $color');
+        }
       }
     });
 
