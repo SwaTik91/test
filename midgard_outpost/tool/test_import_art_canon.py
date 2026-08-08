@@ -13,6 +13,7 @@ from PIL import Image
 TOOL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOL_DIR))
 
+from clean_sprite_alpha import count_neutral_gray_opaque, count_semi_transparent_pixels  # noqa: E402
 from import_art_canon import import_canon  # noqa: E402
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
@@ -26,6 +27,12 @@ CREATURE_OUTPUTS = (
     ASSETS_DIR / "enemies" / "boss_demon.png",
     ASSETS_DIR / "props" / "chest.png",
 )
+
+# Soft glow on VFX/projectiles is allowed; hero/enemy cutouts should be crisp.
+MAX_SEMI_TRANSPARENT_HERO = 120
+MAX_NEUTRAL_GRAY_HERO = 40
+MAX_SEMI_TRANSPARENT_CREATURE = 400
+MAX_NEUTRAL_GRAY_CREATURE = 120
 
 
 def file_md5(path: Path) -> str:
@@ -66,6 +73,23 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
         }
         self.assertEqual(len(hashes), 2, f"mage jump frames duplicated: {hashes}")
 
+    def test_hero_jump_frames_do_not_duplicate_cast(self) -> None:
+        for hero in HERO_CLASSES:
+            jump_hashes = {
+                file_md5(ASSETS_DIR / "heroes" / hero / f"jump_{i}.png")
+                for i in range(2)
+            }
+            cast_hashes = {
+                file_md5(ASSETS_DIR / "heroes" / hero / f"cast_{i}.png")
+                for i in range(3)
+            }
+            overlap = jump_hashes & cast_hashes
+            with self.subTest(hero=hero):
+                self.assertFalse(
+                    overlap,
+                    f"{hero} jump frames duplicate cast: {overlap}",
+                )
+
     def test_hero_run_frames_are_unique_and_not_idle(self) -> None:
         for hero in HERO_CLASSES:
             idle_hashes = {
@@ -104,6 +128,27 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                             f"opaque corners on hero frame: {path}",
                         )
 
+    def test_hero_frames_have_crisp_alpha(self) -> None:
+        for hero in HERO_CLASSES:
+            for anim in ("idle", "run", "jump", "cast"):
+                count = 2 if anim in ("idle", "jump") else (4 if anim == "run" else 3)
+                for idx in range(count):
+                    path = ASSETS_DIR / "heroes" / hero / f"{anim}_{idx}.png"
+                    with Image.open(path) as img:
+                        semi = count_semi_transparent_pixels(img)
+                        gray = count_neutral_gray_opaque(img)
+                    with self.subTest(path=path):
+                        self.assertLessEqual(
+                            semi,
+                            MAX_SEMI_TRANSPARENT_HERO,
+                            f"too many semi-transparent pixels on {path}: {semi}",
+                        )
+                        self.assertLessEqual(
+                            gray,
+                            MAX_NEUTRAL_GRAY_HERO,
+                            f"gray backdrop residue on {path}: {gray}",
+                        )
+
     def test_creature_outputs_have_transparent_corners(self) -> None:
         for path in CREATURE_OUTPUTS:
             with self.subTest(path=path):
@@ -111,6 +156,23 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 self.assertTrue(
                     corners_transparent(path),
                     f"opaque corners on creature output: {path}",
+                )
+
+    def test_creature_outputs_have_clean_alpha(self) -> None:
+        for path in CREATURE_OUTPUTS:
+            with Image.open(path) as img:
+                semi = count_semi_transparent_pixels(img)
+                gray = count_neutral_gray_opaque(img)
+            with self.subTest(path=path):
+                self.assertLessEqual(
+                    semi,
+                    MAX_SEMI_TRANSPARENT_CREATURE,
+                    f"too many semi-transparent pixels on {path}: {semi}",
+                )
+                self.assertLessEqual(
+                    gray,
+                    MAX_NEUTRAL_GRAY_CREATURE,
+                    f"gray backdrop residue on {path}: {gray}",
                 )
 
 

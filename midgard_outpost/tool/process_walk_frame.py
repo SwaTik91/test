@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from clean_sprite_alpha import clean_sprite_cutout, force_corner_alpha_zero
+
 RESAMPLE = Image.Resampling.NEAREST
 
 
@@ -71,9 +73,9 @@ def process_walk_frame(src: Path, dest: Path, max_edge: int = 96) -> tuple[int, 
         keyed = key_magenta_to_alpha(raw)
     cropped = tight_crop_opaque(keyed)
     sized = resize_max_edge(cropped, max_edge)
-    out = force_corner_alpha_zero(sized)
+    out = clean_sprite_cutout(sized)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    out.save(dest, format="PNG", optimize=True)
+    force_corner_alpha_zero(out).save(dest, format="PNG", optimize=True)
     return out.size
 
 

@@ -10,7 +10,14 @@ from pathlib import Path
 
 from PIL import Image
 
+from clean_sprite_alpha import clean_sprite_cutout, force_corner_alpha_zero
+
+HERO_FRAME_RESAMPLE = Image.Resampling.NEAREST
 RESAMPLE = Image.Resampling.LANCZOS
+
+# Ignore tiny VFX particles (e.g. mage fireball) when slicing hero sheets.
+MIN_HERO_POSE_PIXELS = 5000
+MIN_HERO_POSE_EDGE = 80
 
 # Special projectile renames (canon stem -> game filename).
 PROJECTILE_NAMES: dict[str, str] = {
@@ -55,14 +62,14 @@ def ensure_rgba(img: Image.Image) -> Image.Image:
     return img.convert("RGBA")
 
 
-def resize_max_edge(img: Image.Image, max_edge: int) -> Image.Image:
+def resize_max_edge(img: Image.Image, max_edge: int, resample: Image.Resampling = RESAMPLE) -> Image.Image:
     w, h = img.size
     longest = max(w, h)
     if longest <= max_edge:
         return img
     scale = max_edge / longest
     new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-    return img.resize(new_size, RESAMPLE)
+    return img.resize(new_size, resample)
 
 
 def resize_square_crop_fit(img: Image.Image, size: int) -> Image.Image:
@@ -76,7 +83,7 @@ def resize_square_crop_fit(img: Image.Image, size: int) -> Image.Image:
 
 def write_png(img: Image.Image, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    ensure_rgba(img).save(dest, format="PNG", optimize=True)
+    force_corner_alpha_zero(ensure_rgba(img)).save(dest, format="PNG", optimize=True)
 
 
 def estimate_background_rgb(img: Image.Image) -> tuple[int, int, int]:
@@ -97,22 +104,7 @@ def estimate_background_rgb(img: Image.Image) -> tuple[int, int, int]:
 
 def remove_background(img: Image.Image, tolerance: int = 36) -> Image.Image:
     """Key neutral sheet backdrop to transparent alpha."""
-    rgba = ensure_rgba(img)
-    px = rgba.load()
-    w, h = rgba.size
-    bg = estimate_background_rgb(rgba)
-    limit = tolerance * 3
-
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a == 0:
-                continue
-            dist = abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2])
-            if dist <= limit:
-                px[x, y] = (r, g, b, 0)
-
-    return rgba
+    return clean_sprite_cutout(img, bg_tolerance=tolerance)
 
 
 def find_components(img: Image.Image, min_pixels: int = 800) -> list[BBox]:
@@ -167,13 +159,14 @@ def find_components(img: Image.Image, min_pixels: int = 800) -> list[BBox]:
 
 
 def crop_component(img: Image.Image, bbox: BBox, pad: int = 4) -> Image.Image:
-    rgba = remove_background(img)
+    rgba = ensure_rgba(img)
     w, h = rgba.size
     x0 = max(0, bbox.x0 - pad)
     y0 = max(0, bbox.y0 - pad)
     x1 = min(w, bbox.x1 + pad)
     y1 = min(h, bbox.y1 + pad)
-    return rgba.crop((x0, y0, x1, y1))
+    cropped = rgba.crop((x0, y0, x1, y1))
+    return clean_sprite_cutout(cropped)
 
 
 def group_rows(components: list[BBox], row_gap: int = 80) -> list[list[BBox]]:
@@ -213,38 +206,64 @@ def lower_row_poses(rows: list[list[BBox]]) -> list[BBox]:
     return [pose for row in rows[1:] for pose in row]
 
 
-def walk_pose_from_sheet(components: list[BBox]) -> BBox | None:
-    """Best side-view walk pose on the lower row(s), if present."""
-    rows = group_rows(components)
-    lower = lower_row_poses(rows)
-    if not lower:
-        return None
-    return lower[-1]
+def is_hero_pose(bbox: BBox) -> bool:
+    """Filter out tiny VFX particles that are not full character poses."""
+    return (
+        bbox.pixels >= MIN_HERO_POSE_PIXELS
+        and min(bbox.width, bbox.height) >= MIN_HERO_POSE_EDGE
+    )
+
+
+def character_poses(components: list[BBox]) -> list[BBox]:
+    return [bbox for bbox in components if is_hero_pose(bbox)]
+
+
+def action_poses(rows: list[list[BBox]]) -> list[BBox]:
+    """Lower-row combat/cast poses, excluding VFX particles."""
+    return [pose for pose in lower_row_poses(rows) if is_hero_pose(pose)]
+
+
+def pick(source: list[BBox], count: int, *, fallback: list[BBox]) -> list[BBox]:
+    pool = source or fallback
+    if not pool:
+        return []
+    if len(pool) >= count:
+        return pool[:count]
+    padded = list(pool)
+    while len(padded) < count:
+        padded.append(pool[-1])
+    return padded
 
 
 def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
-    rows = group_rows(components)
+    """Map canon hero sheet rows to idle/jump/cast frames.
+
+    Sheet layout (RO multi-pose):
+      top row    -> front standing idle variants (+ side/back references)
+      lower rows -> cast/attack poses and a stride pose
+    Run frames are imported separately from art-canon/walk/.
+    """
+    poses = character_poses(components)
+    rows = group_rows(poses)
     if not rows:
         return {name: [] for name in HERO_ANIM_COUNTS}
 
     top = rows[0]
-    lower = lower_row_poses(rows)
+    actions = action_poses(rows)
 
-    def pick(source: list[BBox], count: int, *, fallback: list[BBox]) -> list[BBox]:
-        pool = source or fallback
-        if len(pool) >= count:
-            return pool[:count]
-        padded = list(pool)
-        while len(padded) < count:
-            padded.append(pool[-1])
-        return padded
+    # Standing idle: first two front-facing poses on the top row.
+    idle = pick(top, 2, fallback=top)
 
-    # Run frames come from art-canon/walk/ (4-frame side-view cycles), not the hero sheet.
-    # The sheet top row is idle/reference poses; using it for run duplicated idle frames.
+    # Jump: side/back reference poses from the top row (distinct from cast action row).
+    jump = pick(top[2:4] if len(top) >= 4 else top[2:], 2, fallback=idle)
+
+    # Cast/attack: full action row (shooting, staff raise, stride follow-through).
+    cast = pick(actions, 3, fallback=top)
+
     return {
-        "idle": pick(top, 2, fallback=top),
-        "jump": pick(lower, 2, fallback=top),
-        "cast": pick(lower, 3, fallback=top),
+        "idle": idle,
+        "jump": jump,
+        "cast": cast,
     }
 
 
@@ -265,7 +284,9 @@ def import_hero_sheet(src: Path, hero_name: str, out_dir: Path) -> list[tuple[Pa
         count = HERO_ANIM_COUNTS[anim]
         for idx in range(count):
             bbox = bboxes[idx]
-            frame = resize_max_edge(crop_component(sheet, bbox), 96)
+            frame = clean_sprite_cutout(
+                resize_max_edge(crop_component(sheet, bbox), 96, resample=HERO_FRAME_RESAMPLE)
+            )
             rel = Path("heroes") / hero_name / f"{anim}_{idx}.png"
             dest = out_dir / rel
             write_png(frame, dest)
@@ -274,7 +295,9 @@ def import_hero_sheet(src: Path, hero_name: str, out_dir: Path) -> list[tuple[Pa
 
     # Run frames are imported separately from art-canon/walk/ side-view cycles.
 
-    preview = resize_max_edge(crop_component(sheet, pose_map["idle"][0]), 128)
+    preview = clean_sprite_cutout(
+        resize_max_edge(crop_component(sheet, pose_map["idle"][0]), 128, resample=HERO_FRAME_RESAMPLE)
+    )
     preview_rel = Path("heroes") / f"{hero_name}.png"
     preview_dest = out_dir / preview_rel
     write_png(preview, preview_dest)
@@ -282,6 +305,7 @@ def import_hero_sheet(src: Path, hero_name: str, out_dir: Path) -> list[tuple[Pa
     print(f"{src.name} -> {preview_rel} ({preview.size[0]}x{preview.size[1]})")
 
     icon = resize_square_crop_fit(crop_component(sheet, pose_map["idle"][0]), 64)
+    icon = clean_sprite_cutout(icon)
     icon_rel = Path("hub") / f"icon_{hero_name}.png"
     icon_dest = out_dir / icon_rel
     write_png(icon, icon_dest)
@@ -301,7 +325,7 @@ def import_creature(src: Path, rel_dest: Path, out_dir: Path, max_edge: int) -> 
         out = resize_max_edge(keyed, max_edge)
     else:
         main = max(components, key=lambda c: c.pixels)
-        cutout = resize_max_edge(crop_component(sheet, main), max_edge)
+        cutout = clean_sprite_cutout(resize_max_edge(crop_component(sheet, main), max_edge))
         out = cutout
 
     dest = out_dir / rel_dest
@@ -362,9 +386,9 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
             components = find_components(img)
             if components:
                 main = max(components, key=lambda c: c.pixels)
-                out = resize_max_edge(crop_component(img, main), max_edge)
+                out = clean_sprite_cutout(resize_max_edge(crop_component(img, main), max_edge))
             else:
-                out = resize_max_edge(remove_background(img), max_edge)
+                out = clean_sprite_cutout(resize_max_edge(remove_background(img), max_edge))
         else:
             out = resize_max_edge(img, max_edge)
         write_png(out, dest)
