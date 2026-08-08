@@ -89,8 +89,8 @@ class _SkillCard extends StatelessWidget {
     final canAdd = canAllocate && !atMax;
 
     return HubCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SkillIcon(kind: skill.kind),
           const SizedBox(width: 10),
@@ -117,24 +117,15 @@ class _SkillCard extends StatelessWidget {
                   'Ур. $rank / $maxRank',
                   style: HubTheme.cardSubtitleStyle(theme),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 HubRankPips(rank: rank, maxRank: maxRank),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Column(
-            children: [
-              Text(
-                '$rank',
-                style: HubTheme.cardTitleStyle(theme),
-              ),
-              const SizedBox(height: 4),
-              HubIncrementButton(
-                enabled: canAdd,
-                onPressed: canAdd ? onAllocate : null,
-              ),
-            ],
+          HubIncrementButton(
+            enabled: canAdd,
+            onPressed: canAdd ? onAllocate : null,
           ),
         ],
       ),
@@ -156,14 +147,14 @@ class _SkillIcon extends StatelessWidget {
     };
 
     return Container(
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
-        color: HubTheme.cardBackgroundAlt,
+        color: HubTheme.cardBgAlt,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: HubTheme.borderBrown),
+        border: Border.all(color: HubTheme.border),
       ),
-      child: Icon(icon, size: 22, color: HubTheme.textBrown),
+      child: Icon(icon, size: 20, color: HubTheme.textPrimary),
     );
   }
 }

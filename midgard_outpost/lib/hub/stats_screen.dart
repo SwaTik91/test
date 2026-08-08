@@ -41,6 +41,7 @@ class StatsScreen extends StatelessWidget {
                 ),
               for (final stat in StatId.values) ...[
                 HubCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
                       Expanded(

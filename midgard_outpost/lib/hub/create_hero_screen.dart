@@ -22,6 +22,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selected = ClassesCatalog.byId(_selectedClass);
+    final heroArt = ArtAtlas.flutterAsset(ArtAtlas.heroPath(_selectedClass));
 
     return Scaffold(
       body: DecoratedBox(
@@ -33,85 +34,114 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 5,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 58,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: constraints.maxWidth * 0.08,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  HubTheme.overlayEdge.withValues(alpha: 0),
+                                  HubTheme.overlayEdge.withValues(alpha: 0.55),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Image.asset(
+                            heroArt,
+                            filterQuality: FilterQuality.none,
+                            fit: BoxFit.contain,
+                            height: constraints.maxHeight * 0.55,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              Expanded(
+                flex: 42,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
                   child: DecoratedBox(
                     decoration: HubTheme.panelDecoration(),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: DefaultTextStyle(
-                        style: const TextStyle(color: HubTheme.textBrown),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Мидгард: Аванпост',
-                              style: theme.textTheme.titleLarge?.copyWith(
+                      padding: HubTheme.contentPadding,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Мидгард: Аванпост',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: HubTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Выберите класс',
+                            style: HubTheme.pointsHeaderStyle(theme.textTheme),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: ListView(
+                              children: [
+                                for (final classDef in ClassesCatalog.all) ...[
+                                  _ClassRow(
+                                    classDef: classDef,
+                                    selected: _selectedClass == classDef.id,
+                                    onTap: () {
+                                      setState(() => _selectedClass = classDef.id);
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                                Text(
+                                  selected.description,
+                                  style: HubTheme.cardSubtitleStyle(theme.textTheme),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            style: HubTheme.accentButtonStyle(
+                              height: HubTheme.ctaHeight,
+                            ),
+                            onPressed: () =>
+                                widget.controller.createHero(_selectedClass),
+                            child: const Text(
+                              'Создать героя',
+                              style: TextStyle(
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: HubTheme.textBrown,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Выберите класс',
-                              style: HubTheme.cardTitleStyle(
-                                theme.textTheme,
-                              ).copyWith(fontSize: 18),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: ClassesCatalog.all.map((classDef) {
-                                final isSelected =
-                                    _selectedClass == classDef.id;
-                                return _ClassChip(
-                                  classDef: classDef,
-                                  selected: isSelected,
-                                  onTap: () {
-                                    setState(
-                                      () => _selectedClass = classDef.id,
-                                    );
-                                  },
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              selected.description,
-                              style: HubTheme.cardSubtitleStyle(
-                                theme.textTheme,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Spacer(),
-                      FilledButton(
-                        style: HubTheme.goldButtonStyle(height: 52),
-                        onPressed: () =>
-                            widget.controller.createHero(_selectedClass),
-                        child: const Text('Создать героя'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -119,8 +149,8 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
   }
 }
 
-class _ClassChip extends StatelessWidget {
-  const _ClassChip({
+class _ClassRow extends StatelessWidget {
+  const _ClassRow({
     required this.classDef,
     required this.selected,
     required this.onTap,
@@ -132,38 +162,48 @@ class _ClassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+
     return Material(
-      color: selected ? HubTheme.goldAccent : HubTheme.cardBackground,
-      borderRadius: BorderRadius.circular(10),
+      color: selected ? HubTheme.cardBgAlt : HubTheme.cardBg,
+      borderRadius: BorderRadius.circular(HubTheme.cardRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        borderRadius: BorderRadius.circular(HubTheme.cardRadius),
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(HubTheme.cardRadius),
             border: Border.all(
-              color: selected ? HubTheme.goldAccentDark : HubTheme.borderBrown,
+              color: selected ? HubTheme.accent : HubTheme.border,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                ArtAtlas.flutterAsset(ArtAtlas.heroIconPath(classDef.id)),
-                width: 24,
-                height: 24,
-                filterQuality: FilterQuality.none,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                classDef.name,
-                style: TextStyle(
-                  color: HubTheme.textBrown,
-                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Image.asset(
+                  ArtAtlas.flutterAsset(ArtAtlas.heroIconPath(classDef.id)),
+                  width: 32,
+                  height: 32,
+                  filterQuality: FilterQuality.none,
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    classDef.name,
+                    style: HubTheme.cardTitleStyle(theme).copyWith(
+                      color: selected ? HubTheme.textPrimary : HubTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  const Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: HubTheme.accent,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

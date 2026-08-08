@@ -63,18 +63,29 @@ class _ShopScreenState extends State<ShopScreen> {
 
     final body = _products == null
         ? const Center(
-            child: CircularProgressIndicator(color: HubTheme.goldAccent),
+            child: CircularProgressIndicator(color: HubTheme.accent),
           )
         : HubTabBody(
             child: ListView(
               children: [
                 HubCard(
-                  child: Text(
-                    'Кристаллы: $crystals',
-                    style: HubTheme.cardTitleStyle(theme),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.diamond_outlined,
+                        size: 18,
+                        color: HubTheme.crystal,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Кристаллы: $crystals',
+                        style: HubTheme.cardTitleStyle(theme),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 for (final product in _products!) ...[
                   _ProductCard(
                     product: product,
@@ -121,40 +132,46 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HubCard(
-      child: Column(
+      padding: const EdgeInsets.all(12),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(product.title, style: HubTheme.cardTitleStyle(theme)),
-          const SizedBox(height: 4),
-          Text(
-            product.description,
-            style: HubTheme.cardSubtitleStyle(theme),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                product.priceLabel,
-                style: HubTheme.cardSubtitleStyle(theme),
-              ),
-              const Spacer(),
-              if (isPurchasing)
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: HubTheme.goldAccent,
-                  ),
-                )
-              else
-                FilledButton(
-                  style: HubTheme.goldButtonStyle(),
-                  onPressed: onPurchase,
-                  child: const Text('Купить'),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.title, style: HubTheme.cardTitleStyle(theme)),
+                const SizedBox(height: 2),
+                Text(
+                  product.description,
+                  style: HubTheme.cardSubtitleStyle(theme),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  product.priceLabel,
+                  style: HubTheme.cardSubtitleStyle(theme),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
+          if (isPurchasing)
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: HubTheme.accent,
+              ),
+            )
+          else
+            FilledButton(
+              style: HubTheme.accentButtonStyle(),
+              onPressed: onPurchase,
+              child: const Text('Купить'),
+            ),
         ],
       ),
     );
