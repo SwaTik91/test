@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:midgard_outpost/run/components/player_component.dart';
+import 'package:midgard_outpost/run/run_layout.dart';
 
 Future<Sprite> _testSprite() async {
   final recorder = ui.PictureRecorder();
@@ -19,19 +20,20 @@ Future<Sprite> _testSprite() async {
 
 void main() {
   test('isGrounded uses bottom-center anchor', () async {
-    const groundY = 330.0;
+    final layout = RunLayout(RunLayout.referenceHeight);
     final player = PlayerComponent.forTest(
-      groundY: groundY,
+      groundY: layout.groundY,
       sprite: await _testSprite(),
+      size: layout.playerSize,
     );
 
-    player.position.y = groundY;
+    player.position.y = layout.groundY;
     expect(player.isGrounded, isTrue);
 
-    player.position.y = groundY - 1;
+    player.position.y = layout.groundY - 1;
     expect(player.isGrounded, isFalse);
 
-    player.position.y = groundY - 0.4;
+    player.position.y = layout.groundY - 0.4;
     expect(player.isGrounded, isTrue);
   });
 }

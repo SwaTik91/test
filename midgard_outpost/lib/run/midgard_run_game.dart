@@ -20,6 +20,7 @@ import 'components/monster_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
 import 'components/vfx_component.dart';
+import 'run_layout.dart';
 import 'run_rewards.dart';
 import 'run_state.dart';
 import 'run_upgrade_effects.dart';
@@ -40,8 +41,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   static const String hudOverlayKey = 'hud';
   static const String upgradePickerOverlayKey = 'upgradePicker';
-  static const double _groundY = 330;
-  static const double _tileWidth = 360;
   static const double _attackInterval = 0.75;
   static const double _collisionInterval = 0.65;
 
@@ -70,10 +69,11 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   final List<ChestComponent> _chests = [];
 
   late final Sprite _projectileSprite;
-  late final Sprite _bgFieldsSprite;
-  late final Sprite _bgForestSprite;
+  late final Sprite _bgFieldsSkySprite;
+  late final Sprite _bgForestSkySprite;
   SpriteComponent? _biomeBackground;
   Biome _displayedBiome = Biome.fields;
+  RunLayout _layout = RunLayout(RunLayout.referenceHeight);
 
   RunState _runState;
   List<RunUpgradeDef> _pendingUpgradeOffers = const [];
@@ -126,17 +126,23 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
       loadStage = 'sprites';
       final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
-      _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
-      _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
+      final bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
+      final bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
+      _bgFieldsSkySprite = _skyBackdropCrop(bgFieldsSprite);
+      _bgForestSkySprite = _skyBackdropCrop(bgForestSprite);
       _projectileSprite = await ArtAtlas.loadSprite(
         ArtAtlas.projectilePath(hero.classId),
       );
 
+      loadStage = 'layout';
+      _layout = _currentLayout();
+
       loadStage = 'backdrop';
       _biomeBackground = SpriteComponent(
-        sprite: _bgFieldsSprite,
-        anchor: Anchor.center,
+        sprite: _bgFieldsSkySprite,
+        anchor: Anchor.bottomCenter,
       );
+      ArtAtlas.applyNearestNeighbor(_biomeBackground!);
       camera.backdrop.add(_biomeBackground!);
       _syncBiomeBackgroundLayout();
       // Do not read [biome]/[distance] before [player] exists.
@@ -154,7 +160,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
           hero,
           ownedUpgradeIds: ownedRunUpgradeIds,
         ),
-        groundY: _groundY,
+        groundY: _layout.groundY,
+        size: _layout.playerSize,
       );
       autoSkillSystem = AutoSkillSystem(
         classId: hero.classId,
@@ -171,6 +178,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
       loadStage = 'hud';
       isRunReady = true;
+      _applyLayout();
       overlays.add(hudOverlayKey);
       loadStage = 'ready';
     } catch (e, st) {
@@ -183,7 +191,34 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    _applyLayout();
+  }
+
+  RunLayout _currentLayout() {
+    final height = camera.viewport.virtualSize.y;
+    return RunLayout(
+      height > 0 ? height : RunLayout.referenceHeight,
+    );
+  }
+
+  Sprite _skyBackdropCrop(Sprite full) {
+    final skyHeight = full.srcSize.y * RunLayout.backdropSkyFraction;
+    return Sprite(
+      full.image,
+      srcPosition: Vector2.zero(),
+      srcSize: Vector2(full.srcSize.x, skyHeight),
+    );
+  }
+
+  void _applyLayout() {
+    _layout = _currentLayout();
     _syncBiomeBackgroundLayout();
+    _syncGroundTilesLayout();
+    if (isRunReady) {
+      player
+        ..setGroundY(_layout.groundY)
+        ..setSize(_layout.playerSize);
+    }
   }
 
   void _syncBiomeBackgroundLayout() {
@@ -195,13 +230,24 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (viewportSize.x <= 0 || viewportSize.y <= 0) {
       return;
     }
-    const bgBottomCrop = 32.0;
+    final coverSize = _layout.backdropCoverSize(
+      regionWidth: viewportSize.x,
+      srcSize: background.sprite!.srcSize,
+    );
     background
-      ..size = Vector2(viewportSize.x, viewportSize.y + bgBottomCrop)
-      ..position = Vector2(
-        viewportSize.x / 2,
-        viewportSize.y / 2 - bgBottomCrop / 2,
-      );
+      ..size = coverSize
+      ..position = Vector2(viewportSize.x / 2, _layout.groundY);
+  }
+
+  void _syncGroundTilesLayout() {
+    final groundY = _layout.groundY;
+    final tileWidth = _layout.groundTileWidth;
+    final tileHeight = _layout.groundTileHeight;
+    for (final tile in _groundTiles) {
+      tile
+        ..position.y = groundY
+        ..size = Vector2(tileWidth, tileHeight);
+    }
   }
 
   @override
@@ -309,12 +355,16 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _addGroundTiles(Sprite groundSprite) {
+    final tileWidth = _layout.groundTileWidth;
+    final tileHeight = _layout.groundTileHeight;
     for (var i = 0; i < 8; i += 1) {
       final tile = SpriteComponent(
         sprite: groundSprite,
-        position: Vector2(i * _tileWidth, _groundY),
-        size: Vector2(_tileWidth, 72),
+        position: Vector2(i * tileWidth, _layout.groundY),
+        size: Vector2(tileWidth, tileHeight),
+        anchor: Anchor.topLeft,
       );
+      ArtAtlas.applyNearestNeighbor(tile);
       _groundTiles.add(tile);
       world.add(tile);
     }
@@ -327,15 +377,17 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
     _displayedBiome = currentBiome;
     _biomeBackground?.sprite = switch (currentBiome) {
-      Biome.fields => _bgFieldsSprite,
-      Biome.forest => _bgForestSprite,
+      Biome.fields => _bgFieldsSkySprite,
+      Biome.forest => _bgForestSkySprite,
     };
+    _syncBiomeBackgroundLayout();
   }
 
   void _recycleGroundTiles() {
+    final tileWidth = _layout.groundTileWidth;
     for (final tile in _groundTiles) {
       if (tile.position.x + tile.size.x < player.position.x - 900) {
-        tile.position.x += _groundTiles.length * _tileWidth;
+        tile.position.x += _groundTiles.length * tileWidth;
       }
     }
   }
@@ -363,7 +415,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _spawnChest(double x) {
-    ChestComponent.create(position: Vector2(x, _groundY - 34)).then((chest) {
+    ChestComponent.create(
+      position: Vector2(x, _layout.groundY),
+      size: _layout.chestSize,
+    ).then((chest) {
       _chests.add(chest);
       world.add(chest);
     });
@@ -378,13 +433,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       isBoss: isBoss,
     );
     if (!isBoss) {
-      _nextSpawnX += 430;
+      _nextSpawnX += _layout.mobSpawnSpacing;
     }
+    final mobSize = _layout.mobSize(isBoss: spec.isBoss);
     MonsterComponent.create(
       kind: spec.kind,
       isBoss: spec.isBoss,
       target: player,
-      position: Vector2(x, _groundY - spec.height),
+      position: Vector2(x, _layout.groundY),
       maxHp: _monsterMaxHp(spec),
       touchDamage: _monsterTouchDamage(spec),
       baseXp: spec.baseXp,
@@ -393,7 +449,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       tempXp: spec.tempXp,
       upgradeDropChance: _upgradeDropChanceFor(spec),
       moveSpeed: spec.moveSpeed,
-      size: Vector2(spec.width, spec.height),
+      size: mobSize,
     ).then((monster) {
       _monsters.add(monster);
       world.add(monster);
@@ -529,7 +585,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       }
       final dx = (monster.position.x - player.position.x).abs();
       final dy = (monster.position.y - player.position.y).abs();
-      return dx <= range && dy < 130;
+      return dx <= range && dy < _layout.verticalCombatReach;
     }).toList();
     targets.sort(
       (a, b) => (a.position.x - player.position.x).abs().compareTo(
@@ -546,7 +602,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
             return false;
           }
           final dy = (monster.position.y - player.position.y).abs();
-          return dy < 130;
+          return dy < _layout.verticalCombatReach;
         })
         .map((monster) => (monster.position.x - player.position.x).abs())
         .toList();
@@ -564,7 +620,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         end: end,
         duration: event.projectile ? 0.18 : 0.14,
         radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
-      ),
+      )..paint.filterQuality = FilterQuality.none,
     );
   }
 

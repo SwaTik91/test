@@ -13,6 +13,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required this.maxSp,
     required this.moveSpeed,
     required this.groundY,
+    required Vector2 size,
     required Map<HeroAnimName, SpriteAnimation> animations,
   }) : currentHp = maxHp,
        currentSp = maxSp,
@@ -20,11 +21,12 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
          animations: animations,
          current: HeroAnimName.idle,
          position: Vector2(120, groundY),
-         size: Vector2(48, 64),
+         size: size,
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
     paint.color = Colors.white;
+    ArtAtlas.applyNearestNeighbor(this);
   }
 
   static const double _gravity = 1200;
@@ -40,6 +42,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required int maxSp,
     required double moveSpeed,
     required double groundY,
+    required Vector2 size,
   }) async {
     final animations = await _loadAnimations(classId);
     return PlayerComponent._(
@@ -47,6 +50,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       maxSp: maxSp,
       moveSpeed: moveSpeed,
       groundY: groundY,
+      size: size,
       animations: animations,
     );
   }
@@ -92,6 +96,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required this.groundY,
     required Sprite sprite,
     Vector2? position,
+    Vector2? size,
     int maxHp = 100,
     int maxSp = 50,
     double moveSpeed = 200,
@@ -104,17 +109,18 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
          animations: _singleSpriteAnimations(sprite),
          current: HeroAnimName.idle,
          position: position ?? Vector2(120, groundY),
-         size: Vector2(48, 64),
+         size: size ?? Vector2(216, 216),
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
     paint.color = Colors.white;
+    ArtAtlas.applyNearestNeighbor(this);
   }
 
   int maxHp;
   int maxSp;
   double moveSpeed;
-  final double groundY;
+  double groundY;
 
   int currentHp;
   int currentSp;
@@ -191,6 +197,17 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
 
   void setMoveSpeed(double value) {
     moveSpeed = value;
+  }
+
+  void setGroundY(double value) {
+    groundY = value;
+    if (position.y > groundY) {
+      position.y = groundY;
+    }
+  }
+
+  void setSize(Vector2 value) {
+    size.setFrom(value);
   }
 
   @override

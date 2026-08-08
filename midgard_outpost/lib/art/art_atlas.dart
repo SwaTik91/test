@@ -1,4 +1,5 @@
 import 'package:flame/components.dart';
+import 'package:flutter/material.dart';
 import 'package:midgard_outpost/core/ids.dart';
 
 /// Static art paths relative to [assetRoot] (`assets/images/`).
@@ -134,5 +135,10 @@ class ArtAtlas {
 
   static Future<Sprite> loadSprite(String path) {
     return Sprite.load(flameAsset(path));
+  }
+
+  /// RO pixel art — nearest-neighbor scaling in Flame world space.
+  static void applyNearestNeighbor(HasPaint component) {
+    component.paint.filterQuality = FilterQuality.none;
   }
 }

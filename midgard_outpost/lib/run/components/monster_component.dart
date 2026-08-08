@@ -29,9 +29,11 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
          animations: animations,
          current: MonsterAnimName.walk,
          position: position,
-         size: size ?? Vector2(40, 44),
+         size: size ?? Vector2(151, 151),
+         anchor: Anchor.bottomCenter,
        ) {
     paint.color = Colors.white;
+    ArtAtlas.applyNearestNeighbor(this);
   }
 
   static const double _damageFlashDuration = 0.16;
@@ -136,7 +138,12 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
 
   bool get canCollect => !isAlive && _deathFlashSeconds <= 0;
 
-  Rect get bounds => Rect.fromLTWH(position.x, position.y, size.x, size.y);
+  Rect get bounds => Rect.fromLTWH(
+    position.x - size.x * anchor.x,
+    position.y - size.y * anchor.y,
+    size.x,
+    size.y,
+  );
 
   void takeDamage(int amount) {
     if (amount <= 0 || !isAlive) {
