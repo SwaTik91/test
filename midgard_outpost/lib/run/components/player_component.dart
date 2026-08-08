@@ -29,6 +29,8 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        ) {
     paint.color = Colors.white;
     ArtAtlas.applyNearestNeighbor(this);
+    _rebuildAnimRenderSizes(animations);
+    _syncFrameAspectSize();
   }
 
   static const double _gravity = 1200;
@@ -118,10 +120,42 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        ) {
     paint.color = Colors.white;
     ArtAtlas.applyNearestNeighbor(this);
+    _rebuildAnimRenderSizes(_singleSpriteAnimations(sprite));
+    _syncFrameAspectSize();
+  }
+
+  @visibleForTesting
+  PlayerComponent.forTestWithAnimations({
+    required this.groundY,
+    required Map<HeroAnimName, SpriteAnimation> animations,
+    Vector2? position,
+    Vector2? size,
+    int maxHp = 100,
+    int maxSp = 50,
+    double moveSpeed = 200,
+    HeroAnimName current = HeroAnimName.idle,
+  }) : maxHp = maxHp,
+       maxSp = maxSp,
+       moveSpeed = moveSpeed,
+       currentHp = maxHp,
+       currentSp = maxSp,
+       _footprintSize = (size ?? Vector2(216, 216)).clone(),
+       super(
+         animations: animations,
+         current: current,
+         position: position ?? Vector2(120, groundY),
+         size: (size ?? Vector2(216, 216)).clone(),
+         anchor: Anchor.bottomCenter,
+         autoResize: false,
+       ) {
+    paint.color = Colors.white;
+    ArtAtlas.applyNearestNeighbor(this);
+    _rebuildAnimRenderSizes(animations);
     _syncFrameAspectSize();
   }
 
   final Vector2 _footprintSize;
+  final Map<HeroAnimName, Vector2> _animRenderSizes = {};
 
   int maxHp;
   int maxSp;
@@ -216,6 +250,10 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
 
   void setSize(Vector2 value) {
     _footprintSize.setFrom(value);
+    final anims = animations;
+    if (anims != null) {
+      _rebuildAnimRenderSizes(anims);
+    }
     _syncFrameAspectSize();
   }
 
@@ -225,18 +263,23 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     _syncFrameAspectSize();
   }
 
+  void _rebuildAnimRenderSizes(Map<HeroAnimName, SpriteAnimation> anims) {
+    _animRenderSizes.clear();
+    for (final entry in anims.entries) {
+      _animRenderSizes[entry.key] = SpriteFit.stableContainHeight(
+        animation: entry.value,
+        targetHeight: _footprintSize.y,
+      );
+    }
+  }
+
   void _syncFrameAspectSize() {
-    final frame = animationTicker?.getSprite();
-    if (frame == null) {
-      size.setFrom(_footprintSize);
+    final renderSize = _animRenderSizes[current];
+    if (renderSize != null) {
+      size.setFrom(renderSize);
       return;
     }
-    size.setFrom(
-      SpriteFit.containHeight(
-        srcSize: frame.srcSize,
-        targetHeight: _footprintSize.y,
-      ),
-    );
+    size.setFrom(_footprintSize);
   }
 
   static const double _runAnimSpeedThreshold = 12;
@@ -269,8 +312,8 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     );
     if (current != anim) {
       current = anim;
+      _syncFrameAspectSize();
     }
-    _syncFrameAspectSize();
 
     if (_damageFlashSeconds > 0) {
       _damageFlashSeconds -= dt;

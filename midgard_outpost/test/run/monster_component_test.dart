@@ -52,6 +52,36 @@ void main() {
     expect(monster.scale.x, lessThan(0));
   });
 
+  test('monster moves toward target while chasing', () async {
+    final layout = RunLayout(RunLayout.referenceHeight);
+    final player = PlayerComponent.forTest(
+      groundY: layout.groundY,
+      sprite: await _testSprite(),
+      position: Vector2(500, layout.groundY),
+      size: layout.playerSize,
+    );
+    final monster = MonsterComponent.forTest(
+      kind: MonsterKind.slime,
+      target: player,
+      position: Vector2(100, layout.groundY),
+      sprite: await _testSprite(),
+      maxHp: 20,
+      touchDamage: 5,
+      baseXp: 1,
+      jobXp: 1,
+      gold: 1,
+      tempXp: 1,
+      upgradeDropChance: 0,
+      moveSpeed: 120,
+    );
+
+    final startX = monster.position.x;
+    for (var i = 0; i < 30; i++) {
+      monster.update(1 / 60);
+    }
+    expect(monster.position.x, greaterThan(startX));
+  });
+
   test('ranged monster telegraphs then fires callback', () async {
     final layout = RunLayout(RunLayout.referenceHeight);
     final player = PlayerComponent.forTest(

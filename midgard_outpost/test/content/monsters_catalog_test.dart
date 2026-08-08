@@ -52,28 +52,22 @@ void main() {
   });
 
   test('ranged mobs expose attack range and interval', () {
-    final bee = MonstersCatalog.forDistance(
-      distancePx: 600,
-      biome: Biome.fields,
-      isBoss: false,
-    );
-    if (bee.kind == MonsterKind.bee) {
-      expect(bee.attackRange, greaterThan(0));
-      expect(bee.attackInterval, greaterThan(0));
-    }
-
-  final rangedKinds = MonsterKind.values.where((k) => k.isRanged);
-    for (final kind in rangedKinds) {
-      final spec = MonstersCatalog.forDistance(
-        distancePx: 0,
-        biome: Biome.fields,
-        isBoss: false,
-      );
-      if (spec.kind == kind) {
-        expect(spec.attackRange, greaterThan(0));
-        expect(spec.attackInterval, greaterThan(0));
-        break;
+    for (final kind in MonsterKind.values.where((k) => k.isRanged)) {
+      MonsterSpec? spec;
+      for (var distance = 0; distance < 10000; distance += 430) {
+        final candidate = MonstersCatalog.forDistance(
+          distancePx: distance.toDouble(),
+          biome: Biome.fields,
+          isBoss: false,
+        );
+        if (candidate.kind == kind) {
+          spec = candidate;
+          break;
+        }
       }
+      expect(spec, isNotNull, reason: 'no spawn slot for $kind');
+      expect(spec!.attackRange, greaterThan(0));
+      expect(spec.attackInterval, greaterThan(0));
     }
   });
 }

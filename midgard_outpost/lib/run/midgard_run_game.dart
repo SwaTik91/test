@@ -65,6 +65,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   Object? loadError;
 
   final List<SpriteComponent> _groundTiles = [];
+
+  @visibleForTesting
+  List<SpriteComponent> get groundTilesForTest => _groundTiles;
+
+  @visibleForTesting
+  void registerMonsterForTest(MonsterComponent monster) {
+    _monsters.add(monster);
+  }
   final List<MonsterComponent> _monsters = [];
   final List<ChestComponent> _chests = [];
 

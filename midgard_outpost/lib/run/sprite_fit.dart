@@ -1,4 +1,5 @@
 import 'package:flame/components.dart';
+import 'package:flame/sprite.dart';
 
 /// Aspect-preserving sprite sizing helpers for run actors and VFX.
 abstract final class SpriteFit {
@@ -26,5 +27,27 @@ abstract final class SpriteFit {
         ? targetExtent / srcSize.x
         : targetExtent / srcSize.y;
     return Vector2(srcSize.x * scale, srcSize.y * scale);
+  }
+
+  /// Fits every frame in [animation] to [targetHeight] and returns the widest
+  /// width so render size stays constant across ticker frames of one anim.
+  static Vector2 stableContainHeight({
+    required SpriteAnimation animation,
+    required double targetHeight,
+  }) {
+    if (animation.frames.isEmpty) {
+      return Vector2.all(targetHeight);
+    }
+    var maxWidth = 0.0;
+    for (final frame in animation.frames) {
+      final contained = containHeight(
+        srcSize: frame.sprite.srcSize,
+        targetHeight: targetHeight,
+      );
+      if (contained.x > maxWidth) {
+        maxWidth = contained.x;
+      }
+    }
+    return Vector2(maxWidth, targetHeight);
   }
 }

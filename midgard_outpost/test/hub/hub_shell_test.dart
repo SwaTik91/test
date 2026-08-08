@@ -135,11 +135,17 @@ void main() {
     await tester.tap(find.text('Создать героя'));
     await tester.pumpAndSettle();
 
-    for (final label in ['Главная', 'Статы', 'Умения', 'Магазин']) {
-      expect(find.text(label), findsOneWidget);
-    }
+    const railLabels = ['Главная', 'Статы', 'Умения', 'Магазин'];
+    const tabLabels = ['Главная', 'Статы', 'Умения', 'Магазин'];
 
-    expect(tester.takeException(), isNull);
+    for (final tab in tabLabels) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      for (final label in railLabels) {
+        expect(find.text(label), findsOneWidget);
+      }
+    }
   });
 }
 
