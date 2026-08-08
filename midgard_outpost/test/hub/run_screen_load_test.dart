@@ -1,6 +1,5 @@
 
 import 'dart:ui' as ui;
-
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -165,7 +164,73 @@ void main() {
     final layout = RunLayout(game.camera.viewport.virtualSize.y);
     expect(game.camera.viewfinder.anchor.y, RunLayout.groundTopFraction);
     expect(game.player.groundY, closeTo(layout.groundY, 0.01));
+    expect(game.player.position.y, closeTo(layout.groundY, 0.01));
+    expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
     expect(game.groundTilesForTest, isNotEmpty);
+    for (final tile in game.groundTilesForTest) {
+      expect(tile.position.y, closeTo(layout.groundY, 0.01));
+    }
+  });
+
+  testWidgets('run level keeps ground anchored at 500px height', (tester) async {
+    await _expectRunGroundAlignedAtHeight(tester, 500);
+  });
+
+  testWidgets('run level keeps ground anchored at 800px height', (tester) async {
+    await _expectRunGroundAlignedAtHeight(tester, 800);
+  });
+
+  testWidgets('run level re-anchors ground after viewport grows', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      save: SaveService(
+        local: LocalSaveRepository(),
+        cloud: NoopCloudSavePort(),
+      ),
+    );
+    await controller.bootstrap();
+    await controller.createHero(HeroClassId.archer);
+
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final game = MidgardRunGame(
+      hero: controller.hero!,
+      onDeath: (_) {},
+      initialRunState: controller.runState,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameWidget<MidgardRunGame>(
+          game: game,
+          overlayBuilderMap: {
+            MidgardRunGame.hudOverlayKey: (context, g) => HudOverlay(game: g),
+          },
+        ),
+      ),
+    );
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 200 && !game.isRunReady; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    });
+    await tester.pump();
+
+    // Simulate a stale grounded pose from a shorter layout pass.
+    final staleGroundY = RunLayout(500).groundY;
+    game.player.position.y = staleGroundY;
+    game.player.setGroundY(staleGroundY);
+
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    game.onGameResize(Vector2(1280, 800));
+    await tester.pump();
+
+    final layout = RunLayout(game.camera.viewport.virtualSize.y);
+    expect(layout.groundY, closeTo(800 * RunLayout.groundTopFraction, 0.01));
+    expect(game.player.position.y, closeTo(layout.groundY, 0.01));
+    expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
     for (final tile in game.groundTilesForTest) {
       expect(tile.position.y, closeTo(layout.groundY, 0.01));
     }
@@ -242,6 +307,58 @@ void main() {
       greaterThan(0),
     );
   });
+}
+
+Future<void> _expectRunGroundAlignedAtHeight(
+  WidgetTester tester,
+  double height,
+) async {
+  SharedPreferences.setMockInitialValues({});
+  final controller = GameController(
+    save: SaveService(
+      local: LocalSaveRepository(),
+      cloud: NoopCloudSavePort(),
+    ),
+  );
+  await controller.bootstrap();
+  await controller.createHero(HeroClassId.archer);
+
+  await tester.binding.setSurfaceSize(Size(1280, height));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+
+  final game = MidgardRunGame(
+    hero: controller.hero!,
+    onDeath: (_) {},
+    initialRunState: controller.runState,
+  );
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: GameWidget<MidgardRunGame>(
+        game: game,
+        overlayBuilderMap: {
+          MidgardRunGame.hudOverlayKey: (context, g) => HudOverlay(game: g),
+        },
+      ),
+    ),
+  );
+
+  await tester.runAsync(() async {
+    for (var i = 0; i < 200 && !game.isRunReady; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  });
+  await tester.pump();
+
+  final layout = RunLayout(game.camera.viewport.virtualSize.y);
+  expect(layout.groundY, closeTo(height * RunLayout.groundTopFraction, 0.01));
+  expect(game.player.groundY, closeTo(layout.groundY, 0.01));
+  expect(game.player.position.y, closeTo(layout.groundY, 0.01));
+  expect(game.camera.viewfinder.anchor.y, RunLayout.groundTopFraction);
+  expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
+  for (final tile in game.groundTilesForTest) {
+    expect(tile.position.y, closeTo(layout.groundY, 0.01));
+  }
 }
 
 Future<ui.Image> _onePixelImage() async {

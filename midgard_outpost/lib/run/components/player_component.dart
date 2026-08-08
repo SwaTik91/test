@@ -242,8 +242,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   }
 
   void setGroundY(double value) {
+    final wasGrounded = isGrounded;
     groundY = value;
-    if (position.y > groundY) {
+    if (wasGrounded || position.y > groundY) {
       position.y = groundY;
     }
   }

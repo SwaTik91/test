@@ -243,7 +243,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     camera.viewfinder.anchor = Anchor(0.5, RunLayout.groundTopFraction);
     camera.viewfinder.position = Vector2(
       player.position.x,
-      player.position.y,
+      _layout.groundY,
     );
   }
 

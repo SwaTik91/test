@@ -32,6 +32,36 @@ Future<Sprite> _testSpriteSized(int width, int height) async {
 }
 
 void main() {
+  test('setGroundY snaps grounded player when ground line rises', () async {
+    final shortLayout = RunLayout(500);
+    final tallLayout = RunLayout(800);
+    final player = PlayerComponent.forTest(
+      groundY: shortLayout.groundY,
+      sprite: await _testSprite(),
+      position: Vector2(120, shortLayout.groundY),
+      size: shortLayout.playerSize,
+    );
+
+    expect(player.isGrounded, isTrue);
+    player.setGroundY(tallLayout.groundY);
+    expect(player.position.y, closeTo(tallLayout.groundY, 0.01));
+  });
+
+  test('setGroundY does not snap airborne player when ground line rises', () async {
+    final shortLayout = RunLayout(500);
+    final tallLayout = RunLayout(800);
+    final player = PlayerComponent.forTest(
+      groundY: shortLayout.groundY,
+      sprite: await _testSprite(),
+      position: Vector2(120, shortLayout.groundY - 80),
+      size: shortLayout.playerSize,
+    );
+
+    expect(player.isGrounded, isFalse);
+    player.setGroundY(tallLayout.groundY);
+    expect(player.position.y, closeTo(shortLayout.groundY - 80, 0.01));
+  });
+
   test('isGrounded uses bottom-center anchor', () async {
     final layout = RunLayout(RunLayout.referenceHeight);
     final player = PlayerComponent.forTest(

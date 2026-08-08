@@ -52,4 +52,17 @@ void main() {
       expect(layout.groundY / layout.viewportHeight, closeTo(0.72, 0.001));
     });
   });
+
+  group('RunLayout across viewport heights', () {
+    test('ground line stays at 72% for 500px and 800px', () {
+      for (final height in [500.0, 800.0]) {
+        final layout = RunLayout(height);
+        expect(layout.groundY, closeTo(height * RunLayout.groundTopFraction, 0.01));
+        expect(
+          layout.groundY + layout.groundTileHeight,
+          closeTo(height, 0.01),
+        );
+      }
+    });
+  });
 }
