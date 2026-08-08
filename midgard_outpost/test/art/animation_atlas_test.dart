@@ -38,17 +38,7 @@ void main() {
     });
   });
 
-  group('enemy and prop frames', () {
-    test('goblin walk and hurt frame counts', () {
-      expect(AnimationAtlas.goblinWalkFrames, hasLength(3));
-      expect(AnimationAtlas.goblinHurtFrames, hasLength(2));
-    });
-
-    test('ogre walk and hurt frame counts', () {
-      expect(AnimationAtlas.ogreWalkFrames, hasLength(3));
-      expect(AnimationAtlas.ogreHurtFrames, hasLength(2));
-    });
-
+  group('prop frames', () {
     test('chest open has 3 frames', () {
       expect(AnimationAtlas.chestOpenFrames, hasLength(3));
     });
@@ -70,19 +60,15 @@ void main() {
       expect(AnimationAtlas.heroStepTime(HeroAnimName.cast), 0.08);
     });
 
-    test('enemy, chest, and vfx stepTimes match design spec', () {
-      expect(AnimationAtlas.goblinWalkStepTime, 0.12);
-      expect(AnimationAtlas.goblinHurtStepTime, 0.08);
-      expect(AnimationAtlas.ogreWalkStepTime, 0.14);
-      expect(AnimationAtlas.ogreHurtStepTime, 0.08);
+    test('chest and vfx stepTimes match design spec', () {
       expect(AnimationAtlas.chestOpenStepTime, 0.10);
       expect(AnimationAtlas.vfxStepTime, 0.08);
     });
   });
 
-  test('allFramePaths lists every wave-2 frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(55));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(55));
+  test('allFramePaths lists every animation frame without duplicates', () {
+    expect(AnimationAtlas.allFramePaths, hasLength(45));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(45));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {
@@ -93,10 +79,6 @@ void main() {
     }
 
     for (final path in [
-      ...AnimationAtlas.goblinWalkFrames,
-      ...AnimationAtlas.goblinHurtFrames,
-      ...AnimationAtlas.ogreWalkFrames,
-      ...AnimationAtlas.ogreHurtFrames,
       ...AnimationAtlas.chestOpenFrames,
       ...AnimationAtlas.vfxSlashFrames,
       ...AnimationAtlas.vfxFlameFrames,

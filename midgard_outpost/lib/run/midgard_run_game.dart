@@ -503,11 +503,32 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       return;
     }
 
+    player.playCastAnimation();
+    _spawnBasicAttackVisual(target);
     _damageMonster(
       target,
       CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
     );
     _tryCollectKill(target);
+  }
+
+  void _spawnBasicAttackVisual(MonsterComponent target) {
+    final start = player.center;
+    final end = target.center;
+    final isRanged = hero.classId != HeroClassId.paladin;
+    if (isRanged) {
+      world.add(
+        ProjectileComponent(
+          sprite: _projectileSprite,
+          start: start,
+          end: end,
+          duration: 0.18,
+        )..paint.filterQuality = FilterQuality.none,
+      );
+      return;
+    }
+
+    _spawnSkillVfx(end);
   }
 
   void _handleAutoSkills(double dt) {

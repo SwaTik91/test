@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
@@ -16,6 +18,35 @@ PROJECTILE_NAMES: dict[str, str] = {
     "fireball": "fireball.png",
     "holy": "holy_bolt.png",
 }
+
+# Animation frame counts expected by AnimationAtlas.
+HERO_ANIM_COUNTS: dict[str, int] = {
+    "idle": 2,
+    "run": 4,
+    "jump": 2,
+    "cast": 3,
+}
+
+
+@dataclass(frozen=True)
+class BBox:
+    x0: int
+    y0: int
+    x1: int
+    y1: int
+    pixels: int
+
+    @property
+    def width(self) -> int:
+        return self.x1 - self.x0
+
+    @property
+    def height(self) -> int:
+        return self.y1 - self.y0
+
+    @property
+    def center_y(self) -> float:
+        return (self.y0 + self.y1) / 2
 
 
 def ensure_rgba(img: Image.Image) -> Image.Image:
@@ -48,17 +79,226 @@ def write_png(img: Image.Image, dest: Path) -> None:
     ensure_rgba(img).save(dest, format="PNG", optimize=True)
 
 
+def estimate_background_rgb(img: Image.Image) -> tuple[int, int, int]:
+    rgb = ensure_rgba(img).convert("RGB")
+    w, h = rgb.size
+    corners = [
+        rgb.getpixel((0, 0)),
+        rgb.getpixel((w - 1, 0)),
+        rgb.getpixel((0, h - 1)),
+        rgb.getpixel((w - 1, h - 1)),
+    ]
+    return (
+        sum(c[0] for c in corners) // 4,
+        sum(c[1] for c in corners) // 4,
+        sum(c[2] for c in corners) // 4,
+    )
+
+
+def remove_background(img: Image.Image, tolerance: int = 36) -> Image.Image:
+    """Key neutral sheet backdrop to transparent alpha."""
+    rgba = ensure_rgba(img)
+    px = rgba.load()
+    w, h = rgba.size
+    bg = estimate_background_rgb(rgba)
+    limit = tolerance * 3
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            dist = abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2])
+            if dist <= limit:
+                px[x, y] = (r, g, b, 0)
+
+    return rgba
+
+
+def find_components(img: Image.Image, min_pixels: int = 800) -> list[BBox]:
+    rgba = ensure_rgba(img)
+    rgb = rgba.convert("RGB")
+    w, h = rgb.size
+    bg = estimate_background_rgb(rgb)
+    px = rgb.load()
+
+    mask = [[False] * w for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            dist = abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2])
+            mask[y][x] = dist > 90
+
+    visited = [[False] * w for _ in range(h)]
+    components: list[BBox] = []
+
+    for y in range(h):
+        for x in range(w):
+            if not mask[y][x] or visited[y][x]:
+                continue
+            queue: deque[tuple[int, int]] = deque([(x, y)])
+            visited[y][x] = True
+            minx = maxx = x
+            miny = maxy = y
+            count = 0
+            while queue:
+                cx, cy = queue.popleft()
+                count += 1
+                minx = min(minx, cx)
+                maxx = max(maxx, cx)
+                miny = min(miny, cy)
+                maxy = max(maxy, cy)
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = cx + dx, cy + dy
+                    if (
+                        0 <= nx < w
+                        and 0 <= ny < h
+                        and mask[ny][nx]
+                        and not visited[ny][nx]
+                    ):
+                        visited[ny][nx] = True
+                        queue.append((nx, ny))
+
+            if count >= min_pixels:
+                components.append(BBox(minx, miny, maxx + 1, maxy + 1, count))
+
+    components.sort(key=lambda c: (c.y0, c.x0))
+    return components
+
+
+def crop_component(img: Image.Image, bbox: BBox, pad: int = 4) -> Image.Image:
+    rgba = remove_background(img)
+    w, h = rgba.size
+    x0 = max(0, bbox.x0 - pad)
+    y0 = max(0, bbox.y0 - pad)
+    x1 = min(w, bbox.x1 + pad)
+    y1 = min(h, bbox.y1 + pad)
+    return rgba.crop((x0, y0, x1, y1))
+
+
+def group_rows(components: list[BBox], row_gap: int = 80) -> list[list[BBox]]:
+    if not components:
+        return []
+
+    rows: list[list[BBox]] = []
+    centers: list[float] = []
+    for comp in components:
+        cy = comp.center_y
+        placed = False
+        for idx, row_cy in enumerate(centers):
+            if abs(cy - row_cy) <= row_gap:
+                rows[idx].append(comp)
+                centers[idx] = sum(c.center_y for c in rows[idx]) / len(rows[idx])
+                placed = True
+                break
+        if not placed:
+            rows.append([comp])
+            centers.append(cy)
+
+    ordered_rows: list[list[BBox]] = []
+    for _, row in sorted(zip(centers, rows), key=lambda item: item[0]):
+        ordered_rows.append(sorted(row, key=lambda c: c.x0))
+    return ordered_rows
+
+
+def flatten_pose_order(components: list[BBox]) -> list[BBox]:
+    rows = group_rows(components)
+    return [pose for row in rows for pose in row]
+
+
+def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
+    rows = group_rows(components)
+    if not rows:
+        return {name: [] for name in HERO_ANIM_COUNTS}
+
+    top = rows[0]
+    bottom = rows[1] if len(rows) > 1 else rows[0]
+
+    def pick(source: list[BBox], count: int) -> list[BBox]:
+        if not source:
+            source = top
+        if len(source) >= count:
+            return source[:count]
+        padded = list(source)
+        while len(padded) < count:
+            padded.append(source[-1])
+        return padded
+
+    return {
+        "idle": pick(top, 2),
+        "run": pick(top, 4),
+        "jump": pick(bottom, 2),
+        "cast": pick(bottom, 3),
+    }
+
+
+def import_hero_sheet(src: Path, hero_name: str, out_dir: Path) -> list[tuple[Path, tuple[int, int]]]:
+    """Slice a multi-pose hero sheet into animation frames and hub assets."""
+    results: list[tuple[Path, tuple[int, int]]] = []
+    with Image.open(src) as raw:
+        sheet = ensure_rgba(raw)
+
+    components = find_components(sheet)
+    if len(components) < 2:
+        raise SystemExit(f"Expected multi-pose hero sheet for {src.name}, found {len(components)} pose(s)")
+
+    pose_map = poses_for_animation(components)
+    hero_dir = out_dir / "heroes" / hero_name
+
+    for anim, bboxes in pose_map.items():
+        count = HERO_ANIM_COUNTS[anim]
+        for idx in range(count):
+            bbox = bboxes[idx]
+            frame = resize_max_edge(crop_component(sheet, bbox), 96)
+            rel = Path("heroes") / hero_name / f"{anim}_{idx}.png"
+            dest = out_dir / rel
+            write_png(frame, dest)
+            results.append((dest, frame.size))
+            print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+
+    preview = resize_max_edge(crop_component(sheet, pose_map["idle"][0]), 128)
+    preview_rel = Path("heroes") / f"{hero_name}.png"
+    preview_dest = out_dir / preview_rel
+    write_png(preview, preview_dest)
+    results.append((preview_dest, preview.size))
+    print(f"{src.name} -> {preview_rel} ({preview.size[0]}x{preview.size[1]})")
+
+    icon = resize_square_crop_fit(crop_component(sheet, pose_map["idle"][0]), 64)
+    icon_rel = Path("hub") / f"icon_{hero_name}.png"
+    icon_dest = out_dir / icon_rel
+    write_png(icon, icon_dest)
+    results.append((icon_dest, icon.size))
+    print(f"{src.name} -> {icon_rel} ({icon.size[0]}x{icon.size[1]})")
+
+    return results
+
+
+def import_creature(src: Path, rel_dest: Path, out_dir: Path, max_edge: int) -> tuple[Path, tuple[int, int]]:
+    with Image.open(src) as raw:
+        sheet = ensure_rgba(raw)
+
+    components = find_components(sheet)
+    if not components:
+        keyed = remove_background(sheet)
+        out = resize_max_edge(keyed, max_edge)
+    else:
+        main = max(components, key=lambda c: c.pixels)
+        cutout = resize_max_edge(crop_component(sheet, main), max_edge)
+        out = cutout
+
+    dest = out_dir / rel_dest
+    write_png(out, dest)
+    print(f"{src.name} -> {rel_dest} ({out.size[0]}x{out.size[1]})")
+    return dest, out.size
+
+
 def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
     """Return [(dest_path, max_edge, mode), ...] for a canon source file."""
     name = src.name
     stem = src.stem
 
     if name.startswith("hero-"):
-        hero_name = stem.removeprefix("hero-")
-        return [
-            (Path("heroes") / f"{hero_name}.png", 128, "max_edge"),
-            (Path("hub") / f"icon_{hero_name}.png", 64, "square"),
-        ]
+        return []
 
     if name == "bg-town.png":
         return [(Path("hub") / "town_bg.png", 1920, "max_edge")]
@@ -74,19 +314,19 @@ def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
 
     if name.startswith("mob-"):
         mob_name = stem.removeprefix("mob-")
-        return [(Path("enemies") / f"{mob_name}.png", 96, "max_edge")]
+        return [(Path("enemies") / f"{mob_name}.png", 96, "creature")]
 
     if name.startswith("boss-"):
         boss_name = stem.removeprefix("boss-")
-        return [(Path("enemies") / f"boss_{boss_name}.png", 160, "max_edge")]
+        return [(Path("enemies") / f"boss_{boss_name}.png", 160, "creature")]
 
     if name == "prop-chest.png":
-        return [(Path("props") / "chest.png", 96, "max_edge")]
+        return [(Path("props") / "chest.png", 96, "creature")]
 
     if name.startswith("proj-"):
         proj_name = stem.removeprefix("proj-")
         filename = PROJECTILE_NAMES.get(proj_name, f"{proj_name}.png")
-        return [(Path("projectiles") / filename, 64, "max_edge")]
+        return [(Path("projectiles") / filename, 64, "creature")]
 
     if name.startswith("ui-btn-"):
         btn_name = stem.removeprefix("ui-btn-")
@@ -95,14 +335,22 @@ def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
     return []
 
 
-def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> None:
+def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int, int]:
     with Image.open(src) as raw:
         img = ensure_rgba(raw)
         if mode == "square":
             out = resize_square_crop_fit(img, max_edge)
+        elif mode == "creature":
+            components = find_components(img)
+            if components:
+                main = max(components, key=lambda c: c.pixels)
+                out = resize_max_edge(crop_component(img, main), max_edge)
+            else:
+                out = resize_max_edge(remove_background(img), max_edge)
         else:
             out = resize_max_edge(img, max_edge)
         write_png(out, dest)
+        return out.size
 
 
 def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
@@ -111,6 +359,12 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
     sources = sorted(canon_dir.glob("*.png"))
 
     for src in sources:
+        if src.name.startswith("hero-"):
+            hero_name = src.stem.removeprefix("hero-")
+            for dest, size in import_hero_sheet(src, hero_name, out_dir):
+                results.append((src, dest, size))
+            continue
+
         mappings = dest_for_source(src)
         if not mappings:
             print(f"skip (no mapping): {src.name}")
@@ -121,13 +375,13 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
 
         for rel_dest, max_edge, mode in mappings:
             dest = out_dir / rel_dest
-            if mode == "square":
-                out = resize_square_crop_fit(base, max_edge)
+            if mode == "creature":
+                _, size = import_creature(src, rel_dest, out_dir, max_edge)
             else:
-                out = resize_max_edge(base, max_edge)
-            write_png(out, dest)
-            results.append((src, dest, out.size))
-            print(f"{src.name} -> {rel_dest} ({out.size[0]}x{out.size[1]})")
+                size = process_image(src, dest, max_edge, mode)
+            results.append((src, dest, size))
+            if mode != "creature":
+                print(f"{src.name} -> {rel_dest} ({size[0]}x{size[1]})")
 
     return results
 

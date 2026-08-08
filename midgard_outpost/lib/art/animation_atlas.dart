@@ -9,22 +9,8 @@ class AnimationAtlas {
 
   static const assetRoot = 'assets/images/';
 
-  static const goblinWalkStepTime = 0.12;
-  static const goblinHurtStepTime = 0.08;
-  static const ogreWalkStepTime = 0.14;
-  static const ogreHurtStepTime = 0.08;
   static const chestOpenStepTime = 0.10;
   static const vfxStepTime = 0.08;
-
-  static List<String> get goblinWalkFrames =>
-      _frames('enemies/goblin', 'walk', 3);
-
-  static List<String> get goblinHurtFrames =>
-      _frames('enemies/goblin', 'hurt', 2);
-
-  static List<String> get ogreWalkFrames => _frames('enemies/ogre', 'walk', 3);
-
-  static List<String> get ogreHurtFrames => _frames('enemies/ogre', 'hurt', 2);
 
   static List<String> get chestOpenFrames =>
       _frames('props/chest', 'open', 3);
@@ -57,10 +43,6 @@ class AnimationAtlas {
         for (final classId in HeroClassId.values)
           for (final anim in HeroAnimName.values)
             ...heroFrames(classId, anim),
-        ...goblinWalkFrames,
-        ...goblinHurtFrames,
-        ...ogreWalkFrames,
-        ...ogreHurtFrames,
         ...chestOpenFrames,
         ...vfxSlashFrames,
         ...vfxFlameFrames,
