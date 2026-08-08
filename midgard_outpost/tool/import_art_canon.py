@@ -206,29 +206,35 @@ def flatten_pose_order(components: list[BBox]) -> list[BBox]:
     return [pose for row in rows for pose in row]
 
 
+def lower_row_poses(rows: list[list[BBox]]) -> list[BBox]:
+    """All poses below the top row, in sheet order (row-major)."""
+    if len(rows) <= 1:
+        return list(rows[0]) if rows else []
+    return [pose for row in rows[1:] for pose in row]
+
+
 def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
     rows = group_rows(components)
     if not rows:
         return {name: [] for name in HERO_ANIM_COUNTS}
 
     top = rows[0]
-    bottom = rows[1] if len(rows) > 1 else rows[0]
+    lower = lower_row_poses(rows)
 
-    def pick(source: list[BBox], count: int) -> list[BBox]:
-        if not source:
-            source = top
-        if len(source) >= count:
-            return source[:count]
-        padded = list(source)
+    def pick(source: list[BBox], count: int, *, fallback: list[BBox]) -> list[BBox]:
+        pool = source or fallback
+        if len(pool) >= count:
+            return pool[:count]
+        padded = list(pool)
         while len(padded) < count:
-            padded.append(source[-1])
+            padded.append(pool[-1])
         return padded
 
     return {
-        "idle": pick(top, 2),
-        "run": pick(top, 4),
-        "jump": pick(bottom, 2),
-        "cast": pick(bottom, 3),
+        "idle": pick(top, 2, fallback=top),
+        "run": pick(top, 4, fallback=top),
+        "jump": pick(lower, 2, fallback=top),
+        "cast": pick(lower, 3, fallback=top),
     }
 
 

@@ -93,8 +93,8 @@ class ArtAtlas {
       };
 
   /// Clean single-hero preview for hub/create screens.
-  /// The root `heroes/<class>.png` files are sheet-like and should not be
-  /// shown as large character previews.
+  /// Root `heroes/<class>.png` are single idle cutouts; prefer per-frame
+  /// animations when a larger in-game preview is needed.
   static String heroPreviewPath(HeroClassId id) => switch (id) {
         HeroClassId.archer => 'heroes/archer/idle_0.png',
         HeroClassId.mage => 'heroes/mage/idle_0.png',
