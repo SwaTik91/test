@@ -72,6 +72,35 @@ void main() {
       expect(RunLayout.groundTopFraction, 0.72);
       expect(layout.groundY / layout.viewportHeight, closeTo(0.72, 0.001));
     });
+
+    test('ground world span extends left of player start for centered camera', () {
+      const viewportWidth = 1280.0;
+      const playerX = 120.0;
+      final span = layout.groundWorldSpan(
+        cameraCenterX: playerX,
+        viewportWidth: viewportWidth,
+      );
+      expect(span.left, lessThan(0));
+      expect(span.right, greaterThan(playerX));
+      expect(span.left, lessThan(playerX - viewportWidth / 2));
+    });
+
+    test('ground tile count covers viewport at player start', () {
+      const viewportWidth = 1280.0;
+      const playerX = 120.0;
+      final span = layout.groundWorldSpan(
+        cameraCenterX: playerX,
+        viewportWidth: viewportWidth,
+      );
+      final startX = layout.groundTileStartX(span.left);
+      final count = layout.groundTileCountForSpan(
+        worldLeft: span.left,
+        worldRight: span.right,
+      );
+      final endX = startX + count * layout.groundTileWidth;
+      expect(startX, lessThanOrEqualTo(playerX - viewportWidth / 2));
+      expect(endX, greaterThanOrEqualTo(playerX + viewportWidth / 2));
+    });
   });
 
   group('RunLayout across viewport heights', () {
@@ -82,6 +111,34 @@ void main() {
         expect(
           layout.groundY + layout.groundTileHeight,
           closeTo(height, 0.01),
+        );
+      }
+    });
+
+    test('ground tile span covers viewport at 500px and 800px heights', () {
+      const viewportWidth = 1280.0;
+      const playerX = 120.0;
+      for (final height in [500.0, 800.0]) {
+        final layout = RunLayout(height);
+        final span = layout.groundWorldSpan(
+          cameraCenterX: playerX,
+          viewportWidth: viewportWidth,
+        );
+        final startX = layout.groundTileStartX(span.left);
+        final count = layout.groundTileCountForSpan(
+          worldLeft: span.left,
+          worldRight: span.right,
+        );
+        final endX = startX + count * layout.groundTileWidth;
+        expect(
+          startX,
+          lessThanOrEqualTo(playerX - viewportWidth / 2),
+          reason: 'height=$height',
+        );
+        expect(
+          endX,
+          greaterThanOrEqualTo(playerX + viewportWidth / 2),
+          reason: 'height=$height',
         );
       }
     });

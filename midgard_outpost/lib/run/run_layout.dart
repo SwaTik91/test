@@ -31,6 +31,37 @@ class RunLayout {
   /// Square ground tiles — no horizontal squash of 256×256 art.
   double get groundTileWidth => groundTileHeight;
 
+  /// World-space span the live ground strip must cover around the camera center.
+  ({double left, double right}) groundWorldSpan({
+    required double cameraCenterX,
+    required double viewportWidth,
+    double marginTiles = 2,
+  }) {
+    final width = viewportWidth > 0 ? viewportWidth : 1280;
+    final margin = groundTileWidth * marginTiles;
+    return (
+      left: cameraCenterX - width / 2 - margin,
+      right: cameraCenterX + width / 2 + margin,
+    );
+  }
+
+  /// Left edge of the first ground tile for a world span.
+  double groundTileStartX(double worldLeft) {
+    final tileWidth = groundTileWidth;
+    return (worldLeft / tileWidth).floor() * tileWidth;
+  }
+
+  /// Tile count to cover [worldLeft, worldRight] without gaps.
+  int groundTileCountForSpan({
+    required double worldLeft,
+    required double worldRight,
+  }) {
+    final tileWidth = groundTileWidth;
+    final startX = groundTileStartX(worldLeft);
+    final endX = worldRight + tileWidth;
+    return ((endX - startX) / tileWidth).ceil();
+  }
+
   Vector2 get playerSize => _squareSize(playerHeightFraction);
 
   Vector2 mobSize({bool isBoss = false}) =>

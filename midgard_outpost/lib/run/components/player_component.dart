@@ -9,6 +9,9 @@ import '../../core/ids.dart';
 import '../sprite_fit.dart';
 
 class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
+  /// Default spawn X — keep in sync with run ground strip layout.
+  static const double startX = 120;
+
   PlayerComponent._({
     required this.maxHp,
     required this.maxSp,
@@ -22,7 +25,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        super(
          animations: animations,
          current: HeroAnimName.idle,
-         position: Vector2(120, groundY),
+         position: Vector2(startX, groundY),
          size: footprintSize.clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
@@ -113,7 +116,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        super(
          animations: _singleSpriteAnimations(sprite),
          current: HeroAnimName.idle,
-         position: position ?? Vector2(120, groundY),
+         position: position ?? Vector2(startX, groundY),
          size: (size ?? Vector2(216, 216)).clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
@@ -143,7 +146,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        super(
          animations: animations,
          current: current,
-         position: position ?? Vector2(120, groundY),
+         position: position ?? Vector2(startX, groundY),
          size: (size ?? Vector2(216, 216)).clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,

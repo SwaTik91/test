@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -34,10 +34,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     required this.onDeath,
     required RunState initialRunState,
     this.onRunStateChanged,
-    Random? rng,
+    math.Random? rng,
   }) : _runState = initialRunState,
        ownedRunUpgradeIds = {...initialRunState.ownedUpgradeIds},
-       _rng = rng ?? Random();
+       _rng = rng ?? math.Random();
 
   static const String hudOverlayKey = 'hud';
   static const String upgradePickerOverlayKey = 'upgradePicker';
@@ -50,7 +50,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   final Set<String> ownedRunUpgradeIds;
   final RunRewardsAccumulator rewards = RunRewardsAccumulator();
   final ValueNotifier<int> hudRevision = ValueNotifier<int>(0);
-  final Random _rng;
+  final math.Random _rng;
 
   late final PlayerComponent player;
   late final AutoSkillSystem autoSkillSystem;
@@ -65,9 +65,44 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   Object? loadError;
 
   final List<SpriteComponent> _groundTiles = [];
+  Sprite? _groundSprite;
 
   @visibleForTesting
   List<SpriteComponent> get groundTilesForTest => _groundTiles;
+
+  @visibleForTesting
+  bool groundCoversVisibleSpan({double? viewportWidth}) {
+    if (_groundTiles.isEmpty) {
+      return false;
+    }
+    final width = viewportWidth ?? _viewportWidth;
+    final centerX = _groundCameraCenterX;
+    final visibleLeft = centerX - width / 2;
+    final visibleRight = centerX + width / 2;
+    final minX = _groundTiles
+        .map((tile) => tile.position.x)
+        .reduce(math.min);
+    final maxX = _groundTiles
+        .map((tile) => tile.position.x + tile.size.x)
+        .reduce(math.max);
+    return minX <= visibleLeft && maxX >= visibleRight;
+  }
+
+  @visibleForTesting
+  bool groundTilesAreContiguous() {
+    if (_groundTiles.length < 2) {
+      return true;
+    }
+    final tiles = List<SpriteComponent>.from(_groundTiles)
+      ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    for (var i = 0; i < tiles.length - 1; i++) {
+      final gap = tiles[i + 1].position.x - (tiles[i].position.x + tiles[i].size.x);
+      if (gap.abs() > 0.5) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   @visibleForTesting
   SpriteComponent? get biomeBackgroundForTest => _biomeBackground;
@@ -212,6 +247,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     );
   }
 
+  double get _viewportWidth {
+    final width = camera.viewport.virtualSize.x;
+    return width > 0 ? width : 1280;
+  }
+
+  double get _groundCameraCenterX =>
+      isRunReady ? player.position.x : PlayerComponent.startX;
+
   Sprite _skyBackdropCrop(Sprite full) {
     final skyHeight = full.srcSize.y * RunLayout.backdropSkyFraction;
     return Sprite(
@@ -270,13 +313,46 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _syncGroundTilesLayout() {
+    _layoutGroundTilePositions();
+  }
+
+  void _layoutGroundTilePositions() {
     final groundY = _layout.groundY;
     final tileWidth = _layout.groundTileWidth;
     final tileHeight = _layout.groundTileHeight;
-    for (final tile in _groundTiles) {
-      tile
-        ..position.y = groundY
+    final span = _layout.groundWorldSpan(
+      cameraCenterX: _groundCameraCenterX,
+      viewportWidth: _viewportWidth,
+    );
+    final needed = _layout.groundTileCountForSpan(
+      worldLeft: span.left,
+      worldRight: span.right,
+    );
+    _ensureGroundTileCount(needed);
+
+    final startX = _layout.groundTileStartX(span.left);
+    final tiles = List<SpriteComponent>.from(_groundTiles)
+      ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    for (var i = 0; i < tiles.length; i++) {
+      tiles[i]
+        ..position = Vector2(startX + i * tileWidth, groundY)
         ..size = Vector2(tileWidth, tileHeight);
+    }
+  }
+
+  void _ensureGroundTileCount(int needed) {
+    final sprite = _groundSprite;
+    if (sprite == null || _groundTiles.length >= needed) {
+      return;
+    }
+    while (_groundTiles.length < needed) {
+      final tile = SpriteComponent(
+        sprite: sprite,
+        anchor: Anchor.topLeft,
+      );
+      ArtAtlas.applyNearestNeighbor(tile);
+      _groundTiles.add(tile);
+      world.add(tile);
     }
   }
 
@@ -385,19 +461,25 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _addGroundTiles(Sprite groundSprite) {
-    final tileWidth = _layout.groundTileWidth;
-    final tileHeight = _layout.groundTileHeight;
-    for (var i = 0; i < 8; i += 1) {
+    _groundSprite = groundSprite;
+    final span = _layout.groundWorldSpan(
+      cameraCenterX: PlayerComponent.startX,
+      viewportWidth: _viewportWidth,
+    );
+    final needed = _layout.groundTileCountForSpan(
+      worldLeft: span.left,
+      worldRight: span.right,
+    );
+    for (var i = 0; i < needed; i++) {
       final tile = SpriteComponent(
         sprite: groundSprite,
-        position: Vector2(i * tileWidth, _layout.groundY),
-        size: Vector2(tileWidth, tileHeight),
         anchor: Anchor.topLeft,
       );
       ArtAtlas.applyNearestNeighbor(tile);
       _groundTiles.add(tile);
       world.add(tile);
     }
+    _layoutGroundTilePositions();
   }
 
   void _syncBiomeIfNeeded() {
@@ -415,9 +497,16 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void _recycleGroundTiles() {
     final tileWidth = _layout.groundTileWidth;
+    final span = _layout.groundWorldSpan(
+      cameraCenterX: _groundCameraCenterX,
+      viewportWidth: _viewportWidth,
+    );
+    final stride = _groundTiles.length * tileWidth;
     for (final tile in _groundTiles) {
-      if (tile.position.x + tile.size.x < player.position.x - 900) {
-        tile.position.x += _groundTiles.length * tileWidth;
+      if (tile.position.x + tile.size.x < span.left) {
+        tile.position.x += stride;
+      } else if (tile.position.x > span.right) {
+        tile.position.x -= stride;
       }
     }
   }
