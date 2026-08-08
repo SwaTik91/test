@@ -7,6 +7,18 @@ void main() {
     expect(ArtAtlas.heroPath(HeroClassId.archer), 'heroes/archer.png');
     expect(ArtAtlas.heroPath(HeroClassId.mage), 'heroes/mage.png');
     expect(ArtAtlas.heroPath(HeroClassId.paladin), 'heroes/paladin.png');
+    expect(
+      ArtAtlas.heroPreviewPath(HeroClassId.archer),
+      'heroes/archer/idle_0.png',
+    );
+    expect(
+      ArtAtlas.heroPreviewPath(HeroClassId.mage),
+      'heroes/mage/idle_0.png',
+    );
+    expect(
+      ArtAtlas.heroPreviewPath(HeroClassId.paladin),
+      'heroes/paladin/idle_0.png',
+    );
   });
 
   test('Flame sprite paths omit assets/images prefix (Flame adds it)', () {

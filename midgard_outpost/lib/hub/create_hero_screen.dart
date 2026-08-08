@@ -22,7 +22,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selected = ClassesCatalog.byId(_selectedClass);
-    final heroArt = ArtAtlas.flutterAsset(ArtAtlas.heroPath(_selectedClass));
+    final heroArt = ArtAtlas.flutterAsset(ArtAtlas.heroPreviewPath(_selectedClass));
 
     return Scaffold(
       body: DecoratedBox(

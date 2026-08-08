@@ -52,7 +52,7 @@ class _HubShellState extends State<HubShell> {
   @override
   Widget build(BuildContext context) {
     final hero = widget.controller.hero!;
-    final heroArt = ArtAtlas.flutterAsset(ArtAtlas.heroPath(hero.classId));
+    final heroArt = ArtAtlas.flutterAsset(ArtAtlas.heroPreviewPath(hero.classId));
 
     return Scaffold(
       body: DecoratedBox(

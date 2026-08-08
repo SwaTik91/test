@@ -92,6 +92,15 @@ class ArtAtlas {
         HeroClassId.paladin => heroPaladin,
       };
 
+  /// Clean single-hero preview for hub/create screens.
+  /// The root `heroes/<class>.png` files are sheet-like and should not be
+  /// shown as large character previews.
+  static String heroPreviewPath(HeroClassId id) => switch (id) {
+        HeroClassId.archer => 'heroes/archer/idle_0.png',
+        HeroClassId.mage => 'heroes/mage/idle_0.png',
+        HeroClassId.paladin => 'heroes/paladin/idle_0.png',
+      };
+
   static String heroIconPath(HeroClassId id) => switch (id) {
         HeroClassId.archer => iconArcher,
         HeroClassId.mage => iconMage,
