@@ -26,6 +26,12 @@ void main() {
       _createGame,
       (game) => _expectGroundCoverageAfterScroll(game, size.width, size.height),
     );
+
+    testWithGame(
+      'ground reaches viewport bottom at ${size.width.toInt()}x${size.height.toInt()}',
+      _createGame,
+      (game) => _expectGroundBottomCoverage(game, size.width, size.height),
+    );
   }
 }
 
@@ -58,11 +64,24 @@ Future<void> _expectInitialGroundCoverage(
   expect(game.groundTilesForTest, isNotEmpty);
   expect(game.leftEdgeCoveredAtStart(viewportWidth: width, viewportHeight: height), isTrue);
   expect(game.groundCoversVisibleSpan(viewportWidth: width), isTrue);
+  expect(game.groundCoversViewportBottom(viewportHeight: height), isTrue);
   expect(game.groundTilesAreContiguous(), isTrue);
 
   final tiles = game.groundTilesForTest;
   final minX = tiles.map((tile) => tile.position.x).reduce((a, b) => a < b ? a : b);
   expect(minX, lessThan(0), reason: 'left edge should extend past world origin');
+}
+
+Future<void> _expectGroundBottomCoverage(
+  MidgardRunGame game,
+  double width,
+  double height,
+) async {
+  game.onGameResize(Vector2(width, height));
+  game.update(0);
+
+  expect(game.isRunReady, isTrue);
+  expect(game.groundCoversViewportBottom(viewportHeight: height), isTrue);
 }
 
 Future<void> _expectGroundCoverageAfterScroll(
@@ -81,5 +100,6 @@ Future<void> _expectGroundCoverageAfterScroll(
   }
 
   expect(game.groundCoversVisibleSpan(viewportWidth: width), isTrue);
+  expect(game.groundCoversViewportBottom(viewportHeight: height), isTrue);
   expect(game.groundTilesAreContiguous(), isTrue);
 }

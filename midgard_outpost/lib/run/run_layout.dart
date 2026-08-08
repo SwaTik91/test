@@ -13,14 +13,15 @@ class RunLayout {
   /// Feet contact line — top of the live ground strip.
   static const double groundTopFraction = 0.72;
 
-  /// Live ground tile visual height (fills contact line → bottom).
-  static const double groundTileHeightFraction = 0.28;
-
   /// Backdrop source crop — sky/scenery only (excludes baked floor in art).
   static const double backdropSkyFraction = 0.72;
 
   /// Extra viewport bleed so cover-fit backdrops never expose [Game.backgroundColor].
   static const double backdropBleedPx = 2;
+
+  /// Extra world bleed below the contact→bottom band so tiles always cover the
+  /// camera-visible bottom (avoids sub-pixel sky/backdrop gaps at short heights).
+  static const double groundBottomBleedPx = 2;
 
   static const double playerHeightFraction = 0.30;
   static const double mobHeightFraction = 0.21;
@@ -31,7 +32,11 @@ class RunLayout {
 
   double get groundY => viewportHeight * groundTopFraction;
 
-  double get groundTileHeight => viewportHeight * groundTileHeightFraction;
+  /// Contact line → viewport bottom (matches camera anchor span below [groundY]).
+  double get groundStripHeight => viewportHeight - groundY;
+
+  /// Render height includes [groundBottomBleedPx] past the visible bottom.
+  double get groundTileHeight => groundStripHeight + groundBottomBleedPx;
 
   /// Square ground tiles — no horizontal squash of 256×256 art.
   double get groundTileWidth => groundTileHeight;

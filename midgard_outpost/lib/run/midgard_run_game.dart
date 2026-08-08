@@ -87,6 +87,24 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   @visibleForTesting
+  bool groundCoversViewportBottom({double? viewportHeight}) {
+    if (_groundTiles.isEmpty) {
+      return false;
+    }
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    if (height <= 0) {
+      return false;
+    }
+    final maxBottom = _groundTiles
+        .map((tile) => tile.position.y + tile.size.y)
+        .reduce(math.max);
+    final viewportBottomY = camera.viewfinder.globalToLocal(
+      Vector2(_groundCameraCenterX, maxBottom),
+    ).y;
+    return viewportBottomY >= height - 0.5;
+  }
+
+  @visibleForTesting
   bool backdropCoversViewport({double? viewportWidth, double? viewportHeight}) {
     final background = _biomeBackground;
     if (background == null) {
@@ -372,7 +390,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   void _layoutGroundTilePositions() {
     final groundY = _layout.groundY;
     final tileWidth = _layout.groundTileWidth;
-    final tileHeight = _layout.groundTileHeight;
+    var tileHeight = _layout.groundTileHeight;
+    if (isRunReady && camera.parent != null) {
+      final visibleBottom = camera.visibleWorldRect.bottom;
+      tileHeight = math.max(
+        tileHeight,
+        visibleBottom - groundY + RunLayout.groundBottomBleedPx,
+      );
+    }
     final span = _groundSpanForLayout();
     final needed = _layout.groundTileCountForSpan(
       worldLeft: span.left,

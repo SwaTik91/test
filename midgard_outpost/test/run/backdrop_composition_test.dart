@@ -40,6 +40,18 @@ void main() {
     _createGame,
     (game) => _expectLeftEdgeCoverage(game, 1280, 800),
   );
+
+  testWithGame(
+    'ground reaches viewport bottom at 500px landscape height',
+    _createGame,
+    (game) => _expectGroundBottomCoverage(game, 1280, 500),
+  );
+
+  testWithGame(
+    'ground reaches viewport bottom at 800px landscape height',
+    _createGame,
+    (game) => _expectGroundBottomCoverage(game, 1280, 800),
+  );
 }
 
 MidgardRunGame _createGame() {
@@ -109,4 +121,31 @@ Future<void> _expectLeftEdgeCoverage(
   }
   expect(game.groundCoversVisibleSpan(viewportWidth: width), isTrue);
   expect(game.backdropCoversViewport(viewportWidth: width, viewportHeight: height), isTrue);
+}
+
+Future<void> _expectGroundBottomCoverage(
+  MidgardRunGame game,
+  double width,
+  double height,
+) async {
+  game.onGameResize(Vector2(width, height));
+  game.update(0);
+
+  expect(game.isRunReady, isTrue, reason: 'stage=${game.loadStage}');
+  expect(game.groundTilesForTest, isNotEmpty);
+  expect(
+    game.groundCoversViewportBottom(viewportHeight: height),
+    isTrue,
+    reason: 'ground strip must cover contact line to viewport bottom',
+  );
+
+  final layout = RunLayout(height);
+  final maxBottom = game.groundTilesForTest
+      .map((tile) => tile.position.y + tile.size.y)
+      .reduce((a, b) => a > b ? a : b);
+  expect(maxBottom, greaterThanOrEqualTo(layout.groundY + layout.groundStripHeight));
+  expect(
+    maxBottom,
+    greaterThanOrEqualTo(game.camera.visibleWorldRect.bottom - 0.5),
+  );
 }

@@ -17,13 +17,17 @@ void main() {
       expect(layout.groundY, 518.4);
     });
 
-    test('ground tile fills lower 28% without squash', () {
+    test('ground tile fills lower band to viewport bottom with bleed', () {
+      expect(
+        layout.groundStripHeight,
+        closeTo(720 * (1 - RunLayout.groundTopFraction), 0.01),
+      );
       expect(
         layout.groundTileHeight,
-        closeTo(720 * RunLayout.groundTileHeightFraction, 0.01),
+        closeTo(layout.groundStripHeight + RunLayout.groundBottomBleedPx, 0.01),
       );
       expect(layout.groundTileWidth, layout.groundTileHeight);
-      expect(layout.groundY + layout.groundTileHeight, closeTo(720, 0.01));
+      expect(layout.groundY + layout.groundStripHeight, closeTo(720, 0.01));
     });
 
     test('actor heights match spec bands', () {
@@ -131,7 +135,7 @@ void main() {
         final layout = RunLayout(height);
         expect(layout.groundY, closeTo(height * RunLayout.groundTopFraction, 0.01));
         expect(
-          layout.groundY + layout.groundTileHeight,
+          layout.groundY + layout.groundStripHeight,
           closeTo(height, 0.01),
         );
       }
