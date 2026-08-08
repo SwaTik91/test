@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+from collections import deque
+from typing import Callable
+
 from PIL import Image
 
 
@@ -39,21 +42,17 @@ def force_corner_alpha_zero(img: Image.Image) -> Image.Image:
 
 
 def remove_floor_shadow(img: Image.Image, floor_fraction: float = 0.76) -> Image.Image:
-    """Strip baked gray drop-shadow ovals under character feet."""
+    """Strip baked gray drop-shadow ovals under character feet (edge-connected only)."""
     rgba = img.convert("RGBA")
-    px = rgba.load()
-    w, h = rgba.size
-    floor_y = int(h * floor_fraction)
+    floor_y = int(rgba.height * floor_fraction)
+    bg = _estimate_background_rgb(rgba)
 
-    for y in range(floor_y, h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a == 0:
-                continue
-            if is_neutral_gray(r, g, b, a):
-                px[x, y] = (r, g, b, 0)
+    def removable(r: int, g: int, b: int, a: int, y: int) -> bool:
+        if y < floor_y:
+            return False
+        return is_neutral_gray(r, g, b, a) or is_backdrop_pixel(r, g, b, a, bg, 36)
 
-    return rgba
+    return _flood_remove(rgba, removable)
 
 
 def defringe_backdrop(
@@ -61,26 +60,22 @@ def defringe_backdrop(
     tolerance: int = 42,
     alpha_cutoff: int = 140,
 ) -> Image.Image:
-    """Remove soft backdrop residue and binarize alpha for crisp sprite edges."""
+    """Remove exterior backdrop/gray residue and binarize fringe alpha only."""
     rgba = img.convert("RGBA")
-    px = rgba.load()
-    w, h = rgba.size
     bg = _estimate_background_rgb(rgba)
 
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a == 0:
-                continue
-            if is_backdrop_pixel(r, g, b, a, bg, tolerance) or is_neutral_gray(r, g, b, a):
-                px[x, y] = (r, g, b, 0)
-                continue
-            if a < alpha_cutoff:
-                px[x, y] = (r, g, b, 0)
-            elif a < 255:
-                px[x, y] = (r, g, b, 255)
+    def removable(r: int, g: int, b: int, a: int, _y: int) -> bool:
+        return is_backdrop_pixel(r, g, b, a, bg, tolerance) or is_neutral_gray(r, g, b, a)
 
-    return rgba
+    rgba = _flood_remove(rgba, removable)
+    return _binarize_fringe_alpha(rgba, alpha_cutoff=alpha_cutoff)
+
+
+def clean_chroma_sprite(img: Image.Image) -> Image.Image:
+    """Single-pass cleanup for magenta-chroma walk frames (no backdrop re-key)."""
+    rgba = remove_floor_shadow(img)
+    rgba = _binarize_fringe_alpha(rgba)
+    return force_corner_alpha_zero(rgba)
 
 
 def clean_sprite_cutout(
@@ -94,7 +89,7 @@ def clean_sprite_cutout(
     rgba = _remove_background(rgba, tolerance=bg_tolerance)
     rgba = remove_floor_shadow(rgba)
     if preserve_soft_glow:
-        rgba = _remove_neutral_fringe(rgba, bg_tolerance=bg_tolerance)
+        rgba = _remove_exterior_fringe(rgba, bg_tolerance=bg_tolerance)
     else:
         rgba = defringe_backdrop(rgba, tolerance=bg_tolerance + 6)
     return force_corner_alpha_zero(rgba)
@@ -121,6 +116,43 @@ def count_neutral_gray_opaque(img: Image.Image) -> int:
         for y in range(h)
         for x in range(w)
         if is_neutral_gray(*px[x, y])
+    )
+
+
+def count_exterior_neutral_gray(img: Image.Image) -> int:
+    """Neutral gray on the outer fringe (adjacent to transparency)."""
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+    fringe_gray = 0
+
+    for y in range(h):
+        for x in range(w):
+            if not is_neutral_gray(*px[x, y]):
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] == 0:
+                    fringe_gray += 1
+                    break
+
+    return fringe_gray
+
+
+def count_opaque_in_center(img: Image.Image, margin_fraction: float = 0.25) -> int:
+    """Opaque pixels in the central band (interior detail guard)."""
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+    x0 = int(w * margin_fraction)
+    x1 = int(w * (1 - margin_fraction))
+    y0 = int(h * margin_fraction)
+    y1 = int(h * (1 - margin_fraction))
+    return sum(
+        1
+        for y in range(y0, y1)
+        for x in range(x0, x1)
+        if px[x, y][3] > 0
     )
 
 
@@ -159,20 +191,77 @@ def _remove_background(img: Image.Image, tolerance: int) -> Image.Image:
     return rgba
 
 
-def _remove_neutral_fringe(img: Image.Image, bg_tolerance: int) -> Image.Image:
-    rgba = img.convert("RGBA")
+def _flood_remove(
+    rgba: Image.Image,
+    removable: Callable[[int, int, int, int, int], bool],
+) -> Image.Image:
+    """Remove pixels reachable from transparent pixels or image borders."""
     px = rgba.load()
     w, h = rgba.size
-    bg = _estimate_background_rgb(rgba)
+    marked = [[False] * w for _ in range(h)]
+    queue: deque[tuple[int, int]] = deque()
 
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
             if a == 0:
+                marked[y][x] = True
+                queue.append((x, y))
+            elif x == 0 or x == w - 1 or y == 0 or y == h - 1:
+                if removable(r, g, b, a, y):
+                    marked[y][x] = True
+                    queue.append((x, y))
+
+    while queue:
+        cx, cy = queue.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cx + dx, cy + dy
+            if not (0 <= nx < w and 0 <= ny < h) or marked[ny][nx]:
                 continue
-            if is_backdrop_pixel(r, g, b, a, bg, bg_tolerance) or (
-                is_neutral_gray(r, g, b, a) and a < 240
-            ):
+            r, g, b, a = px[nx, ny]
+            if removable(r, g, b, a, ny):
+                marked[ny][nx] = True
+                queue.append((nx, ny))
+
+    for y in range(h):
+        for x in range(w):
+            if marked[y][x]:
+                r, g, b, _ = px[x, y]
                 px[x, y] = (r, g, b, 0)
+
+    return rgba
+
+
+def _remove_exterior_fringe(img: Image.Image, bg_tolerance: int) -> Image.Image:
+    rgba = img.convert("RGBA")
+    bg = _estimate_background_rgb(rgba)
+
+    def removable(r: int, g: int, b: int, a: int, _y: int) -> bool:
+        return is_backdrop_pixel(r, g, b, a, bg, bg_tolerance) or (
+            is_neutral_gray(r, g, b, a) and a < 240
+        )
+
+    return _flood_remove(rgba, removable)
+
+
+def _binarize_fringe_alpha(img: Image.Image, alpha_cutoff: int = 140) -> Image.Image:
+    """Snap semi-transparent pixels adjacent to transparency; keep interior soft pixels."""
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0 or a == 255:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] == 0:
+                    if a < alpha_cutoff:
+                        px[x, y] = (r, g, b, 0)
+                    else:
+                        px[x, y] = (r, g, b, 255)
+                    break
 
     return rgba

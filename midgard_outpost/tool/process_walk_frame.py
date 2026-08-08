@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from clean_sprite_alpha import clean_sprite_cutout, force_corner_alpha_zero
+from clean_sprite_alpha import clean_chroma_sprite, force_corner_alpha_zero
 
 RESAMPLE = Image.Resampling.NEAREST
 
@@ -58,24 +58,14 @@ def resize_max_edge(img: Image.Image, max_edge: int) -> Image.Image:
     return img.resize(new_size, RESAMPLE)
 
 
-def force_corner_alpha_zero(img: Image.Image) -> Image.Image:
-    rgba = img.convert("RGBA")
-    px = rgba.load()
-    w, h = rgba.size
-    for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
-        r, g, b, _ = px[x, y]
-        px[x, y] = (r, g, b, 0)
-    return rgba
-
-
 def process_walk_frame(src: Path, dest: Path, max_edge: int = 96) -> tuple[int, int]:
     with Image.open(src) as raw:
         keyed = key_magenta_to_alpha(raw)
     cropped = tight_crop_opaque(keyed)
     sized = resize_max_edge(cropped, max_edge)
-    out = clean_sprite_cutout(sized)
+    out = clean_chroma_sprite(sized)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    force_corner_alpha_zero(out).save(dest, format="PNG", optimize=True)
+    out.save(dest, format="PNG", optimize=True)
     return out.size
 
 

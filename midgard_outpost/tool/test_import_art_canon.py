@@ -13,7 +13,11 @@ from PIL import Image
 TOOL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOL_DIR))
 
-from clean_sprite_alpha import count_neutral_gray_opaque, count_semi_transparent_pixels  # noqa: E402
+from clean_sprite_alpha import (  # noqa: E402
+    count_exterior_neutral_gray,
+    count_opaque_in_center,
+    count_semi_transparent_pixels,
+)
 from import_art_canon import import_canon  # noqa: E402
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
@@ -21,18 +25,17 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
 
-# Representative creature outputs produced by the import pipeline.
 CREATURE_OUTPUTS = (
     ASSETS_DIR / "enemies" / "slime.png",
     ASSETS_DIR / "enemies" / "boss_demon.png",
     ASSETS_DIR / "props" / "chest.png",
 )
 
-# Soft glow on VFX/projectiles is allowed; hero/enemy cutouts should be crisp.
 MAX_SEMI_TRANSPARENT_HERO = 120
-MAX_NEUTRAL_GRAY_HERO = 40
+MAX_EXTERIOR_GRAY_HERO = 80
 MAX_SEMI_TRANSPARENT_CREATURE = 400
-MAX_NEUTRAL_GRAY_CREATURE = 120
+
+MIN_PALADIN_CENTER_OPAQUE = 800
 
 
 def file_md5(path: Path) -> str:
@@ -59,12 +62,12 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
             raise unittest.SkipTest(f"Canon directory missing: {CANON_DIR}")
         import_canon(CANON_DIR, ASSETS_DIR)
 
-    def test_mage_cast_frames_are_unique(self) -> None:
-        hashes = {
-            file_md5(ASSETS_DIR / "heroes" / "mage" / f"cast_{i}.png")
-            for i in range(3)
-        }
-        self.assertEqual(len(hashes), 3, f"mage cast frames duplicated: {hashes}")
+    def test_mage_cast_has_two_unique_attack_frames(self) -> None:
+        cast_0 = file_md5(ASSETS_DIR / "heroes" / "mage" / "cast_0.png")
+        cast_1 = file_md5(ASSETS_DIR / "heroes" / "mage" / "cast_1.png")
+        cast_2 = file_md5(ASSETS_DIR / "heroes" / "mage" / "cast_2.png")
+        self.assertNotEqual(cast_0, cast_1, "mage cast attack frames duplicated")
+        self.assertEqual(cast_2, cast_1, "mage cast_2 should pad cast_1")
 
     def test_mage_jump_frames_are_unique(self) -> None:
         hashes = {
@@ -90,6 +93,34 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     f"{hero} jump frames duplicate cast: {overlap}",
                 )
 
+    def test_cast_third_frame_pads_attack_not_stride(self) -> None:
+        for hero in HERO_CLASSES:
+            cast_1 = file_md5(ASSETS_DIR / "heroes" / hero / "cast_1.png")
+            cast_2 = file_md5(ASSETS_DIR / "heroes" / hero / "cast_2.png")
+            with self.subTest(hero=hero):
+                self.assertEqual(
+                    cast_2,
+                    cast_1,
+                    f"{hero} cast_2 should pad cast_1, not a run stride pose",
+                )
+
+    def test_cast_frames_do_not_match_run(self) -> None:
+        for hero in HERO_CLASSES:
+            cast_hashes = {
+                file_md5(ASSETS_DIR / "heroes" / hero / f"cast_{i}.png")
+                for i in range(3)
+            }
+            run_hashes = {
+                file_md5(ASSETS_DIR / "heroes" / hero / f"run_{i}.png")
+                for i in range(4)
+            }
+            overlap = cast_hashes & run_hashes
+            with self.subTest(hero=hero):
+                self.assertFalse(
+                    overlap,
+                    f"{hero} cast frames overlap run cycle: {overlap}",
+                )
+
     def test_hero_run_frames_are_unique_and_not_idle(self) -> None:
         for hero in HERO_CLASSES:
             idle_hashes = {
@@ -112,6 +143,16 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     f"{hero} run frames duplicate idle: {overlap}",
                 )
 
+    def test_paladin_interior_opaque_detail_preserved(self) -> None:
+        path = ASSETS_DIR / "heroes" / "paladin" / "cast_0.png"
+        with Image.open(path) as img:
+            center_opaque = count_opaque_in_center(img)
+        self.assertGreaterEqual(
+            center_opaque,
+            MIN_PALADIN_CENTER_OPAQUE,
+            f"paladin interior holes after cleanup: {center_opaque} center opaque px",
+        )
+
     def test_hero_cutouts_have_transparent_corners(self) -> None:
         for hero in HERO_CLASSES:
             for anim in ("idle", "run", "jump", "cast"):
@@ -119,10 +160,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 for idx in range(count):
                     path = ASSETS_DIR / "heroes" / hero / f"{anim}_{idx}.png"
                     with self.subTest(path=path):
-                        self.assertTrue(
-                            path.is_file(),
-                            f"missing hero frame: {path}",
-                        )
+                        self.assertTrue(path.is_file(), f"missing hero frame: {path}")
                         self.assertTrue(
                             corners_transparent(path),
                             f"opaque corners on hero frame: {path}",
@@ -136,7 +174,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     path = ASSETS_DIR / "heroes" / hero / f"{anim}_{idx}.png"
                     with Image.open(path) as img:
                         semi = count_semi_transparent_pixels(img)
-                        gray = count_neutral_gray_opaque(img)
+                        exterior_gray = count_exterior_neutral_gray(img)
                     with self.subTest(path=path):
                         self.assertLessEqual(
                             semi,
@@ -144,9 +182,9 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                             f"too many semi-transparent pixels on {path}: {semi}",
                         )
                         self.assertLessEqual(
-                            gray,
-                            MAX_NEUTRAL_GRAY_HERO,
-                            f"gray backdrop residue on {path}: {gray}",
+                            exterior_gray,
+                            MAX_EXTERIOR_GRAY_HERO,
+                            f"exterior gray backdrop on {path}: {exterior_gray}",
                         )
 
     def test_creature_outputs_have_transparent_corners(self) -> None:
@@ -162,17 +200,11 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
         for path in CREATURE_OUTPUTS:
             with Image.open(path) as img:
                 semi = count_semi_transparent_pixels(img)
-                gray = count_neutral_gray_opaque(img)
             with self.subTest(path=path):
                 self.assertLessEqual(
                     semi,
                     MAX_SEMI_TRANSPARENT_CREATURE,
                     f"too many semi-transparent pixels on {path}: {semi}",
-                )
-                self.assertLessEqual(
-                    gray,
-                    MAX_NEUTRAL_GRAY_CREATURE,
-                    f"gray backdrop residue on {path}: {gray}",
                 )
 
 

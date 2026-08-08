@@ -165,8 +165,7 @@ def crop_component(img: Image.Image, bbox: BBox, pad: int = 4) -> Image.Image:
     y0 = max(0, bbox.y0 - pad)
     x1 = min(w, bbox.x1 + pad)
     y1 = min(h, bbox.y1 + pad)
-    cropped = rgba.crop((x0, y0, x1, y1))
-    return clean_sprite_cutout(cropped)
+    return rgba.crop((x0, y0, x1, y1))
 
 
 def group_rows(components: list[BBox], row_gap: int = 80) -> list[list[BBox]]:
@@ -240,8 +239,11 @@ def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
 
     Sheet layout (RO multi-pose):
       top row    -> front standing idle variants (+ side/back references)
-      lower rows -> cast/attack poses and a stride pose
+      lower rows -> cast/attack poses; last pose is a run stride (not used for cast)
+
     Run frames are imported separately from art-canon/walk/.
+    Canon provides no dedicated jump/air art; jump uses side/back top-row poses as
+    a plausible airborne substitute (distinct from cast attack poses).
     """
     poses = character_poses(components)
     rows = group_rows(poses)
@@ -254,11 +256,12 @@ def poses_for_animation(components: list[BBox]) -> dict[str, list[BBox]]:
     # Standing idle: first two front-facing poses on the top row.
     idle = pick(top, 2, fallback=top)
 
-    # Jump: side/back reference poses from the top row (distinct from cast action row).
+    # Air substitute: side/back references (canon has no jump frames).
     jump = pick(top[2:4] if len(top) >= 4 else top[2:], 2, fallback=idle)
 
-    # Cast/attack: full action row (shooting, staff raise, stride follow-through).
-    cast = pick(actions, 3, fallback=top)
+    # Cast: attack-only poses (exclude trailing stride that reads as run).
+    attack_only = actions[:2] if len(actions) >= 2 else actions
+    cast = pick(attack_only, 3, fallback=top)
 
     return {
         "idle": idle,
@@ -325,7 +328,10 @@ def import_creature(src: Path, rel_dest: Path, out_dir: Path, max_edge: int) -> 
         out = resize_max_edge(keyed, max_edge)
     else:
         main = max(components, key=lambda c: c.pixels)
-        cutout = clean_sprite_cutout(resize_max_edge(crop_component(sheet, main), max_edge))
+        cutout = clean_sprite_cutout(
+            resize_max_edge(crop_component(sheet, main), max_edge),
+            preserve_soft_glow=True,
+        )
         out = cutout
 
     dest = out_dir / rel_dest
@@ -386,9 +392,15 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
             components = find_components(img)
             if components:
                 main = max(components, key=lambda c: c.pixels)
-                out = clean_sprite_cutout(resize_max_edge(crop_component(img, main), max_edge))
+                out = clean_sprite_cutout(
+                    resize_max_edge(crop_component(img, main), max_edge),
+                    preserve_soft_glow=True,
+                )
             else:
-                out = clean_sprite_cutout(resize_max_edge(remove_background(img), max_edge))
+                out = clean_sprite_cutout(
+                    resize_max_edge(remove_background(img), max_edge),
+                    preserve_soft_glow=True,
+                )
         else:
             out = resize_max_edge(img, max_edge)
         write_png(out, dest)
