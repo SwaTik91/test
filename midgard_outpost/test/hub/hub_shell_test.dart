@@ -114,6 +114,33 @@ void main() {
 
     expect(find.byType(RunScreen), findsOneWidget);
   });
+
+  testWidgets('hub rail keeps all labels visible on short landscape', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      save: SaveService(
+        local: LocalSaveRepository(),
+        cloud: NoopCloudSavePort(),
+      ),
+    );
+    await controller.bootstrap();
+
+    await tester.binding.setSurfaceSize(const Size(1280, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(MidgardApp(controller: controller));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Лучник'));
+    await tester.tap(find.text('Создать героя'));
+    await tester.pumpAndSettle();
+
+    for (final label in ['Главная', 'Статы', 'Умения', 'Магазин']) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 bool _isPositionedFillStyle(Positioned positioned) {

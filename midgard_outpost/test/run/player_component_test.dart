@@ -36,4 +36,30 @@ void main() {
     player.position.y = layout.groundY - 0.4;
     expect(player.isGrounded, isTrue);
   });
+
+  test('sprite render size preserves frame aspect ratio', () async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 0, 75, 96),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(75, 96);
+    final sprite = Sprite(image);
+
+    final layout = RunLayout(RunLayout.referenceHeight);
+    final player = PlayerComponent.forTest(
+      groundY: layout.groundY,
+      sprite: sprite,
+      size: layout.playerSize,
+    );
+
+    expect(player.size.y, layout.playerSize.y);
+    expect(
+      player.size.x / player.size.y,
+      closeTo(75 / 96, 0.01),
+    );
+    expect(player.footprintSize, layout.playerSize);
+  });
 }

@@ -50,4 +50,30 @@ void main() {
     expect(spec.kind, isNot(MonsterKind.bossDemon));
     expect(spec.isBoss, isFalse);
   });
+
+  test('ranged mobs expose attack range and interval', () {
+    final bee = MonstersCatalog.forDistance(
+      distancePx: 600,
+      biome: Biome.fields,
+      isBoss: false,
+    );
+    if (bee.kind == MonsterKind.bee) {
+      expect(bee.attackRange, greaterThan(0));
+      expect(bee.attackInterval, greaterThan(0));
+    }
+
+  final rangedKinds = MonsterKind.values.where((k) => k.isRanged);
+    for (final kind in rangedKinds) {
+      final spec = MonstersCatalog.forDistance(
+        distancePx: 0,
+        biome: Biome.fields,
+        isBoss: false,
+      );
+      if (spec.kind == kind) {
+        expect(spec.attackRange, greaterThan(0));
+        expect(spec.attackInterval, greaterThan(0));
+        break;
+      }
+    }
+  });
 }

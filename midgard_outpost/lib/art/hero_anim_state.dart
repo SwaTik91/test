@@ -12,9 +12,10 @@ HeroAnimName selectHeroAnim({
   required bool grounded,
   required double vx,
   required bool casting,
+  double runSpeedThreshold = 0,
 }) {
   if (casting) return HeroAnimName.cast;
   if (!grounded) return HeroAnimName.jump;
-  if (vx != 0) return HeroAnimName.run;
+  if (vx.abs() > runSpeedThreshold) return HeroAnimName.run;
   return HeroAnimName.idle;
 }

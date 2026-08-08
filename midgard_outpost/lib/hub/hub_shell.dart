@@ -256,17 +256,23 @@ class _HubRail extends StatelessWidget {
         color: HubTheme.railBg,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        children: [
-          for (final tab in HubTab.values) ...[
-            _RailButton(
-              label: labels[tab]!,
-              icon: icons[tab]!,
-              selected: selected == tab,
-              onPressed: () => onSelect(tab),
-            ),
-          ],
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            children: [
+              for (final tab in HubTab.values)
+                Expanded(
+                  child: _RailButton(
+                    label: labels[tab]!,
+                    icon: icons[tab]!,
+                    selected: selected == tab,
+                    onPressed: () => onSelect(tab),
+                    maxHeight: constraints.maxHeight / HubTab.values.length,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -278,46 +284,56 @@ class _RailButton extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onPressed,
+    required this.maxHeight,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onPressed;
+  final double maxHeight;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
       child: Material(
         color: selected ? HubTheme.accent : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 22,
-                  color: selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
+          child: SizedBox(
+            height: maxHeight.clamp(40, 96),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 22,
+                      color:
+                          selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color:
+                            selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: selected ? HubTheme.overlayEdge : HubTheme.textSecondary,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

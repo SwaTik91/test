@@ -46,5 +46,10 @@ void main() {
       expect(cover.x, greaterThanOrEqualTo(1280));
       expect(cover.y, greaterThanOrEqualTo(layout.groundY));
     });
+
+    test('ground top fraction matches camera anchor target', () {
+      expect(RunLayout.groundTopFraction, 0.72);
+      expect(layout.groundY / layout.viewportHeight, closeTo(0.72, 0.001));
+    });
   });
 }

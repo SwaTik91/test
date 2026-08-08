@@ -42,6 +42,16 @@ extension MonsterKindSprites on MonsterKind {
           true,
         _ => false,
       };
+
+  /// Ranged mobs fire simple projectiles instead of only chasing into melee.
+  bool get isRanged => switch (this) {
+        MonsterKind.bee ||
+        MonsterKind.ghost ||
+        MonsterKind.mushroom ||
+        MonsterKind.plant =>
+          true,
+        _ => false,
+      };
 }
 
 class MonsterSpec {
@@ -58,6 +68,8 @@ class MonsterSpec {
     required this.moveSpeed,
     required this.width,
     required this.height,
+    this.attackRange = 0,
+    this.attackInterval = 1.6,
   });
 
   final MonsterKind kind;
@@ -72,6 +84,8 @@ class MonsterSpec {
   final double moveSpeed;
   final double width;
   final double height;
+  final double attackRange;
+  final double attackInterval;
 }
 
 class MonstersCatalog {
@@ -137,6 +151,7 @@ class MonstersCatalog {
     final gold = 4 + (wave ~/ 3) + biomeReward;
 
     if (!isBoss) {
+      final ranged = kind.isRanged;
       return MonsterSpec(
         kind: kind,
         biome: biome,
@@ -147,9 +162,11 @@ class MonstersCatalog {
         jobXp: jobXp,
         gold: gold,
         tempXp: 20 + wave,
-        moveSpeed: 50 + (wave * 2),
+        moveSpeed: (50 + (wave * 2)) * (ranged ? 0.85 : 1.0),
         width: 40,
         height: 44,
+        attackRange: ranged ? 220 : 0,
+        attackInterval: ranged ? 1.8 : 0,
       );
     }
 

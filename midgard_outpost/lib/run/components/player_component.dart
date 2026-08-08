@@ -6,6 +6,7 @@ import '../../art/animation_atlas.dart';
 import '../../art/art_atlas.dart';
 import '../../art/hero_anim_state.dart';
 import '../../core/ids.dart';
+import '../sprite_fit.dart';
 
 class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   PlayerComponent._({
@@ -13,15 +14,16 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required this.maxSp,
     required this.moveSpeed,
     required this.groundY,
-    required Vector2 size,
+    required Vector2 footprintSize,
     required Map<HeroAnimName, SpriteAnimation> animations,
   }) : currentHp = maxHp,
        currentSp = maxSp,
+       _footprintSize = footprintSize.clone(),
        super(
          animations: animations,
          current: HeroAnimName.idle,
          position: Vector2(120, groundY),
-         size: size,
+         size: footprintSize.clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
@@ -50,7 +52,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       maxSp: maxSp,
       moveSpeed: moveSpeed,
       groundY: groundY,
-      size: size,
+      footprintSize: size,
       animations: animations,
     );
   }
@@ -105,17 +107,21 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        moveSpeed = moveSpeed,
        currentHp = maxHp,
        currentSp = maxSp,
+       _footprintSize = (size ?? Vector2(216, 216)).clone(),
        super(
          animations: _singleSpriteAnimations(sprite),
          current: HeroAnimName.idle,
          position: position ?? Vector2(120, groundY),
-         size: size ?? Vector2(216, 216),
+         size: (size ?? Vector2(216, 216)).clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
     paint.color = Colors.white;
     ArtAtlas.applyNearestNeighbor(this);
+    _syncFrameAspectSize();
   }
+
+  final Vector2 _footprintSize;
 
   int maxHp;
   int maxSp;
@@ -135,11 +141,13 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   bool get isGrounded => position.y >= groundY - 0.5;
 
   Rect get bounds => Rect.fromLTWH(
-    position.x - size.x * anchor.x,
-    position.y - size.y * anchor.y,
-    size.x,
-    size.y,
+    position.x - _footprintSize.x * anchor.x,
+    position.y - _footprintSize.y * anchor.y,
+    _footprintSize.x,
+    _footprintSize.y,
   );
+
+  Vector2 get footprintSize => _footprintSize;
 
   void setHorizontal(double axis) {
     _horizontal = axis.clamp(-1, 1).toDouble();
@@ -207,8 +215,31 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   }
 
   void setSize(Vector2 value) {
-    size.setFrom(value);
+    _footprintSize.setFrom(value);
+    _syncFrameAspectSize();
   }
+
+  @override
+  void onMount() {
+    super.onMount();
+    _syncFrameAspectSize();
+  }
+
+  void _syncFrameAspectSize() {
+    final frame = animationTicker?.getSprite();
+    if (frame == null) {
+      size.setFrom(_footprintSize);
+      return;
+    }
+    size.setFrom(
+      SpriteFit.containHeight(
+        srcSize: frame.srcSize,
+        targetHeight: _footprintSize.y,
+      ),
+    );
+  }
+
+  static const double _runAnimSpeedThreshold = 12;
 
   @override
   void update(double dt) {
@@ -234,10 +265,12 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       grounded: isGrounded,
       vx: _horizontal * moveSpeed,
       casting: _castTimer > 0,
+      runSpeedThreshold: _runAnimSpeedThreshold,
     );
     if (current != anim) {
       current = anim;
     }
+    _syncFrameAspectSize();
 
     if (_damageFlashSeconds > 0) {
       _damageFlashSeconds -= dt;

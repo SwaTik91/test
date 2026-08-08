@@ -174,7 +174,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       world.add(player);
       _spawnMonster();
       _spawnMonster();
-      camera.follow(player, horizontalOnly: true, snap: true);
+      _configureCameraFollow();
 
       loadStage = 'hud';
       isRunReady = true;
@@ -214,11 +214,29 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _layout = _currentLayout();
     _syncBiomeBackgroundLayout();
     _syncGroundTilesLayout();
+    _syncCameraLayout();
     if (isRunReady) {
       player
         ..setGroundY(_layout.groundY)
         ..setSize(_layout.playerSize);
     }
+  }
+
+  void _configureCameraFollow() {
+    camera.viewfinder.anchor = Anchor(0.5, RunLayout.groundTopFraction);
+    camera.follow(player, horizontalOnly: true, snap: true);
+    _syncCameraLayout();
+  }
+
+  void _syncCameraLayout() {
+    if (!isRunReady) {
+      return;
+    }
+    camera.viewfinder.anchor = Anchor(0.5, RunLayout.groundTopFraction);
+    camera.viewfinder.position = Vector2(
+      player.position.x,
+      player.position.y,
+    );
   }
 
   void _syncBiomeBackgroundLayout() {
@@ -449,6 +467,9 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       tempXp: spec.tempXp,
       upgradeDropChance: _upgradeDropChanceFor(spec),
       moveSpeed: spec.moveSpeed,
+      attackRange: spec.attackRange,
+      attackInterval: spec.attackInterval,
+      onRangedAttack: spec.attackRange > 0 ? _onMonsterRangedAttack : null,
       size: mobSize,
     ).then((monster) {
       _monsters.add(monster);
@@ -523,6 +544,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
           start: start,
           end: end,
           duration: 0.18,
+          visualHeight: ProjectileComponent.basicVisualHeight,
         )..paint.filterQuality = FilterQuality.none,
       );
       return;
@@ -640,9 +662,40 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         start: event.projectile ? start : end,
         end: end,
         duration: event.projectile ? 0.18 : 0.14,
-        radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
+        visualHeight: event.kind == SkillCastKind.ultimate
+            ? ProjectileComponent.ultimateVisualHeight
+            : ProjectileComponent.skillVisualHeight,
       )..paint.filterQuality = FilterQuality.none,
     );
+  }
+
+  void _onMonsterRangedAttack(MonsterComponent monster) {
+    if (_finished || !isRunReady || !monster.isAlive) {
+      return;
+    }
+
+    final start = monster.center;
+    final end = player.center;
+    world.add(
+      ProjectileComponent(
+        sprite: _projectileSprite,
+        start: start,
+        end: end,
+        duration: 0.22,
+        visualHeight: ProjectileComponent.skillVisualHeight,
+      )..paint.filterQuality = FilterQuality.none,
+    );
+
+    final dx = (player.position.x - monster.position.x).abs();
+    final dy = (player.position.y - monster.position.y).abs();
+    if (dx <= monster.attackRange + 24 && dy < _layout.verticalCombatReach) {
+      final damage = _incomingDamage(monster.touchDamage);
+      _damagePlayer(damage);
+      _publishHud();
+      if (player.isDead) {
+        _finishRun();
+      }
+    }
   }
 
   void _spawnSkillVfx(Vector2 position) {

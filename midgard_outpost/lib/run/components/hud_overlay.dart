@@ -8,6 +8,12 @@ class HudOverlay extends StatelessWidget {
 
   final MidgardRunGame game;
 
+  @visibleForTesting
+  static BoxConstraints panelConstraintsFor(Size screenSize) => BoxConstraints(
+        maxWidth: screenSize.width * 0.28,
+        maxHeight: screenSize.height * 0.30,
+      );
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
@@ -20,25 +26,25 @@ class HudOverlay extends StatelessWidget {
         final rewards = game.currentRewards;
         final ultimateReady = game.ultimateCooldownRemaining <= 0;
 
+        final screen = MediaQuery.sizeOf(context);
+        final hudConstraints = HudOverlay.panelConstraintsFor(screen);
+
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             child: Stack(
               children: [
                 Align(
                   alignment: Alignment.topLeft,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 360,
-                      maxHeight: MediaQuery.sizeOf(context).height * 0.45,
-                    ),
+                    constraints: hudConstraints,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(8),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,34 +53,35 @@ class HudOverlay extends StatelessWidget {
                               label:
                                   'HP ${game.player.currentHp}/${game.player.maxHp}',
                               value: game.hpFraction,
+                              maxWidth: hudConstraints.maxWidth - 16,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             _Bar(
                               label:
                                   'SP ${game.player.currentSp}/${game.player.maxSp}',
                               value: game.spFraction,
                               color: Colors.lightBlueAccent,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 4),
                             Text(
                               'Авто: ${game.autoSkillName}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 13,
+                                fontSize: 11,
                               ),
                             ),
                             Text(
                               'XP ${rewards.baseXp}/${rewards.jobXp} · Золото ${rewards.gold}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 13,
+                                fontSize: 11,
                               ),
                             ),
                             Text(
                               'Дистанция: ${game.distance.toStringAsFixed(0)} · ${game.biomeLabel}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 13,
+                                fontSize: 11,
                               ),
                             ),
                           ],
@@ -124,35 +131,47 @@ class HudOverlay extends StatelessWidget {
 }
 
 class _HpBar extends StatelessWidget {
-  const _HpBar({required this.label, required this.value});
+  const _HpBar({
+    required this.label,
+    required this.value,
+    required this.maxWidth,
+  });
 
   final String label;
   final double value;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
+    final barWidth = maxWidth.clamp(120.0, 220.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white)),
-        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 11),
+        ),
+        const SizedBox(height: 3),
         Stack(
           alignment: Alignment.centerLeft,
           children: [
             Image.asset(
               ArtAtlas.flutterAsset(ArtAtlas.hpBarFrame),
-              width: 220,
-              height: 22,
+              width: barWidth,
+              height: 18,
               fit: BoxFit.fill,
               filterQuality: FilterQuality.none,
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: LinearProgressIndicator(
-                value: value.clamp(0, 1).toDouble(),
-                color: Colors.redAccent,
-                backgroundColor: Colors.transparent,
-                minHeight: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: SizedBox(
+                width: barWidth - 6,
+                child: LinearProgressIndicator(
+                  value: value.clamp(0, 1).toDouble(),
+                  color: Colors.redAccent,
+                  backgroundColor: Colors.transparent,
+                  minHeight: 10,
+                ),
               ),
             ),
           ],
@@ -174,12 +193,16 @@ class _Bar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white)),
-        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 11),
+        ),
+        const SizedBox(height: 3),
         LinearProgressIndicator(
           value: value.clamp(0, 1).toDouble(),
           color: color,
           backgroundColor: Colors.white24,
+          minHeight: 8,
         ),
       ],
     );
