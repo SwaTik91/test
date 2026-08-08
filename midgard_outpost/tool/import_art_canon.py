@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 from clean_sprite_alpha import clean_sprite_cutout, force_corner_alpha_zero
+from process_walk_frame import process_walk_frame_image
 
 HERO_FRAME_RESAMPLE = Image.Resampling.NEAREST
 RESAMPLE = Image.Resampling.LANCZOS
@@ -33,6 +34,9 @@ HERO_ANIM_COUNTS: dict[str, int] = {
     "jump": 2,
     "cast": 3,
 }
+
+# Archer idle/jump/cast are imported from art-canon/archer-v2/ (not hero sheet slices).
+ARCHER_V2_ANIMS: tuple[str, ...] = ("idle", "jump", "cast")
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,22 @@ def resize_max_edge(img: Image.Image, max_edge: int, resample: Image.Resampling 
     scale = max_edge / longest
     new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
     return img.resize(new_size, resample)
+
+
+def make_bottom_aligned_icon(sprite: Image.Image, size: int = 64) -> Image.Image:
+    """Fit sprite into size×size canvas, bottom-centered, nearest-neighbor."""
+    rgba = ensure_rgba(sprite)
+    w, h = rgba.size
+    longest = max(w, h)
+    if longest > size:
+        scale = size / longest
+        new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+        rgba = rgba.resize(new_size, HERO_FRAME_RESAMPLE)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    x = (size - rgba.width) // 2
+    y = size - rgba.height
+    canvas.paste(rgba, (x, y), rgba)
+    return canvas
 
 
 def resize_square_crop_fit(img: Image.Image, size: int) -> Image.Image:
@@ -407,6 +427,51 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
         return out.size
 
 
+def import_archer_v2_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
+    """Import archer idle/jump/cast from art-canon/archer-v2/ magenta chroma frames."""
+    archer_dir = canon_dir / "archer-v2"
+    if not archer_dir.is_dir():
+        return []
+
+    results: list[tuple[Path, Path, tuple[int, int]]] = []
+    hero_dir = out_dir / "heroes" / "archer"
+    idle_0: Image.Image | None = None
+
+    for anim in ARCHER_V2_ANIMS:
+        count = HERO_ANIM_COUNTS[anim]
+        for idx in range(count):
+            src = archer_dir / f"archer-{anim}-{idx}.png"
+            if not src.is_file():
+                raise SystemExit(f"Missing archer-v2 frame: {src}")
+            with Image.open(src) as raw:
+                frame = process_walk_frame_image(raw, max_edge=96)
+            rel = Path("heroes") / "archer" / f"{anim}_{idx}.png"
+            dest = out_dir / rel
+            write_png(frame, dest)
+            results.append((src, dest, frame.size))
+            print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+            if anim == "idle" and idx == 0:
+                idle_0 = frame
+
+    if idle_0 is None:
+        raise SystemExit("archer-v2 import produced no idle_0 frame")
+
+    preview_rel = Path("heroes") / "archer.png"
+    preview_dest = out_dir / preview_rel
+    write_png(idle_0, preview_dest)
+    results.append((archer_dir / "archer-idle-0.png", preview_dest, idle_0.size))
+    print(f"archer-idle-0.png -> {preview_rel} ({idle_0.size[0]}x{idle_0.size[1]})")
+
+    icon = make_bottom_aligned_icon(idle_0, 64)
+    icon_rel = Path("hub") / "icon_archer.png"
+    icon_dest = out_dir / icon_rel
+    write_png(icon, icon_dest)
+    results.append((archer_dir / "archer-idle-0.png", icon_dest, icon.size))
+    print(f"archer-idle-0.png -> {icon_rel} ({icon.size[0]}x{icon.size[1]})")
+
+    return results
+
+
 def import_walk_cycles_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
     """Import run_0..3 from art-canon/walk/ when present."""
     walk_dir = canon_dir / "walk"
@@ -430,6 +495,10 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
     for src in sources:
         if src.name.startswith("hero-"):
             hero_name = src.stem.removeprefix("hero-")
+            # Archer idle/jump/cast/preview/icon come from archer-v2, not sheet slices.
+            if hero_name == "archer":
+                print(f"skip sheet slice: {src.name} (archer-v2 import)")
+                continue
             for dest, size in import_hero_sheet(src, hero_name, out_dir):
                 results.append((src, dest, size))
             continue
@@ -453,6 +522,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
                 print(f"{src.name} -> {rel_dest} ({size[0]}x{size[1]})")
 
     results.extend(import_walk_cycles_if_present(canon_dir, out_dir))
+    results.extend(import_archer_v2_if_present(canon_dir, out_dir))
     return results
 
 

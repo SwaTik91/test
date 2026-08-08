@@ -58,12 +58,17 @@ def resize_max_edge(img: Image.Image, max_edge: int) -> Image.Image:
     return img.resize(new_size, RESAMPLE)
 
 
-def process_walk_frame(src: Path, dest: Path, max_edge: int = 96) -> tuple[int, int]:
-    with Image.open(src) as raw:
-        keyed = key_magenta_to_alpha(raw)
+def process_walk_frame_image(img: Image.Image, max_edge: int = 96) -> Image.Image:
+    """Magenta key → tight crop → resize max edge → clean_chroma_sprite."""
+    keyed = key_magenta_to_alpha(img)
     cropped = tight_crop_opaque(keyed)
     sized = resize_max_edge(cropped, max_edge)
-    out = clean_chroma_sprite(sized)
+    return force_corner_alpha_zero(clean_chroma_sprite(sized))
+
+
+def process_walk_frame(src: Path, dest: Path, max_edge: int = 96) -> tuple[int, int]:
+    with Image.open(src) as raw:
+        out = process_walk_frame_image(raw, max_edge)
     dest.parent.mkdir(parents=True, exist_ok=True)
     out.save(dest, format="PNG", optimize=True)
     return out.size

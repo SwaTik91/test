@@ -17,13 +17,17 @@ from clean_sprite_alpha import (  # noqa: E402
     count_exterior_neutral_gray,
     count_opaque_in_center,
     count_semi_transparent_pixels,
+    force_corner_alpha_zero,
 )
-from import_art_canon import import_canon  # noqa: E402
+from import_art_canon import ensure_rgba, import_canon  # noqa: E402
+from process_walk_frame import process_walk_frame_image  # noqa: E402
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
+ARCHER_V2_DIR = CANON_DIR / "archer-v2"
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
+SHEET_SLICE_HEROES = ("mage", "paladin")
 
 CREATURE_OUTPUTS = (
     ASSETS_DIR / "enemies" / "slime.png",
@@ -53,6 +57,17 @@ def corners_transparent(path: Path) -> bool:
             rgba.getpixel((w - 1, h - 1)),
         )
     return all(alpha == 0 for *_rgb, alpha in corners)
+
+
+def archer_v2_frame_hash(anim: str, idx: int) -> str:
+    src = ARCHER_V2_DIR / f"archer-{anim}-{idx}.png"
+    with Image.open(src) as raw:
+        processed = process_walk_frame_image(raw, max_edge=96)
+    from io import BytesIO
+
+    buf = BytesIO()
+    force_corner_alpha_zero(ensure_rgba(processed)).save(buf, format="PNG", optimize=True)
+    return hashlib.md5(buf.getvalue()).hexdigest()
 
 
 class ImportArtCanonRegressionTest(unittest.TestCase):
@@ -94,7 +109,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 )
 
     def test_cast_third_frame_pads_attack_not_stride(self) -> None:
-        for hero in HERO_CLASSES:
+        for hero in SHEET_SLICE_HEROES:
             cast_1 = file_md5(ASSETS_DIR / "heroes" / hero / "cast_1.png")
             cast_2 = file_md5(ASSETS_DIR / "heroes" / hero / "cast_2.png")
             with self.subTest(hero=hero):
@@ -103,6 +118,58 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     cast_1,
                     f"{hero} cast_2 should pad cast_1, not a run stride pose",
                 )
+
+    def test_archer_frames_match_v2_canon(self) -> None:
+        if not ARCHER_V2_DIR.is_dir():
+            self.skipTest(f"archer-v2 canon missing: {ARCHER_V2_DIR}")
+        for anim in ("idle", "jump", "cast"):
+            count = 2 if anim in ("idle", "jump") else 3
+            for idx in range(count):
+                dest = ASSETS_DIR / "heroes" / "archer" / f"{anim}_{idx}.png"
+                expected = archer_v2_frame_hash(anim, idx)
+                actual = file_md5(dest)
+                with self.subTest(anim=anim, idx=idx):
+                    self.assertEqual(
+                        actual,
+                        expected,
+                        f"archer {anim}_{idx} does not match processed archer-v2 source",
+                    )
+
+    def test_archer_idle_frames_are_unique(self) -> None:
+        hashes = {
+            file_md5(ASSETS_DIR / "heroes" / "archer" / f"idle_{i}.png")
+            for i in range(2)
+        }
+        self.assertEqual(len(hashes), 2, f"archer idle frames duplicated: {hashes}")
+
+    def test_archer_jump_frames_differ_from_cast(self) -> None:
+        jump_hashes = {
+            file_md5(ASSETS_DIR / "heroes" / "archer" / f"jump_{i}.png")
+            for i in range(2)
+        }
+        cast_hashes = {
+            file_md5(ASSETS_DIR / "heroes" / "archer" / f"cast_{i}.png")
+            for i in range(3)
+        }
+        overlap = jump_hashes & cast_hashes
+        self.assertFalse(overlap, f"archer jump frames duplicate cast: {overlap}")
+
+    def test_archer_cast_has_real_third_frame(self) -> None:
+        """Archer cast uses dedicated v2 art, not sheet-slice padding like mage/paladin."""
+        cast_0 = file_md5(ASSETS_DIR / "heroes" / "archer" / "cast_0.png")
+        cast_1 = file_md5(ASSETS_DIR / "heroes" / "archer" / "cast_1.png")
+        cast_2 = file_md5(ASSETS_DIR / "heroes" / "archer" / "cast_2.png")
+        self.assertNotEqual(cast_0, cast_1, "archer cast attack frames duplicated")
+        self.assertNotEqual(cast_2, cast_1, "archer cast_2 should be unique v2 frame, not padded")
+
+    def test_archer_preview_and_icon_from_idle_0(self) -> None:
+        idle_0 = file_md5(ASSETS_DIR / "heroes" / "archer" / "idle_0.png")
+        preview = file_md5(ASSETS_DIR / "heroes" / "archer.png")
+        self.assertEqual(preview, idle_0, "archer.png should match processed idle_0")
+        icon_path = ASSETS_DIR / "hub" / "icon_archer.png"
+        with Image.open(icon_path) as icon:
+            self.assertEqual(icon.size, (64, 64))
+            self.assertTrue(corners_transparent(icon_path))
 
     def test_cast_frames_do_not_match_run(self) -> None:
         for hero in HERO_CLASSES:
