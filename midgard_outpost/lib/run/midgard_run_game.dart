@@ -66,9 +66,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   final List<SpriteComponent> _groundTiles = [];
   Sprite? _groundSprite;
+  RectangleComponent? _groundFill;
 
   @visibleForTesting
   List<SpriteComponent> get groundTilesForTest => _groundTiles;
+
+  @visibleForTesting
+  RectangleComponent? get groundFillForTest => _groundFill;
 
   @visibleForTesting
   bool groundCoversVisibleSpan({double? viewportWidth}) {
@@ -88,16 +92,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   @visibleForTesting
   bool groundCoversViewportBottom({double? viewportHeight}) {
-    if (_groundTiles.isEmpty) {
+    final fill = _groundFill;
+    if (fill == null && _groundTiles.isEmpty) {
       return false;
     }
     final height = viewportHeight ?? camera.viewport.virtualSize.y;
     if (height <= 0) {
       return false;
     }
-    final maxBottom = _groundTiles
-        .map((tile) => tile.position.y + tile.size.y)
-        .reduce(math.max);
+    final maxBottom = fill != null
+        ? fill.position.y + fill.size.y
+        : _groundTiles
+            .map((tile) => tile.position.y + tile.size.y)
+            .reduce(math.max);
     final viewportBottomY = camera.viewfinder.globalToLocal(
       Vector2(_groundCameraCenterX, maxBottom),
     ).y;
@@ -390,12 +397,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   void _layoutGroundTilePositions() {
     final groundY = _layout.groundY;
     final tileWidth = _layout.groundTileWidth;
-    var tileHeight = _layout.groundTileHeight;
+    final lipHeight = _layout.groundLipHeight;
+    var fillHeight = _layout.groundFillHeight;
     if (isRunReady && camera.parent != null) {
       final visibleBottom = camera.visibleWorldRect.bottom;
-      tileHeight = math.max(
-        tileHeight,
-        visibleBottom - groundY + RunLayout.groundBottomBleedPx,
+      final lipBottom = groundY + lipHeight;
+      fillHeight = math.max(
+        fillHeight,
+        visibleBottom - lipBottom + RunLayout.groundBottomBleedPx + 1,
       );
     }
     final span = _groundSpanForLayout();
@@ -404,15 +413,44 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       worldRight: span.right,
     );
     _ensureGroundTileCount(needed);
+    _ensureGroundFill();
 
     final startX = _layout.groundTileStartX(span.left);
     final tiles = List<SpriteComponent>.from(_groundTiles)
       ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    // Nudge lip 1px above contact so sub-pixel gaps never flash clearColor.
+    final tileTop = groundY - 1;
     for (var i = 0; i < tiles.length; i++) {
       tiles[i]
-        ..position = Vector2(startX + i * tileWidth, groundY)
-        ..size = Vector2(tileWidth, tileHeight);
+        ..position = Vector2(startX + i * tileWidth, tileTop)
+        ..size = Vector2(tileWidth, lipHeight + 1);
     }
+
+    final fill = _groundFill;
+    if (fill != null) {
+      final spanWidth = math.max(tileWidth * needed, span.right - span.left);
+      fill
+        ..position = Vector2(startX, groundY + lipHeight - 1)
+        ..size = Vector2(spanWidth + tileWidth, fillHeight);
+      // Keep fill under lip sprites.
+      fill.priority = -1;
+      for (final tile in tiles) {
+        tile.priority = 0;
+      }
+    }
+  }
+
+  void _ensureGroundFill() {
+    if (_groundFill != null) {
+      return;
+    }
+    final fill = RectangleComponent(
+      paint: Paint()..color = RunLayout.groundFillColor,
+      anchor: Anchor.topLeft,
+      priority: -1,
+    );
+    _groundFill = fill;
+    world.add(fill);
   }
 
   void _ensureGroundTileCount(int needed) {
@@ -556,6 +594,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _groundTiles.add(tile);
       world.add(tile);
     }
+    _ensureGroundFill();
     _layoutGroundTilePositions();
   }
 

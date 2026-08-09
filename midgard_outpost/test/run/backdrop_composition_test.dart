@@ -140,12 +140,16 @@ Future<void> _expectGroundBottomCoverage(
   );
 
   final layout = RunLayout(height);
-  final maxBottom = game.groundTilesForTest
-      .map((tile) => tile.position.y + tile.size.y)
-      .reduce((a, b) => a > b ? a : b);
+  final fill = game.groundFillForTest;
+  expect(fill, isNotNull);
+  final maxBottom = fill!.position.y + fill.size.y;
   expect(maxBottom, greaterThanOrEqualTo(layout.groundY + layout.groundStripHeight));
   expect(
     maxBottom,
     greaterThanOrEqualTo(game.camera.visibleWorldRect.bottom - 0.5),
   );
+  // Lip stays a thin textured band at the contact line.
+  for (final tile in game.groundTilesForTest) {
+    expect(tile.size.y, closeTo(layout.groundLipHeight + 1, 1.0));
+  }
 }

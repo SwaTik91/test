@@ -19,9 +19,19 @@ class RunLayout {
   /// Extra viewport bleed so cover-fit backdrops never expose [Game.backgroundColor].
   static const double backdropBleedPx = 2;
 
-  /// Extra world bleed below the contact→bottom band so tiles always cover the
+  /// Extra world bleed below the contact→bottom band so fill always covers the
   /// camera-visible bottom (avoids sub-pixel sky/backdrop gaps at short heights).
   static const double groundBottomBleedPx = 2;
+
+  /// Textured grass lip as a fraction of viewport height (rest is solid fill).
+  /// Keeps the contact strip thin so stretched tile art cannot form a wide band.
+  static const double groundLipViewportFraction = 0.062;
+
+  /// Source art aspect for [ground_tile] lip (256×64).
+  static const double groundLipArtAspect = 256 / 64;
+
+  /// Solid fill under the grass lip (matches ground-lip-v5 average).
+  static const Color groundFillColor = Color(0xFF549431);
 
   static const double playerHeightFraction = 0.30;
   static const double mobHeightFraction = 0.21;
@@ -35,11 +45,19 @@ class RunLayout {
   /// Contact line → viewport bottom (matches camera anchor span below [groundY]).
   double get groundStripHeight => viewportHeight - groundY;
 
-  /// Render height includes [groundBottomBleedPx] past the visible bottom.
-  double get groundTileHeight => groundStripHeight + groundBottomBleedPx;
+  /// Textured grass lip height (not the full strip).
+  double get groundLipHeight =>
+      math.max(36, viewportHeight * groundLipViewportFraction);
 
-  /// Square ground tiles — no horizontal squash of 256×256 art.
-  double get groundTileWidth => groundTileHeight;
+  /// @deprecated Use [groundLipHeight]; kept for tests that cover the lip band.
+  double get groundTileHeight => groundLipHeight;
+
+  /// Wide lip tiles — preserve 256×64 grass art without vertical stretch bands.
+  double get groundTileWidth => groundLipHeight * groundLipArtAspect;
+
+  /// Solid fill height under the lip, including bottom bleed.
+  double get groundFillHeight =>
+      groundStripHeight - groundLipHeight + groundBottomBleedPx + 1;
 
   /// World-space span the live ground strip must cover around the camera center.
   ({double left, double right}) groundWorldSpan({

@@ -415,17 +415,36 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
     if name == "bg-forest.png":
         return [(Path("world") / "bg_forest.png", 1920, "max_edge")]
 
+    if name == "ground-lip-v5.png":
+        return [(Path("world") / "ground_tile.png", 256, "width")]
+
+    if name == "ground-tile-v5.png":
+        if canon_dir and (canon_dir / "ground-lip-v5.png").is_file():
+            return []
+        return [(Path("world") / "ground_tile.png", 256, "max_edge")]
+
     if name == "ground-tile-v4.png":
+        if canon_dir and (
+            (canon_dir / "ground-lip-v5.png").is_file()
+            or (canon_dir / "ground-tile-v5.png").is_file()
+        ):
+            return []
         return [(Path("world") / "ground_tile.png", 256, "max_edge")]
 
     if name == "ground-tile-v3.png":
-        if canon_dir and (canon_dir / "ground-tile-v4.png").is_file():
+        if canon_dir and (
+            (canon_dir / "ground-lip-v5.png").is_file()
+            or (canon_dir / "ground-tile-v5.png").is_file()
+            or (canon_dir / "ground-tile-v4.png").is_file()
+        ):
             return []
         return [(Path("world") / "ground_tile.png", 256, "max_edge")]
 
     if name == "ground-tile-v2.png":
         if canon_dir and (
-            (canon_dir / "ground-tile-v4.png").is_file()
+            (canon_dir / "ground-lip-v5.png").is_file()
+            or (canon_dir / "ground-tile-v5.png").is_file()
+            or (canon_dir / "ground-tile-v4.png").is_file()
             or (canon_dir / "ground-tile-v3.png").is_file()
         ):
             return []
@@ -433,7 +452,9 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
 
     if name == "ground-tile.png":
         if canon_dir and (
-            (canon_dir / "ground-tile-v4.png").is_file()
+            (canon_dir / "ground-lip-v5.png").is_file()
+            or (canon_dir / "ground-tile-v5.png").is_file()
+            or (canon_dir / "ground-tile-v4.png").is_file()
             or (canon_dir / "ground-tile-v3.png").is_file()
             or (canon_dir / "ground-tile-v2.png").is_file()
         ):
@@ -487,6 +508,16 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
                 out = clean_sprite_cutout(
                     resize_max_edge(remove_background(img), max_edge),
                     preserve_soft_glow=True,
+                )
+        elif mode == "width":
+            w, h = img.size
+            if w == max_edge:
+                out = img
+            else:
+                scale = max_edge / w
+                out = img.resize(
+                    (max_edge, max(1, int(round(h * scale)))),
+                    RESAMPLE,
                 )
         else:
             out = resize_max_edge(img, max_edge)

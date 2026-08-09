@@ -17,16 +17,30 @@ void main() {
       expect(layout.groundY, 518.4);
     });
 
-    test('ground tile fills lower band to viewport bottom with bleed', () {
+    test('ground lip is thin; solid fill covers rest of strip', () {
       expect(
         layout.groundStripHeight,
         closeTo(720 * (1 - RunLayout.groundTopFraction), 0.01),
       );
       expect(
-        layout.groundTileHeight,
-        closeTo(layout.groundStripHeight + RunLayout.groundBottomBleedPx, 0.01),
+        layout.groundLipHeight,
+        closeTo(720 * RunLayout.groundLipViewportFraction, 0.01),
       );
-      expect(layout.groundTileWidth, layout.groundTileHeight);
+      expect(layout.groundTileHeight, layout.groundLipHeight);
+      expect(
+        layout.groundTileWidth,
+        closeTo(layout.groundLipHeight * RunLayout.groundLipArtAspect, 0.01),
+      );
+      expect(
+        layout.groundFillHeight,
+        closeTo(
+          layout.groundStripHeight -
+              layout.groundLipHeight +
+              RunLayout.groundBottomBleedPx +
+              1,
+          0.01,
+        ),
+      );
       expect(layout.groundY + layout.groundStripHeight, closeTo(720, 0.01));
     });
 
