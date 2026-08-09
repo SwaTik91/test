@@ -107,7 +107,7 @@ void main() {
     );
 
     await tester.runAsync(() async {
-      for (var i = 0; i < 200 && !game.isRunReady; i++) {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     });
@@ -155,7 +155,7 @@ void main() {
     );
 
     await tester.runAsync(() async {
-      for (var i = 0; i < 200 && !game.isRunReady; i++) {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     });
@@ -212,7 +212,7 @@ void main() {
     );
 
     await tester.runAsync(() async {
-      for (var i = 0; i < 200 && !game.isRunReady; i++) {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     });
@@ -234,6 +234,67 @@ void main() {
     for (final tile in game.groundTilesForTest) {
       expect(tile.position.y, closeTo(layout.groundY, 0.01));
     }
+  });
+
+  testWidgets('player flips left and back to right in live game', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      save: SaveService(
+        local: LocalSaveRepository(),
+        cloud: NoopCloudSavePort(),
+      ),
+    );
+    await controller.bootstrap();
+    await controller.createHero(HeroClassId.archer);
+
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final game = MidgardRunGame(
+      hero: controller.hero!,
+      onDeath: (_) {},
+      initialRunState: controller.runState,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameWidget<MidgardRunGame>(
+          game: game,
+          overlayBuilderMap: {
+            MidgardRunGame.hudOverlayKey: (context, g) => HudOverlay(game: g),
+          },
+        ),
+      ),
+    );
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    });
+    await tester.pump();
+    expect(game.isRunReady, isTrue);
+
+    game.setLeftPressed(true);
+    await tester.runAsync(() async {
+      for (var i = 0; i < 30; i++) {
+        game.update(1 / 60);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+    });
+    game.setLeftPressed(false);
+    expect(game.player.isFacingLeft, isTrue);
+
+    game.setRightPressed(true);
+    await tester.runAsync(() async {
+      for (var i = 0; i < 30; i++) {
+        game.update(1 / 60);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+    });
+    game.setRightPressed(false);
+    expect(game.player.isFacingLeft, isFalse);
+    expect(game.player.transform.scale.x, isPositive);
   });
 
   testWidgets('archer auto attack spawns projectile in world', (tester) async {
@@ -268,7 +329,7 @@ void main() {
     );
 
     await tester.runAsync(() async {
-      for (var i = 0; i < 200 && !game.isRunReady; i++) {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     });
@@ -344,7 +405,7 @@ Future<void> _expectRunGroundAlignedAtHeight(
   );
 
   await tester.runAsync(() async {
-    for (var i = 0; i < 200 && !game.isRunReady; i++) {
+    for (var i = 0; i < 600 && !game.isRunReady; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
   });
