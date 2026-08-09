@@ -425,7 +425,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         sprite: sprite,
         anchor: Anchor.topLeft,
       );
-      ArtAtlas.applyNearestNeighbor(tile);
+      // Soft filter — grass tile is painterly, not pixel-grid art.
+      tile.paint.filterQuality = FilterQuality.low;
       _groundTiles.add(tile);
       world.add(tile);
     }
@@ -551,7 +552,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         sprite: groundSprite,
         anchor: Anchor.topLeft,
       );
-      ArtAtlas.applyNearestNeighbor(tile);
+      tile.paint.filterQuality = FilterQuality.low;
       _groundTiles.add(tile);
       world.add(tile);
     }
