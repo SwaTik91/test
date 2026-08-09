@@ -196,6 +196,18 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     _horizontal = axis.clamp(-1, 1).toDouble();
   }
 
+  bool _facingLeft = false;
+
+  bool get isFacingLeft => _facingLeft;
+
+  void _syncFacing() {
+    final wantLeft = _horizontal < 0;
+    if (wantLeft != _facingLeft) {
+      _facingLeft = wantLeft;
+      flipHorizontallyAroundCenter();
+    }
+  }
+
   bool jump() {
     if (isGrounded) {
       _verticalVelocity = _jumpVelocity;
@@ -297,6 +309,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   @override
   void update(double dt) {
     super.update(dt);
+    _syncFacing();
     position.x += _horizontal * moveSpeed * dt;
     if (position.x < 0) {
       position.x = 0;

@@ -32,6 +32,27 @@ Future<Sprite> _testSpriteSized(int width, int height) async {
 }
 
 void main() {
+  test('player flips horizontally when moving left and back', () async {
+    final player = PlayerComponent.forTest(
+      groundY: 500,
+      sprite: await _testSprite(),
+    );
+
+    player.setHorizontal(0);
+    player.update(0.016);
+    expect(player.isFacingLeft, isFalse);
+
+    player.setHorizontal(-1);
+    player.update(0.016);
+    expect(player.isFacingLeft, isTrue);
+    expect(player.transform.scale.x, isNegative);
+
+    player.setHorizontal(1);
+    player.update(0.016);
+    expect(player.isFacingLeft, isFalse);
+    expect(player.transform.scale.x, isPositive);
+  });
+
   test('setGroundY snaps grounded player when ground line rises', () async {
     final shortLayout = RunLayout(500);
     final tallLayout = RunLayout(800);
