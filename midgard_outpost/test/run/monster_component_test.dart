@@ -3,9 +3,11 @@ import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:midgard_outpost/art/animation_atlas.dart';
 import 'package:midgard_outpost/content/monsters.dart';
 import 'package:midgard_outpost/run/components/monster_component.dart';
 import 'package:midgard_outpost/run/components/player_component.dart';
+import 'package:midgard_outpost/art/monster_anim_state.dart';
 import 'package:midgard_outpost/run/run_layout.dart';
 
 Future<Sprite> _testSprite({int width = 96, int height = 95}) async {
@@ -114,5 +116,41 @@ void main() {
     monster.update(0.35);
     expect(monster.isTelegraphing, isFalse);
     expect(fired, 1);
+  });
+
+  test('slime walk animation loads six frames from atlas', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final walkAnim = await AnimationAtlas.load(
+      AnimationAtlas.monsterWalkFrames(MonsterKind.slime),
+      AnimationAtlas.monsterWalkStepTime,
+    );
+    expect(walkAnim.frames, hasLength(6));
+  });
+
+  test('bee without walk frames uses single-frame static animation', () async {
+    final layout = RunLayout(RunLayout.referenceHeight);
+    final player = PlayerComponent.forTest(
+      groundY: layout.groundY,
+      sprite: await _testSprite(),
+      position: Vector2(500, layout.groundY),
+      size: layout.playerSize,
+    );
+    final monster = MonsterComponent.forTest(
+      kind: MonsterKind.bee,
+      target: player,
+      position: Vector2(100, layout.groundY),
+      sprite: await _testSprite(),
+      maxHp: 20,
+      touchDamage: 5,
+      baseXp: 1,
+      jobXp: 1,
+      gold: 1,
+      tempXp: 1,
+      upgradeDropChance: 0,
+    );
+
+    final walkAnim = monster.animations![MonsterAnimName.walk]!;
+    expect(walkAnim.frames, hasLength(1));
+    expect(monster.hasRealWalkAnimation, isFalse);
   });
 }

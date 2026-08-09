@@ -1,5 +1,6 @@
 import 'package:flame/components.dart';
 
+import '../content/monsters.dart';
 import '../core/ids.dart';
 import 'hero_anim_state.dart';
 
@@ -20,6 +21,19 @@ class AnimationAtlas {
   static List<String> get vfxFlameFrames => _frames('vfx', 'flame', 3);
 
   static List<String> get vfxHolyFrames => _frames('vfx', 'holy', 3);
+
+  static const monsterWalkStepTime = 0.12;
+
+  static List<String> monsterWalkFrames(MonsterKind kind) {
+    final count = _monsterWalkFrameCount(kind);
+    if (count == 0) {
+      return const [];
+    }
+    return _frames(_monsterFolder(kind), 'walk', count);
+  }
+
+  static bool monsterHasWalkFrames(MonsterKind kind) =>
+      _monsterWalkFrameCount(kind) > 0;
 
   static List<String> heroFrames(HeroClassId classId, HeroAnimName anim) {
     final folder = _heroFolder(classId);
@@ -52,6 +66,8 @@ class AnimationAtlas {
         ...vfxSlashFrames,
         ...vfxFlameFrames,
         ...vfxHolyFrames,
+        for (final kind in MonsterKind.values)
+          ...monsterWalkFrames(kind),
       ];
 
   static Future<SpriteAnimation> load(
@@ -95,4 +111,14 @@ class AnimationAtlas {
 
   static List<String> _frames(String folder, String prefix, int count) =>
       List.generate(count, (i) => '$folder/${prefix}_$i.png');
+
+  static int _monsterWalkFrameCount(MonsterKind kind) => switch (kind) {
+        MonsterKind.slime => 6,
+        _ => 0,
+      };
+
+  static String _monsterFolder(MonsterKind kind) => switch (kind) {
+        MonsterKind.slime => 'enemies/slime',
+        _ => '',
+      };
 }

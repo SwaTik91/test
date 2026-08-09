@@ -23,12 +23,14 @@ from import_art_canon import (  # noqa: E402
     ARCHER_VIDEO_ANIMS,
     ARCHER_VIDEO_CAST_COUNT,
     ARCHER_VIDEO_RUN_COUNT,
+    MONSTER_VIDEO_WALK_COUNT,
     ensure_rgba,
     import_canon,
 )
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
 ARCHER_VIDEO_DIR = CANON_DIR / "archer-video-v2"
+MONSTER_VIDEO_SLIME_DIR = CANON_DIR / "monster-video" / "slime"
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
@@ -43,14 +45,16 @@ DEFAULT_ANIM_COUNTS = {
 }
 
 CREATURE_OUTPUTS = (
-    ASSETS_DIR / "enemies" / "slime.png",
     ASSETS_DIR / "enemies" / "boss_demon.png",
     ASSETS_DIR / "props" / "chest.png",
 )
 
+MAX_SEMI_TRANSPARENT_SLIME_POSTER = 5000
+
 MAX_SEMI_TRANSPARENT_HERO = 120
 MAX_SEMI_TRANSPARENT_ARCHER_HERO = 5000
 MAX_EXTERIOR_GRAY_HERO = 80
+MAX_EXTERIOR_GRAY_ARCHER_HERO = 120
 MAX_SEMI_TRANSPARENT_CREATURE = 400
 
 MIN_PALADIN_CENTER_OPAQUE = 800
@@ -369,6 +373,11 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 if hero == "archer"
                 else MAX_SEMI_TRANSPARENT_HERO
             )
+            max_exterior_gray = (
+                MAX_EXTERIOR_GRAY_ARCHER_HERO
+                if hero == "archer"
+                else MAX_EXTERIOR_GRAY_HERO
+            )
             for anim, count in counts.items():
                 for idx in range(count):
                     path = ASSETS_DIR / "heroes" / hero / f"{anim}_{idx}.png"
@@ -383,7 +392,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                         )
                         self.assertLessEqual(
                             exterior_gray,
-                            MAX_EXTERIOR_GRAY_HERO,
+                            max_exterior_gray,
                             f"exterior gray backdrop on {path}: {exterior_gray}",
                         )
 
@@ -406,6 +415,56 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     MAX_SEMI_TRANSPARENT_CREATURE,
                     f"too many semi-transparent pixels on {path}: {semi}",
                 )
+
+    def test_slime_walk_has_six_uniform_frames(self) -> None:
+        if not MONSTER_VIDEO_SLIME_DIR.is_dir():
+            self.skipTest(f"monster-video slime canon missing: {MONSTER_VIDEO_SLIME_DIR}")
+        sizes: set[tuple[int, int]] = set()
+        for idx in range(MONSTER_VIDEO_WALK_COUNT):
+            path = ASSETS_DIR / "enemies" / "slime" / f"walk_{idx}.png"
+            with self.subTest(idx=idx):
+                self.assertTrue(path.is_file(), f"missing slime walk frame: {path}")
+                self.assertTrue(
+                    corners_transparent(path),
+                    f"opaque corners on slime walk frame: {path}",
+                )
+            with Image.open(path) as img:
+                sizes.add(img.size)
+        self.assertEqual(len(sizes), 1, f"slime walk frames have mixed canvases: {sizes}")
+
+    def test_slime_poster_matches_walk_0(self) -> None:
+        if not MONSTER_VIDEO_SLIME_DIR.is_dir():
+            self.skipTest(f"monster-video slime canon missing: {MONSTER_VIDEO_SLIME_DIR}")
+        walk_0 = file_md5(ASSETS_DIR / "enemies" / "slime" / "walk_0.png")
+        poster = file_md5(ASSETS_DIR / "enemies" / "slime.png")
+        self.assertEqual(poster, walk_0, "enemies/slime.png should match walk_0")
+
+    def test_slime_poster_has_clean_alpha(self) -> None:
+        if not MONSTER_VIDEO_SLIME_DIR.is_dir():
+            self.skipTest(f"monster-video slime canon missing: {MONSTER_VIDEO_SLIME_DIR}")
+        path = ASSETS_DIR / "enemies" / "slime.png"
+        self.assertTrue(path.is_file(), f"missing slime poster: {path}")
+        self.assertTrue(corners_transparent(path), f"opaque corners on slime poster: {path}")
+        with Image.open(path) as img:
+            semi = count_semi_transparent_pixels(img)
+        self.assertLessEqual(
+            semi,
+            MAX_SEMI_TRANSPARENT_SLIME_POSTER,
+            f"too many semi-transparent pixels on {path}: {semi}",
+        )
+
+    def test_slime_walk_frames_are_unique(self) -> None:
+        if not MONSTER_VIDEO_SLIME_DIR.is_dir():
+            self.skipTest(f"monster-video slime canon missing: {MONSTER_VIDEO_SLIME_DIR}")
+        hashes = {
+            file_md5(ASSETS_DIR / "enemies" / "slime" / f"walk_{i}.png")
+            for i in range(MONSTER_VIDEO_WALK_COUNT)
+        }
+        self.assertEqual(
+            len(hashes),
+            MONSTER_VIDEO_WALK_COUNT,
+            f"slime walk frames duplicated: {hashes}",
+        )
 
 
 if __name__ == "__main__":

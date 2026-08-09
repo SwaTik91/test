@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:midgard_outpost/art/animation_atlas.dart';
 import 'package:midgard_outpost/art/hero_anim_state.dart';
+import 'package:midgard_outpost/content/monsters.dart';
 import 'package:midgard_outpost/core/ids.dart';
 
 void main() {
@@ -61,6 +62,27 @@ void main() {
     });
   });
 
+  group('monster walk frames', () {
+    test('slime walk has 6 frames with correct paths', () {
+      final frames = AnimationAtlas.monsterWalkFrames(MonsterKind.slime);
+      expect(frames, hasLength(6));
+      expect(frames, [
+        'enemies/slime/walk_0.png',
+        'enemies/slime/walk_1.png',
+        'enemies/slime/walk_2.png',
+        'enemies/slime/walk_3.png',
+        'enemies/slime/walk_4.png',
+        'enemies/slime/walk_5.png',
+      ]);
+      expect(AnimationAtlas.monsterHasWalkFrames(MonsterKind.slime), isTrue);
+    });
+
+    test('kinds without walk frames return empty list', () {
+      expect(AnimationAtlas.monsterWalkFrames(MonsterKind.bee), isEmpty);
+      expect(AnimationAtlas.monsterHasWalkFrames(MonsterKind.bee), isFalse);
+    });
+  });
+
   group('prop frames', () {
     test('chest open has 3 frames', () {
       expect(AnimationAtlas.chestOpenFrames, hasLength(3));
@@ -109,8 +131,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(60));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(60));
+    expect(AnimationAtlas.allFramePaths, hasLength(66));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(66));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {
@@ -125,6 +147,7 @@ void main() {
       ...AnimationAtlas.vfxSlashFrames,
       ...AnimationAtlas.vfxFlameFrames,
       ...AnimationAtlas.vfxHolyFrames,
+      ...AnimationAtlas.monsterWalkFrames(MonsterKind.slime),
     ]) {
       expect(AnimationAtlas.allFramePaths, contains(path));
     }

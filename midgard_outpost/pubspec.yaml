@@ -67,6 +67,7 @@ flutter:
     - assets/images/heroes/mage/
     - assets/images/heroes/paladin/
     - assets/images/enemies/
+    - assets/images/enemies/slime/
     - assets/images/props/
     - assets/images/props/chest/
     - assets/images/projectiles/

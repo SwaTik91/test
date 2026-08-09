@@ -47,6 +47,13 @@ ARCHER_VIDEO_ANIMS: dict[str, int] = {
     "cast": ARCHER_VIDEO_CAST_COUNT,
 }
 
+# Monster walk cycles from art-canon/monster-video/<kind>/ (pre-keyed alpha).
+MONSTER_VIDEO_WALK_COUNT = 6
+
+MONSTER_VIDEO_ANIMS: dict[str, dict[str, int]] = {
+    "slime": {"walk": MONSTER_VIDEO_WALK_COUNT},
+}
+
 
 @dataclass(frozen=True)
 class BBox:
@@ -369,7 +376,7 @@ def import_creature(src: Path, rel_dest: Path, out_dir: Path, max_edge: int) -> 
     return dest, out.size
 
 
-def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
+def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path, int, str]]:
     """Return [(dest_path, max_edge, mode), ...] for a canon source file."""
     name = src.name
     stem = src.stem
@@ -386,11 +393,22 @@ def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
     if name == "bg-forest.png":
         return [(Path("world") / "bg_forest.png", 1920, "max_edge")]
 
+    if name == "ground-tile-v2.png":
+        return [(Path("world") / "ground_tile.png", 256, "max_edge")]
+
     if name == "ground-tile.png":
+        if canon_dir and (canon_dir / "ground-tile-v2.png").is_file():
+            return []
         return [(Path("world") / "ground_tile.png", 256, "max_edge")]
 
     if name.startswith("mob-"):
         mob_name = stem.removeprefix("mob-")
+        if (
+            mob_name == "slime"
+            and canon_dir
+            and (canon_dir / "monster-video" / "slime").is_dir()
+        ):
+            return []
         return [(Path("enemies") / f"{mob_name}.png", 96, "creature")]
 
     if name.startswith("boss-"):
@@ -507,6 +525,57 @@ def import_archer_video_if_present(
     return results
 
 
+def import_monster_video_if_present(
+    canon_dir: Path, out_dir: Path
+) -> list[tuple[Path, Path, tuple[int, int]]]:
+    """Import monster walk cycles from art-canon/monster-video/<kind>/ (pre-keyed alpha)."""
+    video_root = canon_dir / "monster-video"
+    if not video_root.is_dir():
+        return []
+
+    results: list[tuple[Path, Path, tuple[int, int]]] = []
+    for kind_name, anims in MONSTER_VIDEO_ANIMS.items():
+        kind_dir = video_root / kind_name
+        if not kind_dir.is_dir():
+            raise SystemExit(f"Missing monster-video source dir: {kind_dir}")
+
+        walk_0: Image.Image | None = None
+        kind_out = out_dir / "enemies" / kind_name
+
+        for prefix, count in anims.items():
+            for idx in range(count):
+                src = kind_dir / f"{prefix}_{idx}.png"
+                if not src.is_file():
+                    raise SystemExit(f"Missing monster-video frame: {src}")
+                with Image.open(src) as raw:
+                    frame = ensure_rgba(raw.copy())
+                rel = Path("enemies") / kind_name / f"{prefix}_{idx}.png"
+                dest = out_dir / rel
+                write_png(frame, dest)
+                results.append((src, dest, frame.size))
+                print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+                if prefix == "walk" and idx == 0:
+                    walk_0 = frame
+
+            if kind_out.is_dir():
+                for stale in kind_out.glob(f"{prefix}_*.png"):
+                    stale_idx = int(stale.stem.removeprefix(f"{prefix}_"))
+                    if stale_idx >= count:
+                        stale.unlink()
+                        print(f"removed stale {kind_name} {prefix} frame: {stale.name}")
+
+        if walk_0 is not None:
+            poster_rel = Path("enemies") / f"{kind_name}.png"
+            poster_dest = out_dir / poster_rel
+            write_png(walk_0, poster_dest)
+            results.append((kind_dir / "walk_0.png", poster_dest, walk_0.size))
+            print(
+                f"walk_0.png -> {poster_rel} ({walk_0.size[0]}x{walk_0.size[1]})"
+            )
+
+    return results
+
+
 def import_walk_cycles_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
     """Import run frames from art-canon/walk/ for mage/paladin (archer uses archer-video)."""
     walk_dir = canon_dir / "walk"
@@ -538,13 +607,10 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
                 results.append((src, dest, size))
             continue
 
-        mappings = dest_for_source(src)
+        mappings = dest_for_source(src, canon_dir)
         if not mappings:
             print(f"skip (no mapping): {src.name}")
             continue
-
-        with Image.open(src) as raw:
-            base = ensure_rgba(raw)
 
         for rel_dest, max_edge, mode in mappings:
             dest = out_dir / rel_dest
@@ -558,6 +624,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
 
     results.extend(import_walk_cycles_if_present(canon_dir, out_dir))
     results.extend(import_archer_video_if_present(canon_dir, out_dir))
+    results.extend(import_monster_video_if_present(canon_dir, out_dir))
     return results
 
 

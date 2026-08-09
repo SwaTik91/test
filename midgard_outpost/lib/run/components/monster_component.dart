@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../art/animation_atlas.dart';
 import '../../art/art_atlas.dart';
 import '../../content/monsters.dart';
 import '../../art/monster_anim_state.dart';
@@ -33,10 +34,12 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
     required Map<MonsterAnimName, SpriteAnimation> animations,
     Vector2? footprintSize,
     Sprite? sourceSprite,
+    bool hasRealWalkAnimation = false,
   }) : currentHp = maxHp,
        _hurtDuration = hurtDuration,
        _footprintSize = (footprintSize ?? Vector2(151, 151)).clone(),
        _sourceSprite = sourceSprite,
+       _hasRealWalkAnimation = hasRealWalkAnimation,
        super(
          animations: animations,
          current: MonsterAnimName.walk,
@@ -45,7 +48,11 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
          anchor: Anchor.bottomCenter,
        ) {
     paint.color = Colors.white;
-    ArtAtlas.applyNearestNeighbor(this);
+    if (_hasRealWalkAnimation) {
+      paint.filterQuality = FilterQuality.low;
+    } else {
+      ArtAtlas.applyNearestNeighbor(this);
+    }
     _baseGroundY = position.y;
     _attackCooldown = attackInterval * 0.35;
     _syncFrameAspectSize();
@@ -75,6 +82,48 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
     MonsterRangedAttack? onRangedAttack,
     Vector2? size,
   }) async {
+    if (AnimationAtlas.monsterHasWalkFrames(kind)) {
+      try {
+        final walkAnim = await AnimationAtlas.load(
+          AnimationAtlas.monsterWalkFrames(kind),
+          AnimationAtlas.monsterWalkStepTime,
+        );
+        final posterSprite = walkAnim.frames.first.sprite;
+        final hurtAnim = SpriteAnimation.spriteList(
+          [posterSprite],
+          stepTime: 1.0,
+          loop: true,
+        );
+        return MonsterComponent._(
+          kind: kind,
+          target: target,
+          position: position,
+          maxHp: maxHp,
+          touchDamage: touchDamage,
+          baseXp: baseXp,
+          jobXp: jobXp,
+          gold: gold,
+          tempXp: tempXp,
+          upgradeDropChance: upgradeDropChance,
+          isBoss: isBoss,
+          moveSpeed: moveSpeed,
+          attackRange: attackRange,
+          attackInterval: attackInterval,
+          onRangedAttack: onRangedAttack,
+          hurtDuration: _staticHurtDuration,
+          animations: {
+            MonsterAnimName.walk: walkAnim,
+            MonsterAnimName.hurt: hurtAnim,
+          },
+          footprintSize: size,
+          sourceSprite: posterSprite,
+          hasRealWalkAnimation: true,
+        );
+      } catch (_) {
+        // Fall through to static sprite when walk frames fail to load.
+      }
+    }
+
     final sprite = await ArtAtlas.loadSprite(kind.spritePath);
     return MonsterComponent.forTest(
       kind: kind,
@@ -167,6 +216,7 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
   final double _hurtDuration;
   final Vector2 _footprintSize;
   final Sprite? _sourceSprite;
+  final bool _hasRealWalkAnimation;
 
   int currentHp;
   double _damageFlashSeconds = 0;
@@ -184,6 +234,9 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
   bool get isTelegraphing => _windupSeconds > 0;
 
   bool get canCollect => !isAlive && _deathFlashSeconds <= 0;
+
+  @visibleForTesting
+  bool get hasRealWalkAnimation => _hasRealWalkAnimation;
 
   Rect get bounds => Rect.fromLTWH(
     position.x - _footprintSize.x * anchor.x,
@@ -301,8 +354,12 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
 
     if (isMoving) {
       position.x += distanceToTarget.sign * moveSpeed * dt;
-      _walkPhase += dt * 8;
-      position.y = _baseGroundY + math.sin(_walkPhase) * _walkBobAmplitude;
+      if (_hasRealWalkAnimation) {
+        position.y = _baseGroundY;
+      } else {
+        _walkPhase += dt * 8;
+        position.y = _baseGroundY + math.sin(_walkPhase) * _walkBobAmplitude;
+      }
     } else {
       position.y = _baseGroundY;
     }
