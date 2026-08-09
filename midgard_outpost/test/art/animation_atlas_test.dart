@@ -35,7 +35,7 @@ void main() {
       );
       expect(
         AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast),
-        hasLength(6),
+        hasLength(8),
       );
     });
 
@@ -95,7 +95,7 @@ void main() {
       );
     });
 
-    test('archer cast uses faster step for 6-frame draw cycle', () {
+    test('archer cast uses faster step for 8-frame draw cycle', () {
       expect(
         AnimationAtlas.heroStepTime(HeroClassId.archer, HeroAnimName.cast),
         0.05,
@@ -109,8 +109,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(56));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(56));
+    expect(AnimationAtlas.allFramePaths, hasLength(58));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(58));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {

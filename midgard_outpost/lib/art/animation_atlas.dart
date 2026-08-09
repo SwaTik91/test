@@ -32,7 +32,7 @@ class AnimationAtlas {
 
   static double heroStepTime(HeroClassId classId, HeroAnimName anim) {
     if (classId == HeroClassId.archer && anim == HeroAnimName.cast) {
-      // 6-frame draw cycle; slightly faster step keeps cast pose ~0.30s (damage is instant).
+      // 8-frame draw cycle; faster step keeps cast pose ~0.40s (damage is instant).
       return 0.05;
     }
     return switch (anim) {
@@ -76,7 +76,7 @@ class AnimationAtlas {
         HeroAnimName.idle => 4,
         HeroAnimName.run => 8,
         HeroAnimName.jump => 4,
-        HeroAnimName.cast => 6,
+        HeroAnimName.cast => 8,
       };
     }
     return switch (anim) {
