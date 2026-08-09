@@ -19,17 +19,26 @@ from clean_sprite_alpha import (  # noqa: E402
     count_semi_transparent_pixels,
     force_corner_alpha_zero,
 )
-from import_art_canon import ARCHER_V3_ANIMS, ensure_rgba, import_canon  # noqa: E402
+from import_art_canon import (  # noqa: E402
+    ARCHER_V3_ANIMS,
+    ARCHER_VIDEO_RUN_COUNT,
+    ensure_rgba,
+    import_canon,
+)
 from process_walk_frame import process_walk_frame_image  # noqa: E402
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
 ARCHER_V3_DIR = CANON_DIR / "archer-v3"
+ARCHER_VIDEO_DIR = CANON_DIR / "archer-video"
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
 SHEET_SLICE_HEROES = ("mage", "paladin")
 
-ARCHER_ANIM_COUNTS = ARCHER_V3_ANIMS
+ARCHER_ANIM_COUNTS = {
+    **ARCHER_V3_ANIMS,
+    "run": ARCHER_VIDEO_RUN_COUNT,
+}
 DEFAULT_ANIM_COUNTS = {
     "idle": 2,
     "run": 4,
@@ -65,6 +74,25 @@ def corners_transparent(path: Path) -> bool:
             rgba.getpixel((w - 1, h - 1)),
         )
     return all(alpha == 0 for *_rgb, alpha in corners)
+
+
+def archer_video_run_hash(idx: int) -> str:
+    src = ARCHER_VIDEO_DIR / f"run_{idx}.png"
+    with Image.open(src) as raw:
+        rgba = ensure_rgba(raw.copy())
+        w, h = rgba.size
+        longest = max(w, h)
+        if longest > 96:
+            scale = 96 / longest
+            rgba = rgba.resize(
+                (max(1, int(w * scale)), max(1, int(h * scale))),
+                Image.Resampling.NEAREST,
+            )
+    from io import BytesIO
+
+    buf = BytesIO()
+    force_corner_alpha_zero(rgba).save(buf, format="PNG", optimize=True)
+    return hashlib.md5(buf.getvalue()).hexdigest()
 
 
 def archer_v3_frame_hash(anim: str, idx: int) -> str:
@@ -153,6 +181,20 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                         f"archer {anim}_{idx} does not match processed archer-v3 source",
                     )
 
+    def test_archer_run_frames_match_video_canon(self) -> None:
+        if not ARCHER_VIDEO_DIR.is_dir():
+            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+        for idx in range(ARCHER_VIDEO_RUN_COUNT):
+            dest = ASSETS_DIR / "heroes" / "archer" / f"run_{idx}.png"
+            expected = archer_video_run_hash(idx)
+            actual = file_md5(dest)
+            with self.subTest(idx=idx):
+                self.assertEqual(
+                    actual,
+                    expected,
+                    f"archer run_{idx} does not match processed archer-video source",
+                )
+
     def test_archer_idle_frames_are_unique(self) -> None:
         hashes = {
             file_md5(ASSETS_DIR / "heroes" / "archer" / f"idle_{i}.png")
@@ -187,7 +229,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
             f"archer cast frames duplicated: {hashes}",
         )
 
-    def test_archer_run_has_six_unique_frames(self) -> None:
+    def test_archer_run_has_eight_unique_frames(self) -> None:
         hashes = {
             file_md5(ASSETS_DIR / "heroes" / "archer" / f"run_{i}.png")
             for i in range(ARCHER_ANIM_COUNTS["run"])

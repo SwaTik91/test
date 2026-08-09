@@ -5,9 +5,9 @@ import 'package:midgard_outpost/core/ids.dart';
 
 void main() {
   group('heroFrames', () {
-    test('archer run has 6 frames with correct paths', () {
+    test('archer run has 8 frames with correct paths', () {
       final frames = AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.run);
-      expect(frames, hasLength(6));
+      expect(frames, hasLength(8));
       expect(frames, [
         'heroes/archer/run_0.png',
         'heroes/archer/run_1.png',
@@ -15,6 +15,8 @@ void main() {
         'heroes/archer/run_3.png',
         'heroes/archer/run_4.png',
         'heroes/archer/run_5.png',
+        'heroes/archer/run_6.png',
+        'heroes/archer/run_7.png',
       ]);
     });
 
@@ -25,7 +27,7 @@ void main() {
       );
       expect(
         AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.run),
-        hasLength(6),
+        hasLength(8),
       );
       expect(
         AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.jump),
@@ -107,8 +109,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(54));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(54));
+    expect(AnimationAtlas.allFramePaths, hasLength(56));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(56));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {

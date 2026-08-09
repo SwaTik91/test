@@ -74,7 +74,7 @@ class AnimationAtlas {
     if (classId == HeroClassId.archer) {
       return switch (anim) {
         HeroAnimName.idle => 4,
-        HeroAnimName.run => 6,
+        HeroAnimName.run => 8,
         HeroAnimName.jump => 4,
         HeroAnimName.cast => 6,
       };

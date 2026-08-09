@@ -35,13 +35,15 @@ HERO_ANIM_COUNTS: dict[str, int] = {
     "cast": 3,
 }
 
-# Archer v3 magenta-chroma frames (idle/run/jump/cast — not hero sheet or walk dir).
+# Archer v3 magenta-chroma frames (idle/jump/cast — not hero sheet or walk dir).
 ARCHER_V3_ANIMS: dict[str, int] = {
     "idle": 4,
-    "run": 6,
     "jump": 4,
     "cast": 6,
 }
+
+# Archer run cycle from Higgsfield video frames (pre-keyed alpha in archer-video/).
+ARCHER_VIDEO_RUN_COUNT = 8
 
 
 @dataclass(frozen=True)
@@ -432,8 +434,41 @@ def process_image(src: Path, dest: Path, max_edge: int, mode: str) -> tuple[int,
         return out.size
 
 
+def import_archer_video_run_if_present(
+    canon_dir: Path, out_dir: Path
+) -> list[tuple[Path, Path, tuple[int, int]]]:
+    """Import archer run from art-canon/archer-video/ (pre-keyed alpha, no magenta chroma)."""
+    video_dir = canon_dir / "archer-video"
+    if not video_dir.is_dir():
+        return []
+
+    results: list[tuple[Path, Path, tuple[int, int]]] = []
+    hero_dir = out_dir / "heroes" / "archer"
+
+    for idx in range(ARCHER_VIDEO_RUN_COUNT):
+        src = video_dir / f"run_{idx}.png"
+        if not src.is_file():
+            raise SystemExit(f"Missing archer-video frame: {src}")
+        with Image.open(src) as raw:
+            frame = resize_max_edge(ensure_rgba(raw.copy()), 96, resample=HERO_FRAME_RESAMPLE)
+        rel = Path("heroes") / "archer" / f"run_{idx}.png"
+        dest = out_dir / rel
+        write_png(frame, dest)
+        results.append((src, dest, frame.size))
+        print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+
+    if hero_dir.is_dir():
+        for stale in hero_dir.glob("run_*.png"):
+            stale_idx = int(stale.stem.removeprefix("run_"))
+            if stale_idx >= ARCHER_VIDEO_RUN_COUNT:
+                stale.unlink()
+                print(f"removed stale run frame: {stale.name}")
+
+    return results
+
+
 def import_archer_v3_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
-    """Import archer idle/run/jump/cast from art-canon/archer-v3/ magenta chroma frames."""
+    """Import archer idle/jump/cast from art-canon/archer-v3/ magenta chroma frames."""
     archer_dir = canon_dir / "archer-v3"
     if not archer_dir.is_dir():
         return []
@@ -531,6 +566,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
 
     results.extend(import_walk_cycles_if_present(canon_dir, out_dir))
     results.extend(import_archer_v3_if_present(canon_dir, out_dir))
+    results.extend(import_archer_video_run_if_present(canon_dir, out_dir))
     return results
 
 
