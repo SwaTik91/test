@@ -77,15 +77,28 @@ void main() {
       expect(AnimationAtlas.monsterHasWalkFrames(MonsterKind.slime), isTrue);
     });
 
-    test('kinds without walk frames return empty list', () {
-      expect(AnimationAtlas.monsterWalkFrames(MonsterKind.bee), isEmpty);
-      expect(AnimationAtlas.monsterHasWalkFrames(MonsterKind.bee), isFalse);
+    test('all monster kinds have 6 walk frames', () {
+      for (final kind in MonsterKind.values) {
+        final frames = AnimationAtlas.monsterWalkFrames(kind);
+        expect(frames, hasLength(6), reason: '$kind walk frame count');
+        expect(AnimationAtlas.monsterHasWalkFrames(kind), isTrue);
+        for (var i = 0; i < 6; i++) {
+          expect(frames[i], endsWith('/walk_$i.png'));
+        }
+      }
     });
   });
 
   group('prop frames', () {
-    test('chest open has 3 frames', () {
-      expect(AnimationAtlas.chestOpenFrames, hasLength(3));
+    test('chest open has 5 frames', () {
+      expect(AnimationAtlas.chestOpenFrames, hasLength(5));
+      expect(AnimationAtlas.chestOpenFrames, [
+        'props/chest/open_0.png',
+        'props/chest/open_1.png',
+        'props/chest/open_2.png',
+        'props/chest/open_3.png',
+        'props/chest/open_4.png',
+      ]);
     });
   });
 
@@ -131,8 +144,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(66));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(66));
+    expect(AnimationAtlas.allFramePaths, hasLength(134));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(134));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {
@@ -147,9 +160,14 @@ void main() {
       ...AnimationAtlas.vfxSlashFrames,
       ...AnimationAtlas.vfxFlameFrames,
       ...AnimationAtlas.vfxHolyFrames,
-      ...AnimationAtlas.monsterWalkFrames(MonsterKind.slime),
     ]) {
       expect(AnimationAtlas.allFramePaths, contains(path));
+    }
+
+    for (final kind in MonsterKind.values) {
+      for (final path in AnimationAtlas.monsterWalkFrames(kind)) {
+        expect(AnimationAtlas.allFramePaths, contains(path));
+      }
     }
   });
 }

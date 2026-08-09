@@ -50,8 +50,30 @@ ARCHER_VIDEO_ANIMS: dict[str, int] = {
 # Monster walk cycles from art-canon/monster-video/<kind>/ (pre-keyed alpha).
 MONSTER_VIDEO_WALK_COUNT = 6
 
+MONSTER_VIDEO_KINDS: tuple[str, ...] = (
+    "slime",
+    "lunatic",
+    "wolf",
+    "mushroom",
+    "bee",
+    "crab",
+    "ghost",
+    "plant",
+    "boss_demon",
+    "boss_spider",
+    "boss_undead",
+    "boss_golem",
+)
+
 MONSTER_VIDEO_ANIMS: dict[str, dict[str, int]] = {
-    "slime": {"walk": MONSTER_VIDEO_WALK_COUNT},
+    kind: {"walk": MONSTER_VIDEO_WALK_COUNT} for kind in MONSTER_VIDEO_KINDS
+}
+
+# Chest open animation from art-canon/prop-video/chest/ (pre-keyed alpha, non-loop).
+PROP_VIDEO_CHEST_OPEN_COUNT = 5
+
+PROP_VIDEO_ANIMS: dict[str, dict[str, int]] = {
+    "chest": {"open": PROP_VIDEO_CHEST_OPEN_COUNT},
 }
 
 
@@ -403,19 +425,20 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
 
     if name.startswith("mob-"):
         mob_name = stem.removeprefix("mob-")
-        if (
-            mob_name == "slime"
-            and canon_dir
-            and (canon_dir / "monster-video" / "slime").is_dir()
-        ):
+        if canon_dir and (canon_dir / "monster-video" / mob_name).is_dir():
             return []
         return [(Path("enemies") / f"{mob_name}.png", 96, "creature")]
 
     if name.startswith("boss-"):
         boss_name = stem.removeprefix("boss-")
+        kind_name = f"boss_{boss_name}"
+        if canon_dir and (canon_dir / "monster-video" / kind_name).is_dir():
+            return []
         return [(Path("enemies") / f"boss_{boss_name}.png", 160, "creature")]
 
     if name == "prop-chest.png":
+        if canon_dir and (canon_dir / "prop-video" / "chest").is_dir():
+            return []
         return [(Path("props") / "chest.png", 96, "creature")]
 
     if name.startswith("proj-"):
@@ -576,6 +599,45 @@ def import_monster_video_if_present(
     return results
 
 
+def import_prop_video_if_present(
+    canon_dir: Path, out_dir: Path
+) -> list[tuple[Path, Path, tuple[int, int]]]:
+    """Import prop animations from art-canon/prop-video/<kind>/ (pre-keyed alpha)."""
+    video_root = canon_dir / "prop-video"
+    if not video_root.is_dir():
+        return []
+
+    results: list[tuple[Path, Path, tuple[int, int]]] = []
+    for kind_name, anims in PROP_VIDEO_ANIMS.items():
+        kind_dir = video_root / kind_name
+        if not kind_dir.is_dir():
+            raise SystemExit(f"Missing prop-video source dir: {kind_dir}")
+
+        kind_out = out_dir / "props" / kind_name
+
+        for prefix, count in anims.items():
+            for idx in range(count):
+                src = kind_dir / f"{prefix}_{idx}.png"
+                if not src.is_file():
+                    raise SystemExit(f"Missing prop-video frame: {src}")
+                with Image.open(src) as raw:
+                    frame = ensure_rgba(raw.copy())
+                rel = Path("props") / kind_name / f"{prefix}_{idx}.png"
+                dest = out_dir / rel
+                write_png(frame, dest)
+                results.append((src, dest, frame.size))
+                print(f"{src.name} -> {rel} ({frame.size[0]}x{frame.size[1]})")
+
+            if kind_out.is_dir():
+                for stale in kind_out.glob(f"{prefix}_*.png"):
+                    stale_idx = int(stale.stem.removeprefix(f"{prefix}_"))
+                    if stale_idx >= count:
+                        stale.unlink()
+                        print(f"removed stale {kind_name} {prefix} frame: {stale.name}")
+
+    return results
+
+
 def import_walk_cycles_if_present(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple[int, int]]]:
     """Import run frames from art-canon/walk/ for mage/paladin (archer uses archer-video)."""
     walk_dir = canon_dir / "walk"
@@ -625,6 +687,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
     results.extend(import_walk_cycles_if_present(canon_dir, out_dir))
     results.extend(import_archer_video_if_present(canon_dir, out_dir))
     results.extend(import_monster_video_if_present(canon_dir, out_dir))
+    results.extend(import_prop_video_if_present(canon_dir, out_dir))
     return results
 
 

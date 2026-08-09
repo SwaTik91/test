@@ -127,7 +127,17 @@ void main() {
     expect(walkAnim.frames, hasLength(6));
   });
 
-  test('bee without walk frames uses single-frame static animation', () async {
+  test('bee walk animation loads six frames from atlas', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final walkAnim = await AnimationAtlas.load(
+      AnimationAtlas.monsterWalkFrames(MonsterKind.bee),
+      AnimationAtlas.monsterWalkStepTime,
+    );
+    expect(walkAnim.frames, hasLength(6));
+  });
+
+  test('bee create loads real walk animation', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
     final layout = RunLayout(RunLayout.referenceHeight);
     final player = PlayerComponent.forTest(
       groundY: layout.groundY,
@@ -135,11 +145,11 @@ void main() {
       position: Vector2(500, layout.groundY),
       size: layout.playerSize,
     );
-    final monster = MonsterComponent.forTest(
+    final monster = await MonsterComponent.create(
       kind: MonsterKind.bee,
+      isBoss: false,
       target: player,
       position: Vector2(100, layout.groundY),
-      sprite: await _testSprite(),
       maxHp: 20,
       touchDamage: 5,
       baseXp: 1,
@@ -149,8 +159,7 @@ void main() {
       upgradeDropChance: 0,
     );
 
-    final walkAnim = monster.animations![MonsterAnimName.walk]!;
-    expect(walkAnim.frames, hasLength(1));
-    expect(monster.hasRealWalkAnimation, isFalse);
+    expect(monster.hasRealWalkAnimation, isTrue);
+    expect(monster.animations![MonsterAnimName.walk]!.frames, hasLength(6));
   });
 }

@@ -68,6 +68,17 @@ flutter:
     - assets/images/heroes/paladin/
     - assets/images/enemies/
     - assets/images/enemies/slime/
+    - assets/images/enemies/lunatic/
+    - assets/images/enemies/wolf/
+    - assets/images/enemies/mushroom/
+    - assets/images/enemies/bee/
+    - assets/images/enemies/crab/
+    - assets/images/enemies/ghost/
+    - assets/images/enemies/plant/
+    - assets/images/enemies/boss_demon/
+    - assets/images/enemies/boss_spider/
+    - assets/images/enemies/boss_undead/
+    - assets/images/enemies/boss_golem/
     - assets/images/props/
     - assets/images/props/chest/
     - assets/images/projectiles/

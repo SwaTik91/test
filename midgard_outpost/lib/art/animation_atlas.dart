@@ -13,8 +13,10 @@ class AnimationAtlas {
   static const chestOpenStepTime = 0.10;
   static const vfxStepTime = 0.08;
 
+  static const chestOpenFrameCount = 5;
+
   static List<String> get chestOpenFrames =>
-      _frames('props/chest', 'open', 3);
+      _frames('props/chest', 'open', chestOpenFrameCount);
 
   static List<String> get vfxSlashFrames => _frames('vfx', 'slash', 3);
 
@@ -113,12 +115,33 @@ class AnimationAtlas {
       List.generate(count, (i) => '$folder/${prefix}_$i.png');
 
   static int _monsterWalkFrameCount(MonsterKind kind) => switch (kind) {
-        MonsterKind.slime => 6,
-        _ => 0,
+        MonsterKind.slime ||
+        MonsterKind.lunatic ||
+        MonsterKind.wolf ||
+        MonsterKind.mushroom ||
+        MonsterKind.bee ||
+        MonsterKind.crab ||
+        MonsterKind.ghost ||
+        MonsterKind.plant ||
+        MonsterKind.bossDemon ||
+        MonsterKind.bossSpider ||
+        MonsterKind.bossUndead ||
+        MonsterKind.bossGolem =>
+          6,
       };
 
   static String _monsterFolder(MonsterKind kind) => switch (kind) {
         MonsterKind.slime => 'enemies/slime',
-        _ => '',
+        MonsterKind.lunatic => 'enemies/lunatic',
+        MonsterKind.wolf => 'enemies/wolf',
+        MonsterKind.mushroom => 'enemies/mushroom',
+        MonsterKind.bee => 'enemies/bee',
+        MonsterKind.crab => 'enemies/crab',
+        MonsterKind.ghost => 'enemies/ghost',
+        MonsterKind.plant => 'enemies/plant',
+        MonsterKind.bossDemon => 'enemies/boss_demon',
+        MonsterKind.bossSpider => 'enemies/boss_spider',
+        MonsterKind.bossUndead => 'enemies/boss_undead',
+        MonsterKind.bossGolem => 'enemies/boss_golem',
       };
 }
