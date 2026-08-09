@@ -66,7 +66,7 @@ class _CreateHeroScreenState extends State<CreateHeroScreen> {
                           alignment: Alignment.bottomCenter,
                           child: Image.asset(
                             heroArt,
-                            filterQuality: FilterQuality.none,
+                            filterQuality: FilterQuality.medium,
                             fit: BoxFit.contain,
                             height: constraints.maxHeight * 0.55,
                           ),
@@ -185,7 +185,7 @@ class _ClassRow extends StatelessWidget {
                   ArtAtlas.flutterAsset(ArtAtlas.heroIconPath(classDef.id)),
                   width: 32,
                   height: 32,
-                  filterQuality: FilterQuality.none,
+                  filterQuality: FilterQuality.medium,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

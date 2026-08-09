@@ -121,7 +121,7 @@ class _HubShellState extends State<HubShell> {
                           alignment: Alignment.bottomCenter,
                           child: Image.asset(
                             heroArt,
-                            filterQuality: FilterQuality.none,
+                            filterQuality: FilterQuality.medium,
                             fit: BoxFit.contain,
                             height: constraints.maxHeight * 0.55,
                           ),

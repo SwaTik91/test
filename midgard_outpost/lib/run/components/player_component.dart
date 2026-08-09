@@ -33,7 +33,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
          autoResize: false,
        ) {
     paint.color = Colors.white;
-    ArtAtlas.applyNearestNeighbor(this);
+    paint.filterQuality = FilterQuality.low;
     _rebuildAnimRenderSizes(animations);
     _syncFrameAspectSize();
   }
@@ -126,7 +126,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
          autoResize: false,
        ) {
     paint.color = Colors.white;
-    ArtAtlas.applyNearestNeighbor(this);
+    paint.filterQuality = FilterQuality.low;
     _rebuildAnimRenderSizes(_singleSpriteAnimations(sprite));
     _syncFrameAspectSize();
   }
@@ -157,7 +157,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
          autoResize: false,
        ) {
     paint.color = Colors.white;
-    ArtAtlas.applyNearestNeighbor(this);
+    paint.filterQuality = FilterQuality.low;
     _rebuildAnimRenderSizes(animations);
     _syncFrameAspectSize();
   }

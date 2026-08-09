@@ -28,7 +28,7 @@ from import_art_canon import (  # noqa: E402
 )
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
-ARCHER_VIDEO_DIR = CANON_DIR / "archer-video"
+ARCHER_VIDEO_DIR = CANON_DIR / "archer-video-v2"
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
@@ -49,6 +49,7 @@ CREATURE_OUTPUTS = (
 )
 
 MAX_SEMI_TRANSPARENT_HERO = 120
+MAX_SEMI_TRANSPARENT_ARCHER_HERO = 5000
 MAX_EXTERIOR_GRAY_HERO = 80
 MAX_SEMI_TRANSPARENT_CREATURE = 400
 
@@ -73,22 +74,24 @@ def corners_transparent(path: Path) -> bool:
 
 
 def archer_video_frame_hash(prefix: str, idx: int) -> str:
-    src = ARCHER_VIDEO_DIR / f"{prefix}_{idx}.png"
+    src = ARCHER_VIDEO_DIR / prefix / f"{prefix}_{idx}.png"
     with Image.open(src) as raw:
         rgba = ensure_rgba(raw.copy())
-        w, h = rgba.size
-        longest = max(w, h)
-        if longest > 96:
-            scale = 96 / longest
-            rgba = rgba.resize(
-                (max(1, int(w * scale)), max(1, int(h * scale))),
-                Image.Resampling.NEAREST,
-            )
     from io import BytesIO
 
     buf = BytesIO()
     force_corner_alpha_zero(rgba).save(buf, format="PNG", optimize=True)
     return hashlib.md5(buf.getvalue()).hexdigest()
+
+
+def count_pinkish_opaque_pixels(img: Image.Image) -> int:
+    """Count magenta-noise pixels: r>150,b>150,r>g+40,b>g+40,a>128."""
+    rgba = ensure_rgba(img)
+    count = 0
+    for r, g, b, a in rgba.getdata():
+        if a > 128 and r > 150 and b > 150 and r > g + 40 and b > g + 40:
+            count += 1
+    return count
 
 
 def archer_video_idle_hash(idx: int) -> str:
@@ -165,7 +168,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
 
     def test_archer_idle_frames_match_video_canon(self) -> None:
         if not ARCHER_VIDEO_DIR.is_dir():
-            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+            self.skipTest(f"archer-video-v2 canon missing: {ARCHER_VIDEO_DIR}")
         for idx in range(ARCHER_VIDEO_ANIMS["idle"]):
             dest = ASSETS_DIR / "heroes" / "archer" / f"idle_{idx}.png"
             expected = archer_video_idle_hash(idx)
@@ -174,12 +177,12 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 self.assertEqual(
                     actual,
                     expected,
-                    f"archer idle_{idx} does not match processed archer-video source",
+                    f"archer idle_{idx} does not match processed archer-video-v2 source",
                 )
 
     def test_archer_jump_frames_match_video_canon(self) -> None:
         if not ARCHER_VIDEO_DIR.is_dir():
-            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+            self.skipTest(f"archer-video-v2 canon missing: {ARCHER_VIDEO_DIR}")
         for idx in range(ARCHER_VIDEO_ANIMS["jump"]):
             dest = ASSETS_DIR / "heroes" / "archer" / f"jump_{idx}.png"
             expected = archer_video_jump_hash(idx)
@@ -188,12 +191,12 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 self.assertEqual(
                     actual,
                     expected,
-                    f"archer jump_{idx} does not match processed archer-video source",
+                    f"archer jump_{idx} does not match processed archer-video-v2 source",
                 )
 
     def test_archer_run_frames_match_video_canon(self) -> None:
         if not ARCHER_VIDEO_DIR.is_dir():
-            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+            self.skipTest(f"archer-video-v2 canon missing: {ARCHER_VIDEO_DIR}")
         for idx in range(ARCHER_VIDEO_RUN_COUNT):
             dest = ASSETS_DIR / "heroes" / "archer" / f"run_{idx}.png"
             expected = archer_video_run_hash(idx)
@@ -202,12 +205,12 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 self.assertEqual(
                     actual,
                     expected,
-                    f"archer run_{idx} does not match processed archer-video source",
+                    f"archer run_{idx} does not match processed archer-video-v2 source",
                 )
 
     def test_archer_cast_frames_match_video_canon(self) -> None:
         if not ARCHER_VIDEO_DIR.is_dir():
-            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+            self.skipTest(f"archer-video-v2 canon missing: {ARCHER_VIDEO_DIR}")
         for idx in range(ARCHER_VIDEO_CAST_COUNT):
             dest = ASSETS_DIR / "heroes" / "archer" / f"cast_{idx}.png"
             expected = archer_video_cast_hash(idx)
@@ -216,7 +219,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                 self.assertEqual(
                     actual,
                     expected,
-                    f"archer cast_{idx} does not match processed archer-video source",
+                    f"archer cast_{idx} does not match processed archer-video-v2 source",
                 )
 
     def test_archer_idle_frames_are_unique(self) -> None:
@@ -263,6 +266,27 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
             ARCHER_ANIM_COUNTS["run"],
             f"archer run frames duplicated: {hashes}",
         )
+
+    def test_archer_frames_are_192px_height(self) -> None:
+        for anim, count in ARCHER_ANIM_COUNTS.items():
+            for idx in range(count):
+                path = ASSETS_DIR / "heroes" / "archer" / f"{anim}_{idx}.png"
+                with Image.open(path) as img:
+                    with self.subTest(anim=anim, idx=idx):
+                        self.assertEqual(img.size[1], 192, f"{path} height not 192px")
+
+    def test_archer_frames_have_no_magenta_noise(self) -> None:
+        for anim, count in ARCHER_ANIM_COUNTS.items():
+            for idx in range(count):
+                path = ASSETS_DIR / "heroes" / "archer" / f"{anim}_{idx}.png"
+                with Image.open(path) as img:
+                    pink = count_pinkish_opaque_pixels(img)
+                with self.subTest(anim=anim, idx=idx):
+                    self.assertEqual(
+                        pink,
+                        0,
+                        f"magenta noise pixels on {path}: {pink}",
+                    )
 
     def test_archer_preview_and_icon_from_idle_0(self) -> None:
         idle_0 = file_md5(ASSETS_DIR / "heroes" / "archer" / "idle_0.png")
@@ -340,6 +364,11 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
     def test_hero_frames_have_crisp_alpha(self) -> None:
         for hero in HERO_CLASSES:
             counts = hero_anim_counts(hero)
+            max_semi = (
+                MAX_SEMI_TRANSPARENT_ARCHER_HERO
+                if hero == "archer"
+                else MAX_SEMI_TRANSPARENT_HERO
+            )
             for anim, count in counts.items():
                 for idx in range(count):
                     path = ASSETS_DIR / "heroes" / hero / f"{anim}_{idx}.png"
@@ -349,7 +378,7 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     with self.subTest(path=path):
                         self.assertLessEqual(
                             semi,
-                            MAX_SEMI_TRANSPARENT_HERO,
+                            max_semi,
                             f"too many semi-transparent pixels on {path}: {semi}",
                         )
                         self.assertLessEqual(

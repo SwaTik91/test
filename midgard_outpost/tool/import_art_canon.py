@@ -34,7 +34,7 @@ HERO_ANIM_COUNTS: dict[str, int] = {
     "cast": 3,
 }
 
-# Archer animation cycles from Higgsfield video frames (pre-keyed alpha in archer-video/).
+# Archer animation cycles from Higgsfield video frames (pre-keyed alpha in archer-video-v2/).
 ARCHER_VIDEO_IDLE_COUNT = 4
 ARCHER_VIDEO_RUN_COUNT = 8
 ARCHER_VIDEO_JUMP_COUNT = 6
@@ -93,7 +93,7 @@ def make_bottom_aligned_icon(sprite: Image.Image, size: int = 64) -> Image.Image
     if longest > size:
         scale = size / longest
         new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-        rgba = rgba.resize(new_size, HERO_FRAME_RESAMPLE)
+        rgba = rgba.resize(new_size, RESAMPLE)
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     x = (size - rgba.width) // 2
     y = size - rgba.height
@@ -443,16 +443,17 @@ def _import_archer_video_frames(
     prefix: str,
     count: int,
 ) -> list[tuple[Path, Path, tuple[int, int]]]:
-    """Import one archer-video animation cycle (pre-keyed alpha, passthrough)."""
+    """Import one archer-video-v2 animation cycle (pre-keyed alpha, passthrough at 192px)."""
     results: list[tuple[Path, Path, tuple[int, int]]] = []
     hero_dir = out_dir / "heroes" / "archer"
+    anim_dir = video_dir / prefix
 
     for idx in range(count):
-        src = video_dir / f"{prefix}_{idx}.png"
+        src = anim_dir / f"{prefix}_{idx}.png"
         if not src.is_file():
-            raise SystemExit(f"Missing archer-video frame: {src}")
+            raise SystemExit(f"Missing archer-video-v2 frame: {src}")
         with Image.open(src) as raw:
-            frame = resize_max_edge(ensure_rgba(raw.copy()), 96, resample=HERO_FRAME_RESAMPLE)
+            frame = ensure_rgba(raw.copy())
         rel = Path("heroes") / "archer" / f"{prefix}_{idx}.png"
         dest = out_dir / rel
         write_png(frame, dest)
@@ -472,8 +473,8 @@ def _import_archer_video_frames(
 def import_archer_video_if_present(
     canon_dir: Path, out_dir: Path
 ) -> list[tuple[Path, Path, tuple[int, int]]]:
-    """Import archer idle/run/jump/cast from art-canon/archer-video/ (pre-keyed alpha)."""
-    video_dir = canon_dir / "archer-video"
+    """Import archer idle/run/jump/cast from art-canon/archer-video-v2/ (pre-keyed alpha)."""
+    video_dir = canon_dir / "archer-video-v2"
     if not video_dir.is_dir():
         return []
 
@@ -488,19 +489,19 @@ def import_archer_video_if_present(
                 idle_0 = ensure_rgba(img.copy())
 
     if idle_0 is None:
-        raise SystemExit("archer-video import produced no idle_0 frame")
+        raise SystemExit("archer-video-v2 import produced no idle_0 frame")
 
     preview_rel = Path("heroes") / "archer.png"
     preview_dest = out_dir / preview_rel
     write_png(idle_0, preview_dest)
-    results.append((video_dir / "idle_0.png", preview_dest, idle_0.size))
+    results.append((video_dir / "idle" / "idle_0.png", preview_dest, idle_0.size))
     print(f"idle_0.png -> {preview_rel} ({idle_0.size[0]}x{idle_0.size[1]})")
 
     icon = make_bottom_aligned_icon(idle_0, 64)
     icon_rel = Path("hub") / "icon_archer.png"
     icon_dest = out_dir / icon_rel
     write_png(icon, icon_dest)
-    results.append((video_dir / "idle_0.png", icon_dest, icon.size))
+    results.append((video_dir / "idle" / "idle_0.png", icon_dest, icon.size))
     print(f"idle_0.png -> {icon_rel} ({icon.size[0]}x{icon.size[1]})")
 
     return results
@@ -531,7 +532,7 @@ def import_canon(canon_dir: Path, out_dir: Path) -> list[tuple[Path, Path, tuple
             hero_name = src.stem.removeprefix("hero-")
             # Archer frames come from archer-video, not sheet slices or walk dir.
             if hero_name == "archer":
-                print(f"skip sheet slice: {src.name} (archer-video import)")
+                print(f"skip sheet slice: {src.name} (archer-video-v2 import)")
                 continue
             for dest, size in import_hero_sheet(src, hero_name, out_dir):
                 results.append((src, dest, size))
