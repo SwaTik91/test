@@ -5,19 +5,40 @@ import 'package:midgard_outpost/core/ids.dart';
 
 void main() {
   group('heroFrames', () {
-    test('archer run has 4 frames with correct paths', () {
+    test('archer run has 6 frames with correct paths', () {
       final frames = AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.run);
-      expect(frames, hasLength(4));
+      expect(frames, hasLength(6));
       expect(frames, [
         'heroes/archer/run_0.png',
         'heroes/archer/run_1.png',
         'heroes/archer/run_2.png',
         'heroes/archer/run_3.png',
+        'heroes/archer/run_4.png',
+        'heroes/archer/run_5.png',
       ]);
     });
 
-    test('each hero class has expected frame counts per animation', () {
-      for (final classId in HeroClassId.values) {
+    test('archer has expanded frame counts', () {
+      expect(
+        AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.idle),
+        hasLength(4),
+      );
+      expect(
+        AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.run),
+        hasLength(6),
+      );
+      expect(
+        AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.jump),
+        hasLength(4),
+      );
+      expect(
+        AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast),
+        hasLength(6),
+      );
+    });
+
+    test('mage and paladin keep legacy frame counts', () {
+      for (final classId in [HeroClassId.mage, HeroClassId.paladin]) {
         expect(
           AnimationAtlas.heroFrames(classId, HeroAnimName.idle),
           hasLength(2),
@@ -54,10 +75,29 @@ void main() {
 
   group('stepTime', () {
     test('hero stepTimes match design spec', () {
-      expect(AnimationAtlas.heroStepTime(HeroAnimName.idle), 0.35);
-      expect(AnimationAtlas.heroStepTime(HeroAnimName.run), 0.10);
-      expect(AnimationAtlas.heroStepTime(HeroAnimName.jump), 0.12);
-      expect(AnimationAtlas.heroStepTime(HeroAnimName.cast), 0.08);
+      expect(
+        AnimationAtlas.heroStepTime(HeroClassId.mage, HeroAnimName.idle),
+        0.35,
+      );
+      expect(
+        AnimationAtlas.heroStepTime(HeroClassId.mage, HeroAnimName.run),
+        0.10,
+      );
+      expect(
+        AnimationAtlas.heroStepTime(HeroClassId.mage, HeroAnimName.jump),
+        0.12,
+      );
+      expect(
+        AnimationAtlas.heroStepTime(HeroClassId.mage, HeroAnimName.cast),
+        0.08,
+      );
+    });
+
+    test('archer cast uses faster step for 6-frame draw cycle', () {
+      expect(
+        AnimationAtlas.heroStepTime(HeroClassId.archer, HeroAnimName.cast),
+        0.05,
+      );
     });
 
     test('chest and vfx stepTimes match design spec', () {
@@ -67,8 +107,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(45));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(45));
+    expect(AnimationAtlas.allFramePaths, hasLength(54));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(54));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {

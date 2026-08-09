@@ -19,9 +19,11 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required this.groundY,
     required Vector2 footprintSize,
     required Map<HeroAnimName, SpriteAnimation> animations,
+    required double castDuration,
   }) : currentHp = maxHp,
        currentSp = maxSp,
        _footprintSize = footprintSize.clone(),
+       _castDuration = castDuration,
        super(
          animations: animations,
          current: HeroAnimName.idle,
@@ -39,9 +41,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   static const double _gravity = 1200;
   static const double _jumpVelocity = -520;
 
-  static double get _castDuration =>
-      AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast).length *
-      AnimationAtlas.heroStepTime(HeroAnimName.cast);
+  static double castDurationFor(HeroClassId classId) =>
+      AnimationAtlas.heroFrameCount(classId, HeroAnimName.cast) *
+      AnimationAtlas.heroStepTime(classId, HeroAnimName.cast);
 
   static Future<PlayerComponent> create({
     required HeroClassId classId,
@@ -59,6 +61,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       groundY: groundY,
       footprintSize: size,
       animations: animations,
+      castDuration: castDurationFor(classId),
     );
   }
 
@@ -70,7 +73,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       for (final anim in HeroAnimName.values) {
         animations[anim] = await AnimationAtlas.load(
           AnimationAtlas.heroFrames(classId, anim),
-          AnimationAtlas.heroStepTime(anim),
+          AnimationAtlas.heroStepTime(classId, anim),
           loop: anim != HeroAnimName.cast,
         );
       }
@@ -113,6 +116,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        currentHp = maxHp,
        currentSp = maxSp,
        _footprintSize = (size ?? Vector2(216, 216)).clone(),
+       _castDuration = 0.24,
        super(
          animations: _singleSpriteAnimations(sprite),
          current: HeroAnimName.idle,
@@ -143,6 +147,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        currentHp = maxHp,
        currentSp = maxSp,
        _footprintSize = (size ?? Vector2(216, 216)).clone(),
+       _castDuration = 0.24,
        super(
          animations: animations,
          current: current,
@@ -159,6 +164,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
 
   final Vector2 _footprintSize;
   final Map<HeroAnimName, Vector2> _animRenderSizes = {};
+  final double _castDuration;
 
   int maxHp;
   int maxSp;

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from pathlib import Path
 
 from PIL import Image
@@ -11,6 +12,7 @@ from PIL import Image
 from clean_sprite_alpha import clean_chroma_sprite, force_corner_alpha_zero
 
 RESAMPLE = Image.Resampling.NEAREST
+MIN_OPAQUE_COMPONENT_PIXELS = 80
 
 
 def is_chroma_magenta(r: int, g: int, b: int, a: int) -> bool:
@@ -33,6 +35,48 @@ def key_magenta_to_alpha(img: Image.Image) -> Image.Image:
             if is_chroma_magenta(r, g, b, a):
                 px[x, y] = (r, g, b, 0)
     return rgba
+
+
+def keep_largest_opaque_component(img: Image.Image, min_pixels: int = MIN_OPAQUE_COMPONENT_PIXELS) -> Image.Image:
+    """Drop detached artifacts; keep only the largest connected opaque region."""
+    rgba = img.convert("RGBA")
+    w, h = rgba.size
+    px = rgba.load()
+    visited = [[False] * w for _ in range(h)]
+    best_pixels: list[tuple[int, int]] = []
+
+    for y in range(h):
+        for x in range(w):
+            if visited[y][x] or px[x, y][3] == 0:
+                continue
+            queue: deque[tuple[int, int]] = deque([(x, y)])
+            visited[y][x] = True
+            component: list[tuple[int, int]] = []
+            while queue:
+                cx, cy = queue.popleft()
+                component.append((cx, cy))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = cx + dx, cy + dy
+                    if (
+                        0 <= nx < w
+                        and 0 <= ny < h
+                        and not visited[ny][nx]
+                        and px[nx, ny][3] > 0
+                    ):
+                        visited[ny][nx] = True
+                        queue.append((nx, ny))
+
+            if len(component) >= min_pixels and len(component) > len(best_pixels):
+                best_pixels = component
+
+    if not best_pixels:
+        return rgba
+
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    out_px = out.load()
+    for x, y in best_pixels:
+        out_px[x, y] = px[x, y]
+    return out
 
 
 def tight_crop_opaque(img: Image.Image, pad: int = 2) -> Image.Image:
@@ -58,9 +102,16 @@ def resize_max_edge(img: Image.Image, max_edge: int) -> Image.Image:
     return img.resize(new_size, RESAMPLE)
 
 
-def process_walk_frame_image(img: Image.Image, max_edge: int = 96) -> Image.Image:
-    """Magenta key → tight crop → resize max edge → clean_chroma_sprite."""
+def process_walk_frame_image(
+    img: Image.Image,
+    max_edge: int = 96,
+    *,
+    largest_component_only: bool = False,
+) -> Image.Image:
+    """Magenta key → optional largest-component filter → tight crop → resize → clean."""
     keyed = key_magenta_to_alpha(img)
+    if largest_component_only:
+        keyed = keep_largest_opaque_component(keyed)
     cropped = tight_crop_opaque(keyed)
     sized = resize_max_edge(cropped, max_edge)
     return force_corner_alpha_zero(clean_chroma_sprite(sized))

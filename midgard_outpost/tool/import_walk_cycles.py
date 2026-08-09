@@ -8,7 +8,7 @@ from pathlib import Path
 
 from process_walk_frame import process_walk_frame
 
-HERO_CLASSES = ("archer", "mage", "paladin")
+HERO_CLASSES = ("mage", "paladin")
 RUN_FRAME_COUNT = 4
 
 

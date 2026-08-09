@@ -23,20 +23,25 @@ class AnimationAtlas {
 
   static List<String> heroFrames(HeroClassId classId, HeroAnimName anim) {
     final folder = _heroFolder(classId);
-    return switch (anim) {
-      HeroAnimName.idle => _frames('heroes/$folder', 'idle', 2),
-      HeroAnimName.run => _frames('heroes/$folder', 'run', 4),
-      HeroAnimName.jump => _frames('heroes/$folder', 'jump', 2),
-      HeroAnimName.cast => _frames('heroes/$folder', 'cast', 3),
-    };
+    final count = _heroFrameCount(classId, anim);
+    return _frames('heroes/$folder', anim.name, count);
   }
 
-  static double heroStepTime(HeroAnimName anim) => switch (anim) {
-        HeroAnimName.idle => 0.35,
-        HeroAnimName.run => 0.10,
-        HeroAnimName.jump => 0.12,
-        HeroAnimName.cast => 0.08,
-      };
+  static int heroFrameCount(HeroClassId classId, HeroAnimName anim) =>
+      _heroFrameCount(classId, anim);
+
+  static double heroStepTime(HeroClassId classId, HeroAnimName anim) {
+    if (classId == HeroClassId.archer && anim == HeroAnimName.cast) {
+      // 6-frame draw cycle; slightly faster step keeps cast pose ~0.30s (damage is instant).
+      return 0.05;
+    }
+    return switch (anim) {
+      HeroAnimName.idle => 0.35,
+      HeroAnimName.run => 0.10,
+      HeroAnimName.jump => 0.12,
+      HeroAnimName.cast => 0.08,
+    };
+  }
 
   /// Every wave-2 animation frame path for asset-existence tests.
   static List<String> get allFramePaths => [
@@ -63,6 +68,23 @@ class AnimationAtlas {
       stepTime: stepTime,
       loop: loop,
     );
+  }
+
+  static int _heroFrameCount(HeroClassId classId, HeroAnimName anim) {
+    if (classId == HeroClassId.archer) {
+      return switch (anim) {
+        HeroAnimName.idle => 4,
+        HeroAnimName.run => 6,
+        HeroAnimName.jump => 4,
+        HeroAnimName.cast => 6,
+      };
+    }
+    return switch (anim) {
+      HeroAnimName.idle => 2,
+      HeroAnimName.run => 4,
+      HeroAnimName.jump => 2,
+      HeroAnimName.cast => 3,
+    };
   }
 
   static String _heroFolder(HeroClassId id) => switch (id) {
