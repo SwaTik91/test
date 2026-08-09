@@ -75,7 +75,7 @@ class AnimationAtlas {
       return switch (anim) {
         HeroAnimName.idle => 4,
         HeroAnimName.run => 8,
-        HeroAnimName.jump => 4,
+        HeroAnimName.jump => 6,
         HeroAnimName.cast => 8,
       };
     }

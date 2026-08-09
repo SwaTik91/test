@@ -31,7 +31,7 @@ void main() {
       );
       expect(
         AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.jump),
-        hasLength(4),
+        hasLength(6),
       );
       expect(
         AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast),
@@ -109,8 +109,8 @@ void main() {
   });
 
   test('allFramePaths lists every animation frame without duplicates', () {
-    expect(AnimationAtlas.allFramePaths, hasLength(58));
-    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(58));
+    expect(AnimationAtlas.allFramePaths, hasLength(60));
+    expect(AnimationAtlas.allFramePaths.toSet(), hasLength(60));
 
     for (final classId in HeroClassId.values) {
       for (final anim in HeroAnimName.values) {

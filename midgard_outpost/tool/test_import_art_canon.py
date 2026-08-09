@@ -20,27 +20,21 @@ from clean_sprite_alpha import (  # noqa: E402
     force_corner_alpha_zero,
 )
 from import_art_canon import (  # noqa: E402
-    ARCHER_V3_ANIMS,
+    ARCHER_VIDEO_ANIMS,
     ARCHER_VIDEO_CAST_COUNT,
     ARCHER_VIDEO_RUN_COUNT,
     ensure_rgba,
     import_canon,
 )
-from process_walk_frame import process_walk_frame_image  # noqa: E402
 
 CANON_DIR = Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "art-canon"
-ARCHER_V3_DIR = CANON_DIR / "archer-v3"
 ARCHER_VIDEO_DIR = CANON_DIR / "archer-video"
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets" / "images"
 
 HERO_CLASSES = ("archer", "mage", "paladin")
 SHEET_SLICE_HEROES = ("mage", "paladin")
 
-ARCHER_ANIM_COUNTS = {
-    **ARCHER_V3_ANIMS,
-    "run": ARCHER_VIDEO_RUN_COUNT,
-    "cast": ARCHER_VIDEO_CAST_COUNT,
-}
+ARCHER_ANIM_COUNTS = dict(ARCHER_VIDEO_ANIMS)
 DEFAULT_ANIM_COUNTS = {
     "idle": 2,
     "run": 4,
@@ -97,27 +91,20 @@ def archer_video_frame_hash(prefix: str, idx: int) -> str:
     return hashlib.md5(buf.getvalue()).hexdigest()
 
 
+def archer_video_idle_hash(idx: int) -> str:
+    return archer_video_frame_hash("idle", idx)
+
+
+def archer_video_jump_hash(idx: int) -> str:
+    return archer_video_frame_hash("jump", idx)
+
+
 def archer_video_run_hash(idx: int) -> str:
     return archer_video_frame_hash("run", idx)
 
 
 def archer_video_cast_hash(idx: int) -> str:
     return archer_video_frame_hash("cast", idx)
-
-
-def archer_v3_frame_hash(anim: str, idx: int) -> str:
-    src = ARCHER_V3_DIR / f"archer-{anim}-{idx}.png"
-    with Image.open(src) as raw:
-        processed = process_walk_frame_image(
-            raw,
-            max_edge=96,
-            largest_component_only=True,
-        )
-    from io import BytesIO
-
-    buf = BytesIO()
-    force_corner_alpha_zero(ensure_rgba(processed)).save(buf, format="PNG", optimize=True)
-    return hashlib.md5(buf.getvalue()).hexdigest()
 
 
 def hero_anim_counts(hero: str) -> dict[str, int]:
@@ -176,20 +163,33 @@ class ImportArtCanonRegressionTest(unittest.TestCase):
                     f"{hero} cast_2 should pad cast_1, not a run stride pose",
                 )
 
-    def test_archer_frames_match_v3_canon(self) -> None:
-        if not ARCHER_V3_DIR.is_dir():
-            self.skipTest(f"archer-v3 canon missing: {ARCHER_V3_DIR}")
-        for anim, count in ARCHER_V3_ANIMS.items():
-            for idx in range(count):
-                dest = ASSETS_DIR / "heroes" / "archer" / f"{anim}_{idx}.png"
-                expected = archer_v3_frame_hash(anim, idx)
-                actual = file_md5(dest)
-                with self.subTest(anim=anim, idx=idx):
-                    self.assertEqual(
-                        actual,
-                        expected,
-                        f"archer {anim}_{idx} does not match processed archer-v3 source",
-                    )
+    def test_archer_idle_frames_match_video_canon(self) -> None:
+        if not ARCHER_VIDEO_DIR.is_dir():
+            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+        for idx in range(ARCHER_VIDEO_ANIMS["idle"]):
+            dest = ASSETS_DIR / "heroes" / "archer" / f"idle_{idx}.png"
+            expected = archer_video_idle_hash(idx)
+            actual = file_md5(dest)
+            with self.subTest(idx=idx):
+                self.assertEqual(
+                    actual,
+                    expected,
+                    f"archer idle_{idx} does not match processed archer-video source",
+                )
+
+    def test_archer_jump_frames_match_video_canon(self) -> None:
+        if not ARCHER_VIDEO_DIR.is_dir():
+            self.skipTest(f"archer-video canon missing: {ARCHER_VIDEO_DIR}")
+        for idx in range(ARCHER_VIDEO_ANIMS["jump"]):
+            dest = ASSETS_DIR / "heroes" / "archer" / f"jump_{idx}.png"
+            expected = archer_video_jump_hash(idx)
+            actual = file_md5(dest)
+            with self.subTest(idx=idx):
+                self.assertEqual(
+                    actual,
+                    expected,
+                    f"archer jump_{idx} does not match processed archer-video source",
+                )
 
     def test_archer_run_frames_match_video_canon(self) -> None:
         if not ARCHER_VIDEO_DIR.is_dir():
