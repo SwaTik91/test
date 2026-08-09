@@ -167,11 +167,8 @@ void main() {
     expect(game.player.position.y, closeTo(layout.groundY, 0.01));
     expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
     expect(game.groundTilesForTest, isNotEmpty);
-    expect(game.groundFillForTest, isNotNull);
     for (final tile in game.groundTilesForTest) {
-      // Lip is nudged 1px above contact to hide clearColor seams.
-      expect(tile.position.y, closeTo(layout.groundY - 1, 0.01));
-      expect(tile.size.y, closeTo(layout.groundLipHeight + 1, 1.0));
+      expect(tile.position.y, closeTo(layout.groundY, 0.01));
     }
   });
 
@@ -235,7 +232,7 @@ void main() {
     expect(game.player.position.y, closeTo(layout.groundY, 0.01));
     expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
     for (final tile in game.groundTilesForTest) {
-      expect(tile.position.y, closeTo(layout.groundY - 1, 0.01));
+      expect(tile.position.y, closeTo(layout.groundY, 0.01));
     }
   });
 
@@ -420,9 +417,8 @@ Future<void> _expectRunGroundAlignedAtHeight(
   expect(game.player.position.y, closeTo(layout.groundY, 0.01));
   expect(game.camera.viewfinder.anchor.y, RunLayout.groundTopFraction);
   expect(game.camera.viewfinder.position.y, closeTo(layout.groundY, 0.01));
-  expect(game.groundFillForTest, isNotNull);
   for (final tile in game.groundTilesForTest) {
-    expect(tile.position.y, closeTo(layout.groundY - 1, 0.01));
+    expect(tile.position.y, closeTo(layout.groundY, 0.01));
   }
 }
 

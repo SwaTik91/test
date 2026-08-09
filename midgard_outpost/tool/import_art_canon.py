@@ -415,17 +415,26 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
     if name == "bg-forest.png":
         return [(Path("world") / "bg_forest.png", 1920, "max_edge")]
 
+    if name == "ground-tile-v6.png":
+        return [(Path("world") / "ground_tile.png", 256, "max_edge")]
+
     if name == "ground-lip-v5.png":
+        if canon_dir and (canon_dir / "ground-tile-v6.png").is_file():
+            return []
         return [(Path("world") / "ground_tile.png", 256, "width")]
 
     if name == "ground-tile-v5.png":
-        if canon_dir and (canon_dir / "ground-lip-v5.png").is_file():
+        if canon_dir and (
+            (canon_dir / "ground-tile-v6.png").is_file()
+            or (canon_dir / "ground-lip-v5.png").is_file()
+        ):
             return []
         return [(Path("world") / "ground_tile.png", 256, "max_edge")]
 
     if name == "ground-tile-v4.png":
         if canon_dir and (
-            (canon_dir / "ground-lip-v5.png").is_file()
+            (canon_dir / "ground-tile-v6.png").is_file()
+            or (canon_dir / "ground-lip-v5.png").is_file()
             or (canon_dir / "ground-tile-v5.png").is_file()
         ):
             return []
@@ -433,7 +442,8 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
 
     if name == "ground-tile-v3.png":
         if canon_dir and (
-            (canon_dir / "ground-lip-v5.png").is_file()
+            (canon_dir / "ground-tile-v6.png").is_file()
+            or (canon_dir / "ground-lip-v5.png").is_file()
             or (canon_dir / "ground-tile-v5.png").is_file()
             or (canon_dir / "ground-tile-v4.png").is_file()
         ):
@@ -442,7 +452,8 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
 
     if name == "ground-tile-v2.png":
         if canon_dir and (
-            (canon_dir / "ground-lip-v5.png").is_file()
+            (canon_dir / "ground-tile-v6.png").is_file()
+            or (canon_dir / "ground-lip-v5.png").is_file()
             or (canon_dir / "ground-tile-v5.png").is_file()
             or (canon_dir / "ground-tile-v4.png").is_file()
             or (canon_dir / "ground-tile-v3.png").is_file()
@@ -452,7 +463,8 @@ def dest_for_source(src: Path, canon_dir: Path | None = None) -> list[tuple[Path
 
     if name == "ground-tile.png":
         if canon_dir and (
-            (canon_dir / "ground-lip-v5.png").is_file()
+            (canon_dir / "ground-tile-v6.png").is_file()
+            or (canon_dir / "ground-lip-v5.png").is_file()
             or (canon_dir / "ground-tile-v5.png").is_file()
             or (canon_dir / "ground-tile-v4.png").is_file()
             or (canon_dir / "ground-tile-v3.png").is_file()

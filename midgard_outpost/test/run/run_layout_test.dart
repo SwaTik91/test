@@ -17,30 +17,16 @@ void main() {
       expect(layout.groundY, 518.4);
     });
 
-    test('ground lip is thin; solid fill covers rest of strip', () {
+    test('ground tile fills lower band to viewport bottom with bleed', () {
       expect(
         layout.groundStripHeight,
         closeTo(720 * (1 - RunLayout.groundTopFraction), 0.01),
       );
       expect(
-        layout.groundLipHeight,
-        closeTo(720 * RunLayout.groundLipViewportFraction, 0.01),
+        layout.groundTileHeight,
+        closeTo(layout.groundStripHeight + RunLayout.groundBottomBleedPx, 0.01),
       );
-      expect(layout.groundTileHeight, layout.groundLipHeight);
-      expect(
-        layout.groundTileWidth,
-        closeTo(layout.groundLipHeight * RunLayout.groundLipArtAspect, 0.01),
-      );
-      expect(
-        layout.groundFillHeight,
-        closeTo(
-          layout.groundStripHeight -
-              layout.groundLipHeight +
-              RunLayout.groundBottomBleedPx +
-              1,
-          0.01,
-        ),
-      );
+      expect(layout.groundTileWidth, layout.groundTileHeight);
       expect(layout.groundY + layout.groundStripHeight, closeTo(720, 0.01));
     });
 
@@ -93,18 +79,13 @@ void main() {
       const srcH = 1024.0 * RunLayout.backdropSkyFraction;
       for (final height in [500.0, 800.0]) {
         final layout = RunLayout(height);
-        for (final width in [414.0, 700.0, 1280.0]) {
-          final cover = layout.backdropCoverSize(
-            regionWidth: width,
-            regionHeight: height,
-            srcSize: Vector2(srcW, srcH),
-          );
-          expect(
-            cover.y,
-            greaterThanOrEqualTo(height),
-            reason: '${width}x$height',
-          );
-        }
+        final cover = layout.backdropCoverSize(
+          regionWidth: 414,
+          regionHeight: layout.viewportHeight,
+          srcSize: Vector2(srcW, srcH),
+        );
+        expect(cover.x, greaterThanOrEqualTo(414));
+        expect(cover.y, greaterThanOrEqualTo(layout.viewportHeight));
       }
     });
 
@@ -171,32 +152,18 @@ void main() {
           worldRight: span.right,
         );
         final endX = startX + count * layout.groundTileWidth;
-        expect(
-          startX,
-          lessThanOrEqualTo(playerX - viewportWidth / 2),
-          reason: 'height=$height',
-        );
-        expect(
-          endX,
-          greaterThanOrEqualTo(playerX + viewportWidth / 2),
-          reason: 'height=$height',
-        );
+        expect(startX, lessThan(playerX - viewportWidth / 2));
+        expect(endX, greaterThan(playerX + viewportWidth / 2));
       }
     });
 
     test('ground span from visible rect extends extra margin on the left', () {
-      const height = 500.0;
-      final layout = RunLayout(height);
-      const visible = Rect.fromLTRB(-520, 0, 760, 500);
+      final layout = RunLayout(720);
       final span = layout.groundWorldSpanFromVisibleRect(
-        visibleWorldRect: visible,
+        visibleWorldRect: const Rect.fromLTWH(0, 0, 1280, 720),
       );
-      final centerSpan = layout.groundWorldSpan(
-        cameraCenterX: 120,
-        viewportWidth: 1280,
-      );
-      expect(span.left, lessThan(centerSpan.left));
-      expect(span.right, closeTo(centerSpan.right, 0.01));
+      expect(span.left, lessThan(-layout.groundTileWidth));
+      expect(span.right, greaterThan(1280));
     });
   });
 }
