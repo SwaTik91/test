@@ -380,7 +380,7 @@ def dest_for_source(src: Path) -> list[tuple[Path, int, str]]:
     if name == "bg-town.png":
         return [(Path("hub") / "town_bg.png", 1920, "max_edge")]
 
-    if name == "bg-fields.png":
+    if name == "bg-fields-prontera.png":
         return [(Path("world") / "bg_fields.png", 1920, "max_edge")]
 
     if name == "bg-forest.png":
