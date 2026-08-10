@@ -162,11 +162,18 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   final List<ChestComponent> _chests = [];
 
   late final Sprite _projectileSprite;
+  late final Sprite _doubleStrafeSprite;
+  late final Sprite _windArrowSprite;
+  late final Sprite _arrowShowerSprite;
+  SpriteAnimation? _concentrateAuraAnimation;
+  SpriteAnimationComponent? _concentrateAura;
   late final Sprite _bgFieldsSkySprite;
   late final Sprite _bgForestSkySprite;
   SpriteComponent? _biomeBackground;
   Biome _displayedBiome = Biome.fields;
   RunLayout _layout = RunLayout(RunLayout.referenceHeight);
+  double _concentrateTimer = 0;
+  int _concentrateBonus = 0;
 
   RunState _runState;
   List<RunUpgradeDef> _pendingUpgradeOffers = const [];
@@ -225,6 +232,18 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _bgForestSkySprite = _skyBackdropCrop(bgForestSprite);
       _projectileSprite = await ArtAtlas.loadSprite(
         ArtAtlas.projectilePath(hero.classId),
+      );
+      _doubleStrafeSprite = await ArtAtlas.loadSprite(ArtAtlas.doubleStrafeArrow);
+      _windArrowSprite = await ArtAtlas.loadSprite(ArtAtlas.windArrow);
+      _arrowShowerSprite = await ArtAtlas.loadSprite(ArtAtlas.arrowShowerArrow);
+      final auraSprites = <Sprite>[];
+      for (final path in ArtAtlas.concentrateAuraFrames) {
+        auraSprites.add(await ArtAtlas.loadSprite(path));
+      }
+      _concentrateAuraAnimation = SpriteAnimation.spriteList(
+        auraSprites,
+        stepTime: 0.12,
+        loop: true,
       );
 
       loadStage = 'layout';
@@ -454,6 +473,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _handleMonsterContact();
     _collectReadyKills();
     _tickPlayerUpgradeTimers(dt);
+    _tickConcentrate(dt);
     _applyPlayerRegen(dt);
     _publishHudIfNeeded();
   }
@@ -709,6 +729,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final roll = CombatMath.rollBasicAttackDamage(
       hero,
       ownedUpgradeIds: ownedRunUpgradeIds,
+      temporaryAllStatsBonus: _concentrateBonus,
       rng: _rng,
     );
     _spawnBasicAttackVisual(target, roll);
@@ -756,11 +777,19 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void _applySkillEvent(SkillCastEvent event) {
     player.playCastAnimation();
+    if (event.skillId == 'concentrate') {
+      _activateConcentrate();
+      return;
+    }
     final targets = _targetsInRange(
       event.range,
     ).take(event.targetCount).toList(growable: false);
     if (targets.isEmpty) {
       _spawnSkillVfx(player.center, size: Vector2.all(96));
+      return;
+    }
+    if (event.skillId == 'arrow_shower') {
+      _spawnArrowShower(event, targets);
       return;
     }
     for (final target in targets) {
@@ -769,11 +798,125 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         critChanceValue: CombatMath.critChance(
           hero,
           ownedUpgradeIds: ownedRunUpgradeIds,
+          temporaryAllStatsBonus: _concentrateBonus,
         ),
         rng: _rng,
       );
       _spawnSkillVisual(event, target, roll);
     }
+  }
+
+  void _activateConcentrate() {
+    final rank = skillRank('concentrate');
+    _concentrateBonus = AutoSkillSystem.concentrateStatBonus(rank);
+    _concentrateTimer = 20;
+    _syncPlayerUpgradeStats();
+    _ensureConcentrateAura();
+    _spawnSkillVfx(player.center, size: Vector2.all(110));
+  }
+
+  void _tickConcentrate(double dt) {
+    if (_concentrateTimer <= 0) {
+      return;
+    }
+    _concentrateTimer = (_concentrateTimer - dt).clamp(0, 20).toDouble();
+    if (_concentrateAura != null && _concentrateAura!.isMounted) {
+      _concentrateAura!.position = player.center;
+    }
+    if (_concentrateTimer <= 0 && _concentrateBonus > 0) {
+      _concentrateBonus = 0;
+      _removeConcentrateAura();
+      _syncPlayerUpgradeStats();
+    }
+  }
+
+  void _ensureConcentrateAura() {
+    final animation = _concentrateAuraAnimation;
+    if (animation == null) {
+      return;
+    }
+    if (_concentrateAura != null && _concentrateAura!.isMounted) {
+      return;
+    }
+    final aura = SpriteAnimationComponent(
+      animation: animation,
+      size: Vector2.all(96),
+      anchor: Anchor.center,
+      position: player.center,
+      priority: player.priority - 1,
+    )..paint.filterQuality = FilterQuality.none;
+    _concentrateAura = aura;
+    world.add(aura);
+  }
+
+  void _removeConcentrateAura() {
+    _concentrateAura?.removeFromParent();
+    _concentrateAura = null;
+  }
+
+  void _spawnArrowShower(SkillCastEvent event, List<MonsterComponent> targets) {
+    final roll = CombatMath.rollSkillDamage(
+      event.damage,
+      critChanceValue: CombatMath.critChance(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
+      rng: _rng,
+    );
+    const rainCount = 18;
+    var shot = 0;
+    for (final target in targets) {
+      final impactDelay = 0.28 + _rng.nextDouble() * 0.18;
+      _spawnFallingArrow(
+        target: target,
+        duration: impactDelay,
+        onHit: () {
+          if (!target.isMounted || !target.isAlive) {
+            return;
+          }
+          _spawnSkillVfx(target.center, size: Vector2.all(100));
+          _damageMonster(
+            target,
+            roll.amount,
+            skillId: event.skillId,
+            isCrit: roll.isCrit,
+          );
+          _tryCollectKill(target);
+        },
+      );
+      shot += 1;
+    }
+    while (shot < rainCount) {
+      final target = targets[shot % targets.length];
+      final impactDelay = 0.22 + _rng.nextDouble() * 0.35;
+      _spawnFallingArrow(target: target, duration: impactDelay);
+      shot += 1;
+    }
+  }
+
+  void _spawnFallingArrow({
+    required MonsterComponent target,
+    required double duration,
+    void Function()? onHit,
+  }) {
+    final end = target.center.clone()
+      ..x += (_rng.nextDouble() - 0.5) * 28
+      ..y -= target.size.y * 0.15;
+    final start = Vector2(
+      end.x + (_rng.nextDouble() - 0.5) * 40,
+      end.y - (180 + _rng.nextDouble() * 80),
+    );
+    world.add(
+      ProjectileComponent(
+        sprite: _arrowShowerSprite,
+        start: start,
+        end: end,
+        duration: duration,
+        visualHeight: 56,
+        onArrived: onHit,
+      )..paint.filterQuality = FilterQuality.none,
+    );
   }
 
   void _damageMonster(
@@ -867,11 +1010,55 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     final start = player.center;
     final end = target.center;
     final isUlt = event.kind == SkillCastKind.ultimate;
-    final fly = event.projectile;
-    final duration = isUlt ? 0.38 : (fly ? 0.32 : 0.16);
+    final duration = isUlt ? 0.38 : 0.32;
     final height = isUlt
         ? ProjectileComponent.ultimateVisualHeight
         : ProjectileComponent.skillVisualHeight;
+
+    if (event.skillId == 'double_strafe') {
+      final half = math.max(1, (roll.amount / 2).round());
+      final offsets = <Vector2>[Vector2(0, -10), Vector2(0, 10)];
+      for (var i = 0; i < offsets.length; i++) {
+        final offset = offsets[i];
+        final dealsDamage = i == 0;
+        world.add(
+          ProjectileComponent(
+            sprite: _doubleStrafeSprite,
+            start: start + offset,
+            end: end + offset,
+            duration: duration + i * 0.04,
+            visualHeight: height,
+            onArrived: () {
+              if (!target.isMounted || !target.isAlive) {
+                return;
+              }
+              _spawnSkillVfx(target.center, size: Vector2.all(88));
+              if (dealsDamage) {
+                _damageMonster(
+                  target,
+                  half,
+                  skillId: event.skillId,
+                  isCrit: roll.isCrit,
+                );
+              } else {
+                _damageMonster(
+                  target,
+                  roll.amount - half,
+                  skillId: event.skillId,
+                  isCrit: roll.isCrit,
+                );
+              }
+              _tryCollectKill(target);
+            },
+          )..paint.filterQuality = FilterQuality.none,
+        );
+      }
+      return;
+    }
+
+    final sprite = event.skillId == 'wind_arrow'
+        ? _windArrowSprite
+        : _projectileSprite;
 
     void onHit() {
       if (!target.isMounted || !target.isAlive) {
@@ -890,30 +1077,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _tryCollectKill(target);
     }
 
-    if (fly) {
-      world.add(
-        ProjectileComponent(
-          sprite: _projectileSprite,
-          start: start,
-          end: end,
-          duration: duration,
-          visualHeight: height,
-          onArrived: onHit,
-        )..paint.filterQuality = FilterQuality.low,
-      );
-      return;
-    }
-
-    // Point-blank skills still show a short travel so the cast reads as directed.
     world.add(
       ProjectileComponent(
-        sprite: _projectileSprite,
+        sprite: sprite,
         start: start,
         end: end,
         duration: duration,
-        visualHeight: height,
+        visualHeight: event.skillId == 'wind_arrow' ? 56 : height,
         onArrived: onHit,
-      )..paint.filterQuality = FilterQuality.low,
+      )..paint.filterQuality = FilterQuality.none,
     );
   }
 
@@ -1199,13 +1371,25 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void _syncPlayerUpgradeStats() {
     player.setMaxHp(
-      CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.maxHp(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     player.setMaxSp(
-      CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.maxSp(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     player.setMoveSpeed(
-      CombatMath.moveSpeed(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.moveSpeed(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     autoSkillSystem.setMaxSp(player.maxSp);
   }

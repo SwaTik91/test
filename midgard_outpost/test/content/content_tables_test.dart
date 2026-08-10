@@ -12,11 +12,15 @@ void main() {
     }
   });
 
-  test('each skill has exactly 3 run upgrades', () {
+  test('each combat skill has exactly 3 run upgrades', () {
     for (final skill in SkillsCatalog.all) {
+      if (skill.kind == SkillKind.passive || skill.id == 'concentrate') {
+        continue;
+      }
       final ups = RunUpgradesCatalog.forSkill(skill.id);
       expect(ups, hasLength(3), reason: skill.id);
     }
+    expect(RunUpgradesCatalog.forSkill('concentrate'), isEmpty);
   });
 
   test('general run upgrades pool has 18 entries', () {
@@ -39,7 +43,7 @@ void main() {
     );
     expect(
       archerPool.where((u) => u.kind == RunUpgradeKind.skill),
-      hasLength(15),
+      hasLength(12),
     );
   });
 }

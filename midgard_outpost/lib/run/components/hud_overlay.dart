@@ -18,7 +18,7 @@ class HudOverlay extends StatelessWidget {
   static String shortSkillLabel(SkillDef skill) => switch (skill.id) {
         'double_strafe' => 'ДС',
         'wind_arrow' => 'ВС',
-        'trap' => 'Лов',
+        'concentrate' => 'Конц',
         'arrow_shower' => 'Град',
         'fire_bolt' => 'Огн',
         'frost' => 'Мор',
@@ -126,6 +126,7 @@ class HudOverlay extends StatelessWidget {
                           for (final skill in skills)
                             _SkillButton(
                               label: shortSkillLabel(skill),
+                              iconPath: ArtAtlas.skillIconPath(skill.id),
                               cooldown: game.skillCooldownRemaining(skill.id),
                               enabled: game.skillRank(skill.id) > 0 &&
                                   game.skillCooldownRemaining(skill.id) <= 0 &&
@@ -154,12 +155,14 @@ class HudOverlay extends StatelessWidget {
 class _SkillButton extends StatelessWidget {
   const _SkillButton({
     required this.label,
+    this.iconPath,
     required this.cooldown,
     required this.enabled,
     required this.onTap,
   });
 
   final String label;
+  final String? iconPath;
   final double cooldown;
   final bool enabled;
   final VoidCallback onTap;
@@ -183,16 +186,75 @@ class _SkillButton extends StatelessWidget {
           child: SizedBox(
             width: 56,
             height: 56,
-            child: Center(
-              child: Text(
-                cdText ?? label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cdText != null ? Colors.white70 : const Color(0xFFFFF1C2),
-                  fontWeight: FontWeight.w800,
-                  fontSize: cdText != null ? 16 : 13,
-                ),
-              ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (iconPath != null)
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Image.asset(
+                      ArtAtlas.flutterAsset(iconPath!),
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.none,
+                    ),
+                  )
+                else
+                  Text(
+                    cdText ?? label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color:
+                          cdText != null ? Colors.white70 : const Color(0xFFFFF1C2),
+                      fontWeight: FontWeight.w800,
+                      fontSize: cdText != null ? 16 : 13,
+                    ),
+                  ),
+                if (iconPath != null && cdText == null)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFFFF1C2),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 9,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (iconPath != null && cdText != null)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: Text(
+                          cdText,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

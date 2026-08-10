@@ -68,6 +68,9 @@ void main() {
     expect(ArtAtlas.arrow, 'projectiles/arrow.png');
     expect(ArtAtlas.fireball, 'projectiles/fireball.png');
     expect(ArtAtlas.holyBolt, 'projectiles/holy_bolt.png');
+    expect(ArtAtlas.doubleStrafeArrow, 'projectiles/double_strafe_arrow.png');
+    expect(ArtAtlas.windArrow, 'projectiles/wind_arrow.png');
+    expect(ArtAtlas.arrowShowerArrow, 'projectiles/arrow_shower_arrow.png');
     expect(ArtAtlas.projectilePath(HeroClassId.archer), ArtAtlas.arrow);
     expect(ArtAtlas.projectilePath(HeroClassId.mage), ArtAtlas.fireball);
     expect(ArtAtlas.projectilePath(HeroClassId.paladin), ArtAtlas.holyBolt);
@@ -79,6 +82,15 @@ void main() {
     expect(ArtAtlas.hpBarFrame, 'ui/hp_bar_frame.png');
     expect(ArtAtlas.btnJump, 'ui/btn_jump.png');
     expect(ArtAtlas.btnUlt, 'ui/btn_ult.png');
+    expect(ArtAtlas.skillIconPath('concentrate'), ArtAtlas.skillConcentrate);
+  });
+
+  test('skill icon paths map archer skills', () {
+    expect(ArtAtlas.skillIconPath('double_strafe'), ArtAtlas.skillDoubleStrafe);
+    expect(ArtAtlas.skillIconPath('wind_arrow'), ArtAtlas.skillWindArrow);
+    expect(ArtAtlas.skillIconPath('eagle_eye'), ArtAtlas.skillEagleEye);
+    expect(ArtAtlas.skillIconPath('arrow_shower'), ArtAtlas.skillArrowShower);
+    expect(ArtAtlas.skillIconPath('fire_bolt'), isNull);
   });
 
   test('allPaths lists every game asset and excludes _style', () {
@@ -102,6 +114,9 @@ void main() {
       'projectiles/arrow.png',
       'projectiles/fireball.png',
       'projectiles/holy_bolt.png',
+      'projectiles/double_strafe_arrow.png',
+      'projectiles/wind_arrow.png',
+      'projectiles/arrow_shower_arrow.png',
       'world/ground_tile.png',
       'world/bg_fields.png',
       'world/bg_forest.png',
@@ -112,6 +127,15 @@ void main() {
       'ui/hp_bar_frame.png',
       'ui/btn_jump.png',
       'ui/btn_ult.png',
+      'ui/skills/double_strafe.png',
+      'ui/skills/wind_arrow.png',
+      'ui/skills/concentrate.png',
+      'ui/skills/eagle_eye.png',
+      'ui/skills/arrow_shower.png',
+      'vfx/concentrate_0.png',
+      'vfx/concentrate_1.png',
+      'vfx/concentrate_2.png',
+      'vfx/concentrate_3.png',
     };
 
     expect(ArtAtlas.allPaths.toSet(), expected);

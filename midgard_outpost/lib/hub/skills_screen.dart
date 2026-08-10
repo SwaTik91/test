@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../art/art_atlas.dart';
 import '../content/balance.dart';
 import '../content/skills.dart';
 import 'game_controller.dart';
@@ -83,6 +84,37 @@ class _SkillCard extends StatelessWidget {
   final VoidCallback onAllocate;
   final TextTheme theme;
 
+  void _showDescription(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HubTheme.cardBg,
+        title: Text(skill.name, style: HubTheme.cardTitleStyle(theme)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ур. $rank / $maxRank',
+              style: HubTheme.cardSubtitleStyle(theme),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              skill.description,
+              style: theme.bodyMedium?.copyWith(color: HubTheme.textPrimary),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final atMax = rank >= maxRank;
@@ -92,7 +124,10 @@ class _SkillCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          _SkillIcon(kind: skill.kind),
+          GestureDetector(
+            onLongPress: () => _showDescription(context),
+            child: _SkillIcon(skill: skill),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -134,13 +169,32 @@ class _SkillCard extends StatelessWidget {
 }
 
 class _SkillIcon extends StatelessWidget {
-  const _SkillIcon({required this.kind});
+  const _SkillIcon({required this.skill});
 
-  final SkillKind kind;
+  final SkillDef skill;
 
   @override
   Widget build(BuildContext context) {
-    final icon = switch (kind) {
+    final iconPath = ArtAtlas.skillIconPath(skill.id);
+    if (iconPath != null) {
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: HubTheme.cardBgAlt,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: HubTheme.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset(
+          ArtAtlas.flutterAsset(iconPath),
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.none,
+        ),
+      );
+    }
+
+    final icon = switch (skill.kind) {
       SkillKind.auto => Icons.bolt,
       SkillKind.passive => Icons.shield,
       SkillKind.ultimate => Icons.star,

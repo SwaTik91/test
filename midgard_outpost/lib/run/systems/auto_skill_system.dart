@@ -104,6 +104,15 @@ class AutoSkillSystem {
     final kind = skill.kind == SkillKind.ultimate
         ? SkillCastKind.ultimate
         : SkillCastKind.auto;
+
+    // Self-buff: no enemy required.
+    if (skill.id == 'concentrate') {
+      if (kind == SkillCastKind.ultimate) {
+        return null;
+      }
+      return _tryCast(skill, kind, 1);
+    }
+
     if (kind == SkillCastKind.ultimate) {
       if (_ultimateCooldownRemaining > 0) {
         return null;
@@ -139,6 +148,9 @@ class AutoSkillSystem {
     }
     return _tryCast(skill, kind, skillEnemiesInRange);
   }
+
+  /// Temporary all-stat bonus while Concentrate is active: rank + 1.
+  static int concentrateStatBonus(int rank) => rank <= 0 ? 0 : rank + 1;
 
   bool tryUltimate({
     int enemiesInRange = 1,
@@ -345,13 +357,13 @@ class AutoSkillSystem {
         rankDamage: 5,
         range: 380,
       ),
-      'trap' => const _SkillTuning(
-        cooldown: 4.5,
-        spCost: 12,
-        baseDamage: 16,
-        rankDamage: 4,
-        range: 260,
-        projectile: true,
+      'concentrate' => const _SkillTuning(
+        cooldown: 8,
+        spCost: 14,
+        baseDamage: 0,
+        rankDamage: 0,
+        range: 0,
+        projectile: false,
       ),
       'fire_bolt' => const _SkillTuning(
         cooldown: 2.4,

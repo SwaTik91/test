@@ -22,8 +22,8 @@ void main() {
       'ВС',
     );
     expect(
-      HudOverlay.shortSkillLabel(SkillsCatalog.byId('trap')),
-      'Лов',
+      HudOverlay.shortSkillLabel(SkillsCatalog.byId('concentrate')),
+      'Конц',
     );
     expect(
       HudOverlay.shortSkillLabel(SkillsCatalog.byId('arrow_shower')),

@@ -36,6 +36,9 @@ class ArtAtlas {
   static const arrow = 'projectiles/arrow.png';
   static const fireball = 'projectiles/fireball.png';
   static const holyBolt = 'projectiles/holy_bolt.png';
+  static const doubleStrafeArrow = 'projectiles/double_strafe_arrow.png';
+  static const windArrow = 'projectiles/wind_arrow.png';
+  static const arrowShowerArrow = 'projectiles/arrow_shower_arrow.png';
 
   // World
   static const groundTile = 'world/ground_tile.png';
@@ -52,6 +55,26 @@ class ArtAtlas {
   static const hpBarFrame = 'ui/hp_bar_frame.png';
   static const btnJump = 'ui/btn_jump.png';
   static const btnUlt = 'ui/btn_ult.png';
+
+  // Skill icons
+  static const skillDoubleStrafe = 'ui/skills/double_strafe.png';
+  static const skillWindArrow = 'ui/skills/wind_arrow.png';
+  static const skillConcentrate = 'ui/skills/concentrate.png';
+  static const skillEagleEye = 'ui/skills/eagle_eye.png';
+  static const skillArrowShower = 'ui/skills/arrow_shower.png';
+
+  // Concentrate aura frames
+  static const concentrateAura0 = 'vfx/concentrate_0.png';
+  static const concentrateAura1 = 'vfx/concentrate_1.png';
+  static const concentrateAura2 = 'vfx/concentrate_2.png';
+  static const concentrateAura3 = 'vfx/concentrate_3.png';
+
+  static const concentrateAuraFrames = [
+    concentrateAura0,
+    concentrateAura1,
+    concentrateAura2,
+    concentrateAura3,
+  ];
 
   /// Every game asset path from art spec §4 (excludes `_style/` reference art).
   static const allPaths = [
@@ -74,6 +97,9 @@ class ArtAtlas {
     arrow,
     fireball,
     holyBolt,
+    doubleStrafeArrow,
+    windArrow,
+    arrowShowerArrow,
     groundTile,
     bgFields,
     bgForest,
@@ -84,7 +110,25 @@ class ArtAtlas {
     hpBarFrame,
     btnJump,
     btnUlt,
+    skillDoubleStrafe,
+    skillWindArrow,
+    skillConcentrate,
+    skillEagleEye,
+    skillArrowShower,
+    concentrateAura0,
+    concentrateAura1,
+    concentrateAura2,
+    concentrateAura3,
   ];
+
+  static String? skillIconPath(String skillId) => switch (skillId) {
+        'double_strafe' => skillDoubleStrafe,
+        'wind_arrow' => skillWindArrow,
+        'concentrate' => skillConcentrate,
+        'eagle_eye' => skillEagleEye,
+        'arrow_shower' => skillArrowShower,
+        _ => null,
+      };
 
   static String heroPath(HeroClassId id) => switch (id) {
         HeroClassId.archer => heroArcher,

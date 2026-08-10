@@ -181,28 +181,6 @@ class RunUpgradesCatalog {
       name: 'Режущий ветер',
       description: '+% урона и лёгкий DoT.',
     ),
-    // Лучник — Ловушка
-    RunUpgradeDef(
-      id: 'trap__spiked_trap',
-      kind: RunUpgradeKind.skill,
-      skillId: 'trap',
-      name: 'Шипастая ловушка',
-      description: '+урон ловушки.',
-    ),
-    RunUpgradeDef(
-      id: 'trap__sticky_resin',
-      kind: RunUpgradeKind.skill,
-      skillId: 'trap',
-      name: 'Клейкая смола',
-      description: 'Дольше замедление.',
-    ),
-    RunUpgradeDef(
-      id: 'trap__double_setup',
-      kind: RunUpgradeKind.skill,
-      skillId: 'trap',
-      name: 'Двойная установка',
-      description: '2 ловушки за каст.',
-    ),
     // Лучник — Глаз орла
     RunUpgradeDef(
       id: 'eagle_eye__hawk_focus',

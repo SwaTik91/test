@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:midgard_outpost/content/skills.dart';
 import 'package:midgard_outpost/core/ids.dart';
 import 'package:midgard_outpost/progress/hero_progress.dart';
 import 'package:midgard_outpost/run/combat_math.dart';
@@ -114,19 +115,18 @@ void main() {
     final ids = sys.castableSkills.map((s) => s.id).toList();
     expect(
       ids,
-      containsAll(['double_strafe', 'wind_arrow', 'trap', 'arrow_shower']),
+      containsAll(['double_strafe', 'wind_arrow', 'concentrate', 'arrow_shower']),
     );
     expect(ids, isNot(contains('eagle_eye')));
   });
 
   test('each ranked archer combat skill can be cast manually', () {
-    const skillIds = [
+    const projectileSkills = [
       'double_strafe',
       'wind_arrow',
-      'trap',
       'arrow_shower',
     ];
-    for (final skillId in skillIds) {
+    for (final skillId in projectileSkills) {
       final sys = AutoSkillSystem(
         classId: HeroClassId.archer,
         ranks: {skillId: 1},
@@ -138,6 +138,28 @@ void main() {
       expect(event.damage, greaterThan(0));
       expect(event.projectile, isTrue, reason: '$skillId should fly');
     }
+  });
+
+  test('concentrate casts without enemies and applies no projectile damage', () {
+    final sys = AutoSkillSystem(
+      classId: HeroClassId.archer,
+      ranks: {'concentrate': 2},
+      upgrades: const {},
+    );
+
+    final event = sys.tryCastSkill('concentrate', enemiesInRange: 0);
+
+    expect(event, isNotNull);
+    expect(event!.skillId, 'concentrate');
+    expect(event.damage, 0);
+    expect(event.projectile, isFalse);
+    expect(AutoSkillSystem.concentrateStatBonus(2), 3);
+  });
+
+  test('trap is absent from archer skill catalog', () {
+    final ids = SkillsCatalog.forClass(HeroClassId.archer).map((s) => s.id);
+    expect(ids, isNot(contains('trap')));
+    expect(ids, contains('concentrate'));
   });
 
   test('owned skill upgrade increases matching skill damage', () {
