@@ -1,6 +1,15 @@
+import 'dart:math' as math;
+
 import '../core/ids.dart';
 import '../progress/hero_progress.dart';
 import 'run_upgrade_effects.dart';
+
+class DamageRoll {
+  const DamageRoll({required this.amount, required this.isCrit});
+
+  final int amount;
+  final bool isCrit;
+}
 
 class CombatMath {
   CombatMath._();
@@ -54,6 +63,37 @@ class CombatMath {
               ownedUpgradeIds,
             ))
         .round();
+  }
+
+  /// Discrete RO-style roll (crit = 1.5×), used for floating numbers.
+  static DamageRoll rollBasicAttackDamage(
+    HeroProgress hero, {
+    Set<String> ownedUpgradeIds = const {},
+    math.Random? rng,
+  }) {
+    final random = rng ?? math.Random();
+    final base =
+        _baseAttackDamage(hero, ownedUpgradeIds: ownedUpgradeIds) *
+        RunUpgradeEffects.basicAttackDamageMultiplier(
+          hero.classId,
+          ownedUpgradeIds,
+        );
+    final isCrit =
+        random.nextDouble() <
+        critChance(hero, ownedUpgradeIds: ownedUpgradeIds);
+    final amount = (base * (isCrit ? 1.5 : 1.0)).round().clamp(1, 99999);
+    return DamageRoll(amount: amount, isCrit: isCrit);
+  }
+
+  static DamageRoll rollSkillDamage(
+    int baseDamage, {
+    required double critChanceValue,
+    math.Random? rng,
+  }) {
+    final random = rng ?? math.Random();
+    final isCrit = random.nextDouble() < critChanceValue.clamp(0, 1);
+    final amount = (baseDamage * (isCrit ? 1.5 : 1.0)).round().clamp(1, 99999);
+    return DamageRoll(amount: amount, isCrit: isCrit);
   }
 
   static double critChance(

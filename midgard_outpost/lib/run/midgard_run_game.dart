@@ -16,6 +16,7 @@ import '../core/ids.dart';
 import '../progress/hero_progress.dart';
 import 'combat_math.dart';
 import 'components/chest_component.dart';
+import 'components/damage_number_component.dart';
 import 'components/monster_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
@@ -506,9 +507,20 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void tryCastUltimate() {
+    final skill = SkillsCatalog.forClass(
+      hero.classId,
+    ).firstWhere((skill) => skill.kind == SkillKind.ultimate);
+    tryCastSkill(skill.id);
+  }
+
+  void tryCastSkill(String skillId) {
+    if (!isRunReady || _finished) {
+      return;
+    }
     autoSkillSystem.sp = player.currentSp;
     final enemyDistances = _targetDistances();
-    final event = autoSkillSystem.tryCastUltimate(
+    final event = autoSkillSystem.tryCastSkill(
+      skillId,
       enemiesInRange: enemyDistances.length,
       enemyDistances: enemyDistances,
     );
@@ -519,14 +531,21 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _publishHud();
   }
 
+  double skillCooldownRemaining(String skillId) =>
+      autoSkillSystem.cooldownRemaining(skillId);
+
+  List<SkillDef> get castableSkills => autoSkillSystem.castableSkills;
+
+  int skillRank(String skillId) => hero.skillRanks[skillId] ?? 0;
+
   String _autoSkillNameForHero() {
-    final autoSkills = SkillsCatalog.forClass(
+    final castable = SkillsCatalog.forClass(
       hero.classId,
-    ).where((skill) => skill.kind == SkillKind.auto);
-    return autoSkills
+    ).where((skill) => skill.kind != SkillKind.passive);
+    return castable
         .firstWhere(
           (skill) => (hero.skillRanks[skill.id] ?? 0) > 0,
-          orElse: () => autoSkills.first,
+          orElse: () => castable.first,
         )
         .name;
   }
@@ -687,15 +706,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
 
     player.playCastAnimation();
-    _spawnBasicAttackVisual(target);
-    _damageMonster(
-      target,
-      CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    final roll = CombatMath.rollBasicAttackDamage(
+      hero,
+      ownedUpgradeIds: ownedRunUpgradeIds,
+      rng: _rng,
     );
-    _tryCollectKill(target);
+    _spawnBasicAttackVisual(target, roll);
   }
 
-  void _spawnBasicAttackVisual(MonsterComponent target) {
+  void _spawnBasicAttackVisual(MonsterComponent target, DamageRoll roll) {
     final start = player.center;
     final end = target.center;
     final isRanged = hero.classId != HeroClassId.paladin;
@@ -705,34 +724,34 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
           sprite: _projectileSprite,
           start: start,
           end: end,
-          duration: 0.18,
+          duration: 0.22,
           visualHeight: ProjectileComponent.basicVisualHeight,
-        )..paint.filterQuality = FilterQuality.none,
+          onArrived: () {
+            if (!target.isMounted || !target.isAlive) {
+              return;
+            }
+            _damageMonster(
+              target,
+              roll.amount,
+              isCrit: roll.isCrit,
+            );
+            _tryCollectKill(target);
+          },
+        )..paint.filterQuality = FilterQuality.low,
       );
       return;
     }
 
-    _spawnSkillVfx(end);
+    _spawnSkillVfx(end, size: Vector2.all(72));
+    _damageMonster(target, roll.amount, isCrit: roll.isCrit);
+    _tryCollectKill(target);
   }
 
   void _handleAutoSkills(double dt) {
+    // Manual skills only: tick CD + SP regen, never auto-cast.
     autoSkillSystem.sp = player.currentSp;
-    final enemyDistances = _targetDistances();
-    final events = autoSkillSystem.tick(
-      dt,
-      enemiesInRange: enemyDistances.length,
-      enemyDistances: enemyDistances,
-    );
+    autoSkillSystem.tick(dt, enemiesInRange: 0);
     player.setSp(autoSkillSystem.sp);
-
-    if (events.isEmpty) {
-      return;
-    }
-
-    for (final event in events) {
-      _applySkillEvent(event);
-    }
-    _publishHud();
   }
 
   void _applySkillEvent(SkillCastEvent event) {
@@ -741,24 +760,39 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       event.range,
     ).take(event.targetCount).toList(growable: false);
     if (targets.isEmpty) {
-      _spawnSkillVfx(player.center);
-    } else {
-      for (final target in targets) {
-        _spawnSkillVisual(event, target);
-        _spawnSkillVfx(target.center);
-        _damageMonster(target, event.damage, skillId: event.skillId);
-        _tryCollectKill(target);
-      }
+      _spawnSkillVfx(player.center, size: Vector2.all(96));
+      return;
+    }
+    for (final target in targets) {
+      final roll = CombatMath.rollSkillDamage(
+        event.damage,
+        critChanceValue: CombatMath.critChance(
+          hero,
+          ownedUpgradeIds: ownedRunUpgradeIds,
+        ),
+        rng: _rng,
+      );
+      _spawnSkillVisual(event, target, roll);
     }
   }
 
-  void _damageMonster(MonsterComponent target, int amount, {String? skillId}) {
+  void _damageMonster(
+    MonsterComponent target,
+    int amount, {
+    String? skillId,
+    bool isCrit = false,
+  }) {
     final before = target.currentHp;
     target.takeDamage(amount);
     final damageDealt = before - target.currentHp;
     if (damageDealt <= 0) {
       return;
     }
+    _spawnDamageNumber(
+      target.position.clone()..y -= target.size.y * 0.85,
+      damageDealt,
+      isCrit: isCrit,
+    );
 
     final healFraction = RunUpgradeEffects.lifestealFraction(
       skillId,
@@ -767,6 +801,16 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (healFraction > 0) {
       player.heal((damageDealt * healFraction).round());
     }
+  }
+
+  void _spawnDamageNumber(Vector2 position, int amount, {bool isCrit = false}) {
+    world.add(
+      DamageNumberComponent(
+        amount: amount,
+        position: position,
+        isCrit: isCrit,
+      ),
+    );
   }
 
   MonsterComponent? _nearestTargetInRange() {
@@ -815,19 +859,61 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     return distances;
   }
 
-  void _spawnSkillVisual(SkillCastEvent event, MonsterComponent target) {
+  void _spawnSkillVisual(
+    SkillCastEvent event,
+    MonsterComponent target,
+    DamageRoll roll,
+  ) {
     final start = player.center;
     final end = target.center;
+    final isUlt = event.kind == SkillCastKind.ultimate;
+    final fly = event.projectile;
+    final duration = isUlt ? 0.38 : (fly ? 0.32 : 0.16);
+    final height = isUlt
+        ? ProjectileComponent.ultimateVisualHeight
+        : ProjectileComponent.skillVisualHeight;
+
+    void onHit() {
+      if (!target.isMounted || !target.isAlive) {
+        return;
+      }
+      _spawnSkillVfx(
+        target.center,
+        size: Vector2.all(isUlt ? 120 : 88),
+      );
+      _damageMonster(
+        target,
+        roll.amount,
+        skillId: event.skillId,
+        isCrit: roll.isCrit,
+      );
+      _tryCollectKill(target);
+    }
+
+    if (fly) {
+      world.add(
+        ProjectileComponent(
+          sprite: _projectileSprite,
+          start: start,
+          end: end,
+          duration: duration,
+          visualHeight: height,
+          onArrived: onHit,
+        )..paint.filterQuality = FilterQuality.low,
+      );
+      return;
+    }
+
+    // Point-blank skills still show a short travel so the cast reads as directed.
     world.add(
       ProjectileComponent(
         sprite: _projectileSprite,
-        start: event.projectile ? start : end,
+        start: start,
         end: end,
-        duration: event.projectile ? 0.18 : 0.14,
-        visualHeight: event.kind == SkillCastKind.ultimate
-            ? ProjectileComponent.ultimateVisualHeight
-            : ProjectileComponent.skillVisualHeight,
-      )..paint.filterQuality = FilterQuality.none,
+        duration: duration,
+        visualHeight: height,
+        onArrived: onHit,
+      )..paint.filterQuality = FilterQuality.low,
     );
   }
 
@@ -860,10 +946,11 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
   }
 
-  void _spawnSkillVfx(Vector2 position) {
+  void _spawnSkillVfx(Vector2 position, {Vector2? size}) {
     VfxComponent.create(
       kind: VfxComponent.forClass(hero.classId),
       position: position,
+      size: size ?? Vector2.all(96),
     ).then(
       (vfx) {
         if (vfx != null) {
@@ -932,7 +1019,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       player.currentHp = 1;
       return;
     }
+    final before = player.currentHp;
     player.takeDamage(amount);
+    final dealt = before - player.currentHp;
+    if (dealt > 0) {
+      _spawnDamageNumber(
+        player.position.clone()..y -= player.size.y * 0.9,
+        dealt,
+      );
+    }
   }
 
   void _applyThorns(List<MonsterComponent> touchingMonsters, int damageTaken) {

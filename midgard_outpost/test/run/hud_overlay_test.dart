@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:midgard_outpost/content/skills.dart';
 import 'package:midgard_outpost/run/components/hud_overlay.dart';
 
 void main() {
@@ -9,5 +10,24 @@ void main() {
 
     expect(constraints.maxWidth, closeTo(1280 * 0.28, 0.01));
     expect(constraints.maxHeight, closeTo(720 * 0.30, 0.01));
+  });
+
+  test('archer skill buttons use short HUD labels', () {
+    expect(
+      HudOverlay.shortSkillLabel(SkillsCatalog.byId('double_strafe')),
+      'ДС',
+    );
+    expect(
+      HudOverlay.shortSkillLabel(SkillsCatalog.byId('wind_arrow')),
+      'ВС',
+    );
+    expect(
+      HudOverlay.shortSkillLabel(SkillsCatalog.byId('trap')),
+      'Лов',
+    );
+    expect(
+      HudOverlay.shortSkillLabel(SkillsCatalog.byId('arrow_shower')),
+      'Град',
+    );
   });
 }

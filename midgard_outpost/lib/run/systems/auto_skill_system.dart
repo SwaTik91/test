@@ -46,11 +46,37 @@ class AutoSkillSystem {
 
   double get ultimateCooldownRemaining => _ultimateCooldownRemaining;
 
+  /// Castable non-passive skills for HUD (auto + ultimate).
+  List<SkillDef> get castableSkills => SkillsCatalog.forClass(classId)
+      .where((skill) => skill.kind != SkillKind.passive)
+      .toList(growable: false);
+
   void setMaxSp(int value) {
     maxSp = value;
     sp = sp.clamp(0, maxSp).toInt();
   }
 
+  double cooldownRemaining(String skillId) {
+    final skill = _skillById(skillId);
+    if (skill == null) {
+      return 0;
+    }
+    if (skill.kind == SkillKind.ultimate) {
+      return _ultimateCooldownRemaining;
+    }
+    return _cooldowns[skillId] ?? 0;
+  }
+
+  SkillDef? _skillById(String skillId) {
+    for (final skill in SkillsCatalog.forClass(classId)) {
+      if (skill.id == skillId) {
+        return skill;
+      }
+    }
+    return null;
+  }
+
+  /// Ticks cooldowns + SP regen only. Does **not** auto-cast.
   List<SkillCastEvent> tick(
     double dt, {
     required int enemiesInRange,
@@ -58,33 +84,60 @@ class AutoSkillSystem {
   }) {
     _tickCooldowns(dt);
     _regenerateSp(dt);
+    return const [];
+  }
 
-    final distances = enemyDistances?.toList(growable: false);
-    if ((distances == null && enemiesInRange <= 0) ||
-        (distances != null && distances.isEmpty)) {
-      return const [];
+  /// Manual cast for any ranked auto/ultimate skill.
+  SkillCastEvent? tryCastSkill(
+    String skillId, {
+    int enemiesInRange = 1,
+    Iterable<double>? enemyDistances,
+  }) {
+    final skill = _skillById(skillId);
+    if (skill == null || skill.kind == SkillKind.passive) {
+      return null;
+    }
+    if (_rank(skill.id) <= 0) {
+      return null;
     }
 
-    for (final skill in SkillsCatalog.forClass(classId)) {
-      if (skill.kind != SkillKind.auto || _rank(skill.id) <= 0) {
-        continue;
+    final kind = skill.kind == SkillKind.ultimate
+        ? SkillCastKind.ultimate
+        : SkillCastKind.auto;
+    if (kind == SkillCastKind.ultimate) {
+      if (_ultimateCooldownRemaining > 0) {
+        return null;
       }
+      final distances = enemyDistances?.toList(growable: false);
       final skillEnemiesInRange = _enemyCountForSkill(
         skill,
-        SkillCastKind.auto,
+        kind,
         enemiesInRange,
         distances,
       );
       if (skillEnemiesInRange <= 0) {
-        continue;
+        return null;
       }
-      final event = _tryCast(skill, SkillCastKind.auto, skillEnemiesInRange);
-      if (event != null) {
-        return [event];
+      final event = _buildEvent(skill, kind, skillEnemiesInRange);
+      if (event.spCost > sp) {
+        return null;
       }
+      sp -= event.spCost;
+      _ultimateCooldownRemaining = _cooldownFor(skill.id, kind);
+      return event;
     }
 
-    return const [];
+    final distances = enemyDistances?.toList(growable: false);
+    final skillEnemiesInRange = _enemyCountForSkill(
+      skill,
+      kind,
+      enemiesInRange,
+      distances,
+    );
+    if (skillEnemiesInRange <= 0) {
+      return null;
+    }
+    return _tryCast(skill, kind, skillEnemiesInRange);
   }
 
   bool tryUltimate({
@@ -104,32 +157,11 @@ class AutoSkillSystem {
     final skill = SkillsCatalog.forClass(
       classId,
     ).firstWhere((skill) => skill.kind == SkillKind.ultimate);
-    final distances = enemyDistances?.toList(growable: false);
-    final skillEnemiesInRange = _enemyCountForSkill(
-      skill,
-      SkillCastKind.ultimate,
-      enemiesInRange,
-      distances,
+    return tryCastSkill(
+      skill.id,
+      enemiesInRange: enemiesInRange,
+      enemyDistances: enemyDistances,
     );
-    if (skillEnemiesInRange <= 0 || _ultimateCooldownRemaining > 0) {
-      return null;
-    }
-    if (_rank(skill.id) <= 0) {
-      return null;
-    }
-
-    final event = _buildEvent(
-      skill,
-      SkillCastKind.ultimate,
-      skillEnemiesInRange,
-    );
-    if (event.spCost > sp) {
-      return null;
-    }
-
-    sp -= event.spCost;
-    _ultimateCooldownRemaining = _cooldownFor(skill.id, SkillCastKind.ultimate);
-    return event;
   }
 
   SkillCastEvent? _tryCast(
@@ -266,7 +298,7 @@ class AutoSkillSystem {
           rankDamage: 8,
           range: 360,
           targetCount: 5,
-          projectile: false,
+          projectile: true,
         ),
         'meteor' => const _SkillTuning(
           cooldown: 10,
@@ -319,7 +351,7 @@ class AutoSkillSystem {
         baseDamage: 16,
         rankDamage: 4,
         range: 260,
-        projectile: false,
+        projectile: true,
       ),
       'fire_bolt' => const _SkillTuning(
         cooldown: 2.4,

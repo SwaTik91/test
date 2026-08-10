@@ -9,6 +9,7 @@ class ProjectileComponent extends SpriteComponent {
     required Vector2 end,
     required this.duration,
     double visualHeight = 24,
+    this.onArrived,
   }) : _start = start.clone(),
        _end = end.clone(),
        _elapsed = 0,
@@ -23,13 +24,15 @@ class ProjectileComponent extends SpriteComponent {
        );
 
   static const double basicVisualHeight = 24;
-  static const double skillVisualHeight = 28;
-  static const double ultimateVisualHeight = 34;
+  static const double skillVisualHeight = 48;
+  static const double ultimateVisualHeight = 72;
 
   final Vector2 _start;
   final Vector2 _end;
   final double duration;
+  final void Function()? onArrived;
   double _elapsed;
+  bool _arrived = false;
 
   @override
   void update(double dt) {
@@ -40,7 +43,9 @@ class ProjectileComponent extends SpriteComponent {
       ..x = _start.x + ((_end.x - _start.x) * t)
       ..y = _start.y + ((_end.y - _start.y) * t);
 
-    if (_elapsed >= duration) {
+    if (!_arrived && _elapsed >= duration) {
+      _arrived = true;
+      onArrived?.call();
       removeFromParent();
     }
   }
