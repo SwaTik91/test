@@ -60,8 +60,8 @@ Removed: `trap` and upgrades `trap__spiked_trap`, `trap__sticky_resin`, `trap__d
 - Stat bonus: `rank + 1` added to **every** `StatId` while active (STR/AGI/VIT/INT/DEX/LUK).
 - CombatMath / move speed / HP-SP derived stats that read hero stats during the run must include this temporary bonus (run-local overlay, not written into saved `hero.stats`).
 - Refreshing while active: **refresh duration** to 20s; bonus uses current rank (no stacking).
-- Visual: soft aura on the hero for the buff duration (`vfx/concentrate_*` or single looping frame set).
-- HUD: optional small timer badge near SP or skill button while active (nice-to-have; not required for v1 if aura is clear).
+- Visual: soft aura on the hero for the buff duration (`vfx/concentrate_*`, 2–4 loop frames). Required.
+- HUD timer badge: out of scope for this pass (aura + skill CD convey state).
 
 ### Arrow Shower (ultimate)
 
