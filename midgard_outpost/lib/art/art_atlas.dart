@@ -63,19 +63,6 @@ class ArtAtlas {
   static const skillEagleEye = 'ui/skills/eagle_eye.png';
   static const skillArrowShower = 'ui/skills/arrow_shower.png';
 
-  // Concentrate aura frames
-  static const concentrateAura0 = 'vfx/concentrate_0.png';
-  static const concentrateAura1 = 'vfx/concentrate_1.png';
-  static const concentrateAura2 = 'vfx/concentrate_2.png';
-  static const concentrateAura3 = 'vfx/concentrate_3.png';
-
-  static const concentrateAuraFrames = [
-    concentrateAura0,
-    concentrateAura1,
-    concentrateAura2,
-    concentrateAura3,
-  ];
-
   /// Every game asset path from art spec §4 (excludes `_style/` reference art).
   static const allPaths = [
     heroArcher,
@@ -115,10 +102,6 @@ class ArtAtlas {
     skillConcentrate,
     skillEagleEye,
     skillArrowShower,
-    concentrateAura0,
-    concentrateAura1,
-    concentrateAura2,
-    concentrateAura3,
   ];
 
   static String? skillIconPath(String skillId) => switch (skillId) {

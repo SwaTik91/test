@@ -189,7 +189,7 @@ class _SkillIcon extends StatelessWidget {
         child: Image.asset(
           ArtAtlas.flutterAsset(iconPath),
           fit: BoxFit.cover,
-          filterQuality: FilterQuality.none,
+          filterQuality: FilterQuality.medium,
         ),
       );
     }

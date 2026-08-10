@@ -165,8 +165,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   late final Sprite _doubleStrafeSprite;
   late final Sprite _windArrowSprite;
   late final Sprite _arrowShowerSprite;
-  SpriteAnimation? _concentrateAuraAnimation;
-  SpriteAnimationComponent? _concentrateAura;
+  PositionComponent? _concentrateAura;
   late final Sprite _bgFieldsSkySprite;
   late final Sprite _bgForestSkySprite;
   SpriteComponent? _biomeBackground;
@@ -236,15 +235,6 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _doubleStrafeSprite = await ArtAtlas.loadSprite(ArtAtlas.doubleStrafeArrow);
       _windArrowSprite = await ArtAtlas.loadSprite(ArtAtlas.windArrow);
       _arrowShowerSprite = await ArtAtlas.loadSprite(ArtAtlas.arrowShowerArrow);
-      final auraSprites = <Sprite>[];
-      for (final path in ArtAtlas.concentrateAuraFrames) {
-        auraSprites.add(await ArtAtlas.loadSprite(path));
-      }
-      _concentrateAuraAnimation = SpriteAnimation.spriteList(
-        auraSprites,
-        stepTime: 0.12,
-        loop: true,
-      );
 
       loadStage = 'layout';
       _layout = _currentLayout();
@@ -831,20 +821,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _ensureConcentrateAura() {
-    final animation = _concentrateAuraAnimation;
-    if (animation == null) {
-      return;
-    }
     if (_concentrateAura != null && _concentrateAura!.isMounted) {
       return;
     }
-    final aura = SpriteAnimationComponent(
-      animation: animation,
-      size: Vector2.all(96),
-      anchor: Anchor.center,
+    final aura = _ConcentrateAuraComponent(
       position: player.center,
       priority: player.priority - 1,
-    )..paint.filterQuality = FilterQuality.none;
+    );
     _concentrateAura = aura;
     world.add(aura);
   }
@@ -915,7 +898,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         duration: duration,
         visualHeight: 56,
         onArrived: onHit,
-      )..paint.filterQuality = FilterQuality.none,
+      )..paint.filterQuality = FilterQuality.medium,
     );
   }
 
@@ -1050,7 +1033,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
               }
               _tryCollectKill(target);
             },
-          )..paint.filterQuality = FilterQuality.none,
+          )..paint.filterQuality = FilterQuality.medium,
         );
       }
       return;
@@ -1077,16 +1060,18 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _tryCollectKill(target);
     }
 
-    world.add(
-      ProjectileComponent(
-        sprite: sprite,
-        start: start,
-        end: end,
-        duration: duration,
-        visualHeight: event.skillId == 'wind_arrow' ? 56 : height,
-        onArrived: onHit,
-      )..paint.filterQuality = FilterQuality.none,
-    );
+    final projectile = ProjectileComponent(
+      sprite: sprite,
+      start: start,
+      end: end,
+      duration: duration,
+      visualHeight: event.skillId == 'wind_arrow' ? 56 : height,
+      onArrived: onHit,
+    )..paint.filterQuality = FilterQuality.medium;
+    world.add(projectile);
+    if (event.skillId == 'wind_arrow') {
+      world.add(_WindArrowTrailComponent(projectile));
+    }
   }
 
   void _onMonsterRangedAttack(MonsterComponent monster) {
@@ -1461,4 +1446,114 @@ class _PendingOfferRequest {
 
   final ChestComponent? chest;
   final bool consumeTempXpThreshold;
+}
+
+class _ConcentrateAuraComponent extends PositionComponent {
+  _ConcentrateAuraComponent({
+    required Vector2 position,
+    required int priority,
+  }) : super(
+         position: position,
+         anchor: Anchor.center,
+         priority: priority,
+       );
+
+  double _pulse = 0;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    add(
+      CircleComponent(
+        radius: 54,
+        anchor: Anchor.center,
+        paint: Paint()..color = const Color(0x28FFD54F),
+      ),
+    );
+    add(
+      CircleComponent(
+        radius: 40,
+        anchor: Anchor.center,
+        paint: Paint()..color = const Color(0x44FFC107),
+      ),
+    );
+    add(
+      CircleComponent(
+        radius: 46,
+        anchor: Anchor.center,
+        paint: Paint()
+          ..color = const Color(0x99FFD54F)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      ),
+    );
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _pulse += dt * 2.4;
+    scale = Vector2.all(1 + 0.05 * math.sin(_pulse));
+  }
+}
+
+class _WindArrowTrailComponent extends Component {
+  _WindArrowTrailComponent(this._projectile);
+
+  final ProjectileComponent _projectile;
+  double _spawnTimer = 0;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!_projectile.isMounted) {
+      removeFromParent();
+      return;
+    }
+    _spawnTimer += dt;
+    if (_spawnTimer < 0.045) {
+      return;
+    }
+    _spawnTimer = 0;
+    parent?.add(
+      _FadingTrailDot(
+        position: _projectile.position.clone(),
+        priority: _projectile.priority - 1,
+      ),
+    );
+  }
+}
+
+class _FadingTrailDot extends CircleComponent {
+  _FadingTrailDot({
+    required Vector2 position,
+    required int priority,
+  }) : _maxLife = 0.32,
+       super(
+         radius: 5,
+         position: position,
+         anchor: Anchor.center,
+         priority: priority,
+         paint: Paint()..color = const Color(0xAA00E5FF),
+       );
+
+  final double _maxLife;
+  double _elapsed = 0;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _elapsed += dt;
+    if (_elapsed >= _maxLife) {
+      removeFromParent();
+      return;
+    }
+    final t = 1 - (_elapsed / _maxLife);
+    paint.color = Color.lerp(
+      const Color(0x0000E5FF),
+      const Color(0xCC00E5FF),
+      t,
+    )!;
+    radius = 5 * t;
+  }
 }

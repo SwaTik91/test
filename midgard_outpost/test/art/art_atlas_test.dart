@@ -132,10 +132,6 @@ void main() {
       'ui/skills/concentrate.png',
       'ui/skills/eagle_eye.png',
       'ui/skills/arrow_shower.png',
-      'vfx/concentrate_0.png',
-      'vfx/concentrate_1.png',
-      'vfx/concentrate_2.png',
-      'vfx/concentrate_3.png',
     };
 
     expect(ArtAtlas.allPaths.toSet(), expected);

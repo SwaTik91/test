@@ -195,7 +195,7 @@ class _SkillButton extends StatelessWidget {
                     child: Image.asset(
                       ArtAtlas.flutterAsset(iconPath!),
                       fit: BoxFit.contain,
-                      filterQuality: FilterQuality.none,
+                      filterQuality: FilterQuality.medium,
                     ),
                   )
                 else
