@@ -11,7 +11,8 @@ class RunLayout {
   static const double referenceHeight = 720;
 
   /// Feet contact line — top of the live ground strip.
-  static const double groundTopFraction = 0.72;
+  /// Thin path (~14% of viewport) so actors/sky keep most of the screen.
+  static const double groundTopFraction = 0.86;
 
   /// Backdrop source crop — sky/scenery only (excludes baked floor in art).
   static const double backdropSkyFraction = 0.72;
@@ -38,8 +39,10 @@ class RunLayout {
   /// Render height includes [groundBottomBleedPx] past the visible bottom.
   double get groundTileHeight => groundStripHeight + groundBottomBleedPx;
 
-  /// Square ground tiles — no horizontal squash of 256×256 art.
-  double get groundTileWidth => groundTileHeight;
+  /// Landscape tiles — side-view dirt/grass strip, not a tall green square.
+  static const double groundTileWidthAspect = 2.5;
+
+  double get groundTileWidth => groundTileHeight * groundTileWidthAspect;
 
   /// World-space span the live ground strip must cover around the camera center.
   ({double left, double right}) groundWorldSpan({

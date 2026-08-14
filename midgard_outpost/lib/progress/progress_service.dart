@@ -53,6 +53,23 @@ class ProgressService {
     );
   }
 
+  /// Debug/test helper: instantly grant [baseLevels] and [jobLevels].
+  /// Awards the same unspent points as real level-ups.
+  static HeroProgress grantDebugLevels(
+    HeroProgress hero, {
+    int baseLevels = 10,
+    int jobLevels = 10,
+  }) {
+    return hero.copyWith(
+      baseLevel: hero.baseLevel + baseLevels,
+      jobLevel: hero.jobLevel + jobLevels,
+      unspentStatPoints:
+          hero.unspentStatPoints + baseLevels * Balance.baseStatPointsPerLevel,
+      unspentSkillPoints:
+          hero.unspentSkillPoints + jobLevels * Balance.jobSkillPointsPerLevel,
+    );
+  }
+
   static HeroProgress allocateStat(HeroProgress hero, StatId stat) {
     if (hero.unspentStatPoints <= 0) {
       throw StateError('No unspent stat points');

@@ -71,6 +71,15 @@ void main() {
     expect(updated.jobXp, 10);
   });
 
+  test('grantDebugLevels adds 10 base and 10 job levels with points', () {
+    final hero = HeroProgress.createNew(HeroClassId.archer);
+    final updated = ProgressService.grantDebugLevels(hero);
+    expect(updated.baseLevel, 11);
+    expect(updated.jobLevel, 11);
+    expect(updated.unspentStatPoints, 10);
+    expect(updated.unspentSkillPoints, 10);
+  });
+
   test('toJson roundtrips through fromJson', () {
     final original = HeroProgress.createNew(HeroClassId.paladin).copyWith(
       gold: 100,

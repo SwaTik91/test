@@ -35,6 +35,24 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  Future<void> _grantDebugLevels() async {
+    if (widget.controller.hero == null) {
+      return;
+    }
+    await widget.controller.grantDebugLevels();
+    if (!mounted) {
+      return;
+    }
+    final hero = widget.controller.hero!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Тест: база ${hero.baseLevel}, проф ${hero.jobLevel}',
+        ),
+      ),
+    );
+  }
+
   Future<void> _purchase(IapProduct product) async {
     setState(() => _purchasingId = product.id);
     final ok = await widget.controller.purchaseProduct(product.id);
@@ -86,6 +104,11 @@ class _ShopScreenState extends State<ShopScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                _DebugLevelsCard(
+                  onGrant: _grantDebugLevels,
+                  theme: theme,
+                ),
+                const SizedBox(height: 8),
                 for (final product in _products!) ...[
                   _ProductCard(
                     product: product,
@@ -112,6 +135,50 @@ class _ShopScreenState extends State<ShopScreen> {
         ),
       ),
       body: body,
+    );
+  }
+}
+
+class _DebugLevelsCard extends StatelessWidget {
+  const _DebugLevelsCard({
+    required this.onGrant,
+    required this.theme,
+  });
+
+  final VoidCallback onGrant;
+  final TextTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return HubCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Тест: +10 уровней',
+                  style: HubTheme.cardTitleStyle(theme),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '+10 к базовому и +10 к проф. уровню. Для быстрых тестов.',
+                  style: HubTheme.cardSubtitleStyle(theme),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: HubTheme.accentButtonStyle(),
+            onPressed: onGrant,
+            child: const Text('+10 / +10'),
+          ),
+        ],
+      ),
     );
   }
 }

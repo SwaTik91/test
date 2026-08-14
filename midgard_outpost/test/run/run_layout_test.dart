@@ -12,9 +12,9 @@ void main() {
       layout = RunLayout(RunLayout.referenceHeight);
     });
 
-    test('ground line at 72% height', () {
+    test('ground line at 86% height', () {
       expect(layout.groundY, closeTo(720 * RunLayout.groundTopFraction, 0.01));
-      expect(layout.groundY, 518.4);
+      expect(layout.groundY, 619.2);
     });
 
     test('ground tile fills lower band to viewport bottom with bleed', () {
@@ -26,7 +26,10 @@ void main() {
         layout.groundTileHeight,
         closeTo(layout.groundStripHeight + RunLayout.groundBottomBleedPx, 0.01),
       );
-      expect(layout.groundTileWidth, layout.groundTileHeight);
+      expect(
+        layout.groundTileWidth,
+        closeTo(layout.groundTileHeight * RunLayout.groundTileWidthAspect, 0.01),
+      );
       expect(layout.groundY + layout.groundStripHeight, closeTo(720, 0.01));
     });
 
@@ -90,8 +93,8 @@ void main() {
     });
 
     test('ground top fraction matches camera anchor target', () {
-      expect(RunLayout.groundTopFraction, 0.72);
-      expect(layout.groundY / layout.viewportHeight, closeTo(0.72, 0.001));
+      expect(RunLayout.groundTopFraction, 0.86);
+      expect(layout.groundY / layout.viewportHeight, closeTo(0.86, 0.001));
     });
 
     test('ground world span extends left of player start for centered camera', () {
@@ -125,7 +128,7 @@ void main() {
   });
 
   group('RunLayout across viewport heights', () {
-    test('ground line stays at 72% for 500px and 800px', () {
+    test('ground line stays at 86% for 500px and 800px', () {
       for (final height in [500.0, 800.0]) {
         final layout = RunLayout(height);
         expect(layout.groundY, closeTo(height * RunLayout.groundTopFraction, 0.01));
