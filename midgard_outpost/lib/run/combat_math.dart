@@ -67,7 +67,7 @@ class CombatMath {
                 ownedUpgradeIds,
                 temporaryAllStatsBonus: temporaryAllStatsBonus,
               ) *
-              18)) *
+              5)) *
       RunUpgradeEffects.moveSpeedMultiplier(ownedUpgradeIds);
 
   static int basicAttackDamage(

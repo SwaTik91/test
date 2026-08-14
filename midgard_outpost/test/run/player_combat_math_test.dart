@@ -40,6 +40,9 @@ void main() {
       CombatMath.moveSpeed(quick),
       greaterThan(CombatMath.moveSpeed(slow)),
     );
+    // +5 px/s per AGI (was +18); keeps early-game pace, slows late scaling.
+    expect(CombatMath.moveSpeed(slow), 195);
+    expect(CombatMath.moveSpeed(quick), 205);
   });
 
   test('physical classes use str and dex for basic attack damage', () {
