@@ -15,6 +15,10 @@ class HudOverlay extends StatelessWidget {
         maxHeight: screenSize.height * 0.30,
       );
 
+  @visibleForTesting
+  static List<Offset> skillOffsets(int count) =>
+      _ActionCluster.skillOffsets(count);
+
   static String shortSkillLabel(SkillDef skill) => switch (skill.id) {
         'double_strafe' => 'ДС',
         'wind_arrow' => 'ВС',
@@ -114,33 +118,24 @@ class HudOverlay extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.bottomRight,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.end,
-                        children: [
-                          for (final skill in skills)
-                            _SkillButton(
-                              label: shortSkillLabel(skill),
-                              iconPath: ArtAtlas.skillIconPath(skill.id),
-                              cooldown: game.skillCooldownRemaining(skill.id),
-                              enabled: game.skillRank(skill.id) > 0 &&
-                                  game.skillCooldownRemaining(skill.id) <= 0 &&
-                                  game.player.currentSp > 0,
-                              onTap: () => game.tryCastSkill(skill.id),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _ImageTapButton(
-                        assetPath: ArtAtlas.btnJump,
-                        onTap: game.jump,
-                      ),
+                  child: _ActionCluster(
+                    skills: [
+                      for (final skill in skills)
+                        _SkillButton(
+                          label: shortSkillLabel(skill),
+                          iconPath: ArtAtlas.skillIconPath(skill.id),
+                          cooldown: game.skillCooldownRemaining(skill.id),
+                          enabled: game.skillRank(skill.id) > 0 &&
+                              game.skillCooldownRemaining(skill.id) <= 0 &&
+                              game.player.currentSp > 0,
+                          onTap: () => game.tryCastSkill(skill.id),
+                        ),
                     ],
+                    jump: _ImageTapButton(
+                      assetPath: ArtAtlas.btnJump,
+                      onTap: game.jump,
+                      size: 80,
+                    ),
                   ),
                 ),
               ],
@@ -148,6 +143,68 @@ class HudOverlay extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Thumb cluster: large jump at bottom-right, skills in an arc above/left.
+class _ActionCluster extends StatelessWidget {
+  const _ActionCluster({
+    required this.skills,
+    required this.jump,
+  });
+
+  static const double width = 216;
+  static const double height = 196;
+  static const double skillSize = 52;
+
+  final List<Widget> skills;
+  final Widget jump;
+
+  /// Skill top-left offsets inside the cluster (jump sits bottom-right).
+  @visibleForTesting
+  static List<Offset> skillOffsets(int count) {
+    const slots = <Offset>[
+      Offset(68, 132), // left of jump
+      Offset(128, 60), // above jump
+      Offset(60, 68), // upper-left
+      Offset(8, 108), // far-left mid (ult)
+    ];
+    if (count <= slots.length) {
+      return slots.take(count).toList(growable: false);
+    }
+    return [
+      ...slots,
+      for (var i = slots.length; i < count; i++)
+        Offset(8.0 + ((i - slots.length) % 3) * 56, 8.0),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offsets = skillOffsets(skills.length);
+    return SizedBox(
+      key: const Key('hud-action-cluster'),
+      width: width,
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < skills.length; i++)
+            Positioned(
+              left: offsets[i].dx,
+              top: offsets[i].dy,
+              width: skillSize,
+              height: skillSize,
+              child: skills[i],
+            ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: jump,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -184,8 +241,8 @@ class _SkillButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: SizedBox(
-            width: 56,
-            height: 56,
+            width: 52,
+            height: 52,
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -363,10 +420,12 @@ class _ImageTapButton extends StatelessWidget {
   const _ImageTapButton({
     required this.assetPath,
     required this.onTap,
+    this.size = 64,
   });
 
   final String assetPath;
   final VoidCallback onTap;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -374,8 +433,8 @@ class _ImageTapButton extends StatelessWidget {
       onTap: onTap,
       child: Image.asset(
         ArtAtlas.flutterAsset(assetPath),
-        width: 64,
-        height: 64,
+        width: size,
+        height: size,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
       ),

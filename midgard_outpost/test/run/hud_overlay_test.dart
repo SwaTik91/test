@@ -12,7 +12,16 @@ void main() {
     expect(constraints.maxHeight, closeTo(720 * 0.30, 0.01));
   });
 
-  test('archer skill buttons use short HUD labels', () {
+    test('action cluster places skills in an arc above the jump button', () {
+      final offsets = HudOverlay.skillOffsets(4);
+      expect(offsets, hasLength(4));
+      expect(offsets[0], const Offset(68, 132));
+      expect(offsets[1], const Offset(128, 60));
+      expect(offsets[2], const Offset(60, 68));
+      expect(offsets[3], const Offset(8, 108));
+    });
+
+    test('archer skill buttons use short HUD labels', () {
     expect(
       HudOverlay.shortSkillLabel(SkillsCatalog.byId('double_strafe')),
       'ДС',
