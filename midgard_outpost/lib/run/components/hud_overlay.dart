@@ -431,12 +431,14 @@ class _ImageTapButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Image.asset(
-        ArtAtlas.flutterAsset(assetPath),
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.none,
+      child: ClipOval(
+        child: Image.asset(
+          ArtAtlas.flutterAsset(assetPath),
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
       ),
     );
   }
