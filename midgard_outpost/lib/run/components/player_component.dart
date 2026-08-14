@@ -286,9 +286,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   }
 
   void setGroundY(double value) {
-    final wasGrounded = isGrounded;
+    final wasOnContactLine = position.y >= groundY - 0.5;
     groundY = value;
-    if (wasGrounded || position.y > groundY) {
+    if (wasOnContactLine || position.y > groundY) {
       position.y = groundY;
     }
   }
