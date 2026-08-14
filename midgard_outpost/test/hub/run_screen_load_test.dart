@@ -120,6 +120,9 @@ void main() {
       reason: 'stage=${game.loadStage} err=${game.loadError}',
     );
     expect(game.loadError, isNull);
+    expect(game.terrain.features, isNotEmpty);
+    expect(game.terrain.features.any((f) => f.isPit), isTrue);
+    expect(game.terrain.features.any((f) => f.isObstacle), isTrue);
     expect(find.textContaining('HP '), findsOneWidget);
   });
 

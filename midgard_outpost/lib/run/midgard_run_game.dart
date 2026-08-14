@@ -18,6 +18,8 @@ import 'combat_math.dart';
 import 'components/chest_component.dart';
 import 'components/damage_number_component.dart';
 import 'components/monster_component.dart';
+import 'components/obstacle_component.dart';
+import 'components/pit_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
 import 'components/vfx_component.dart';
@@ -28,6 +30,7 @@ import 'run_upgrade_effects.dart';
 import 'upgrade_offer_service.dart';
 import 'systems/auto_skill_system.dart';
 import 'systems/spawn_system.dart' hide Biome;
+import 'systems/terrain_system.dart';
 
 class MidgardRunGame extends FlameGame with KeyboardEvents {
   MidgardRunGame({
@@ -67,6 +70,12 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   final List<SpriteComponent> _groundTiles = [];
   Sprite? _groundSprite;
+  final TerrainSystem terrain = TerrainSystem();
+  final Set<double> _spawnedHazardXs = {};
+  final List<PitComponent> _pits = [];
+  final List<ObstacleComponent> _obstacles = [];
+  double _lastSolidX = PlayerComponent.startX;
+  double _pitIFrames = 0;
 
   @visibleForTesting
   List<SpriteComponent> get groundTilesForTest => _groundTiles;
@@ -272,8 +281,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
         maxSp: player.maxSp,
       );
 
+      player.floorYAt = (x, y) => terrain.floorY(
+            x: x,
+            y: y,
+            groundY: _layout.groundY,
+          );
+
       loadStage = 'world';
       world.add(player);
+      _spawnHazardsAhead();
       _spawnMonster();
       _spawnMonster();
       _configureCameraFollow();
@@ -354,6 +370,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       player
         ..setGroundY(_layout.groundY)
         ..setSize(_layout.playerSize);
+      _syncHazardLayout();
     }
   }
 
@@ -434,6 +451,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       final tile = SpriteComponent(
         sprite: sprite,
         anchor: Anchor.topLeft,
+        priority: -2,
       );
       tile.paint.filterQuality = FilterQuality.medium;
       _groundTiles.add(tile);
@@ -454,6 +472,8 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
     _syncGroundTilesLayout();
     _syncBiomeIfNeeded();
+    _spawnHazardsAhead();
+    _resolveTerrain(dt);
     _spawnAheadIfNeeded();
     _spawnMilestonesIfNeeded();
     _handleAutoSkills(dt);
@@ -579,6 +599,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       final tile = SpriteComponent(
         sprite: groundSprite,
         anchor: Anchor.topLeft,
+        priority: -2,
       );
       tile.paint.filterQuality = FilterQuality.medium;
       _groundTiles.add(tile);
@@ -622,9 +643,90 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
   }
 
+  void _spawnHazardsAhead() {
+    terrain.ensureUntil(player.position.x + 920);
+    for (final feature in terrain.features) {
+      if (!_spawnedHazardXs.add(feature.startX)) {
+        continue;
+      }
+      if (feature.isPit) {
+        final pit = PitComponent(
+          startX: feature.startX,
+          groundY: _layout.groundY,
+          width: feature.width,
+          depth: math.max(TerrainSystem.pitDepth, _layout.groundTileHeight),
+        );
+        _pits.add(pit);
+        world.add(pit);
+      } else {
+        final obstacle = ObstacleComponent(
+          kind: feature.kind,
+          groundY: _layout.groundY,
+          feature: feature,
+        );
+        _obstacles.add(obstacle);
+        world.add(obstacle);
+      }
+    }
+  }
+
+  void _syncHazardLayout() {
+    final groundY = _layout.groundY;
+    final pitDepth = math.max(TerrainSystem.pitDepth, _layout.groundTileHeight);
+    for (final pit in _pits) {
+      pit.position.y = groundY;
+      pit.size.y = pitDepth;
+    }
+    for (final obstacle in _obstacles) {
+      obstacle.position.y = groundY;
+    }
+  }
+
+  void _resolveTerrain(double dt) {
+    if (_pitIFrames > 0) {
+      _pitIFrames = (_pitIFrames - dt).clamp(0, double.infinity).toDouble();
+    }
+
+    final groundY = _layout.groundY;
+    if (player.isGrounded && terrain.pitAt(player.position.x) == null) {
+      _lastSolidX = player.position.x;
+    }
+
+    final bodyHalf = player.terrainBodyHalfWidth;
+    final block = terrain.blockingObstacle(
+      x: player.position.x,
+      y: player.position.y,
+      halfWidth: bodyHalf,
+      groundY: groundY,
+    );
+    if (block != null) {
+      if (player.position.x < block.centerX) {
+        player.position.x = block.startX - bodyHalf;
+      } else {
+        player.position.x = block.endX + bodyHalf;
+      }
+    }
+
+    if (player.position.y < groundY + TerrainSystem.fallRescueDepth) {
+      return;
+    }
+    if (_pitIFrames <= 0) {
+      _damagePlayer(TerrainSystem.pitDamage(player.maxHp));
+      _pitIFrames = 0.6;
+      _publishHud();
+    }
+    player.landAt(
+      _lastSolidX.clamp(0, player.position.x).toDouble(),
+      groundY,
+    );
+    if (player.isDead) {
+      _finishRun();
+    }
+  }
+
   void _spawnChest(double x) {
     ChestComponent.create(
-      position: Vector2(x, _layout.groundY),
+      position: Vector2(terrain.solidXNear(x), _layout.groundY),
       size: _layout.chestSize,
     ).then((chest) {
       _chests.add(chest);
@@ -633,7 +735,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _spawnMonster({double? spawnX, bool isBoss = false}) {
-    final x = spawnX ?? _nextSpawnX;
+    final x = terrain.solidXNear(spawnX ?? _nextSpawnX);
     final monsterBiome = SpawnSystem.biomeAt(x);
     final spec = MonstersCatalog.forDistance(
       distancePx: x,

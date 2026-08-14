@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -38,8 +40,15 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     _syncFrameAspectSize();
   }
 
-  static const double _gravity = 1200;
-  static const double _jumpVelocity = -520;
+  static const double gravity = 1200;
+  static const double jumpVelocity = -520;
+
+  static double get jumpHeight =>
+      (jumpVelocity * jumpVelocity) / (2 * gravity);
+
+  static double get airTime => 2 * (-jumpVelocity) / gravity;
+
+  static double jumpDistance(double moveSpeed) => moveSpeed * airTime;
 
   static double castDurationFor(HeroClassId classId) =>
       AnimationAtlas.heroFrameCount(classId, HeroAnimName.cast) *
@@ -179,9 +188,17 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   double _damageFlashSeconds = 0;
   double _castTimer = 0;
 
+  /// Optional floor under the feet. `(x, y) → contact Y`.
+  double Function(double x, double y)? floorYAt;
+
   bool get isDead => currentHp <= 0;
 
-  bool get isGrounded => position.y >= groundY - 0.5;
+  double get terrainBodyHalfWidth =>
+      math.max(14, _footprintSize.x * 0.12).toDouble();
+
+  double floorYFor(double x, double y) => floorYAt?.call(x, y) ?? groundY;
+
+  bool get isGrounded => position.y >= floorYFor(position.x, position.y) - 0.5;
 
   Rect get bounds => Rect.fromLTWH(
     position.x - _footprintSize.x * anchor.x,
@@ -210,10 +227,16 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
 
   bool jump() {
     if (isGrounded) {
-      _verticalVelocity = _jumpVelocity;
+      _verticalVelocity = jumpVelocity;
       return true;
     }
     return false;
+  }
+
+  void landAt(double x, double y) {
+    position.x = x;
+    position.y = y;
+    _verticalVelocity = 0;
   }
 
   void playCastAnimation() {
@@ -315,9 +338,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       position.x = 0;
     }
 
-    _verticalVelocity += _gravity * dt;
+    _verticalVelocity += gravity * dt;
     position.y += _verticalVelocity * dt;
-    final floorY = groundY;
+    final floorY = floorYFor(position.x, position.y);
     if (position.y > floorY) {
       position.y = floorY;
       _verticalVelocity = 0;

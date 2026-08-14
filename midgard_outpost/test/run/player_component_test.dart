@@ -101,6 +101,44 @@ void main() {
     expect(player.isGrounded, isTrue);
   });
 
+  test('player falls when the floor drops into a pit', () async {
+    final player = PlayerComponent.forTest(
+      groundY: 500,
+      sprite: await _testSprite(),
+      position: Vector2(40, 500),
+      moveSpeed: 190,
+    );
+    player.floorYAt = (x, y) => x >= 80 && x < 188 ? 650 : 500;
+    player.setHorizontal(1);
+    var maxY = player.position.y;
+    for (var i = 0; i < 90; i++) {
+      player.update(1 / 60);
+      if (player.position.y > maxY) {
+        maxY = player.position.y;
+      }
+    }
+    expect(maxY, greaterThan(520));
+  });
+
+  test('running jump clears a 108px pit', () async {
+    final player = PlayerComponent.forTest(
+      groundY: 500,
+      sprite: await _testSprite(),
+      position: Vector2(50, 500),
+      moveSpeed: 190,
+    );
+    player.floorYAt = (x, y) => x >= 80 && x < 188 ? 650 : 500;
+    player.setHorizontal(1);
+    player.update(1 / 60);
+    expect(player.jump(), isTrue);
+    for (var i = 0; i < 80; i++) {
+      player.update(1 / 60);
+    }
+    expect(player.position.x, greaterThan(188));
+    expect(player.position.y, closeTo(500, 1));
+    expect(player.isGrounded, isTrue);
+  });
+
   test('sprite render size preserves frame aspect ratio', () async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
