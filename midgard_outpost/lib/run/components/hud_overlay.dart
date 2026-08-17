@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../art/art_atlas.dart';
+import '../../content/classes.dart';
 import '../../content/skills.dart';
+import '../../core/ids.dart';
+import '../../hub/hub_theme.dart';
 import '../midgard_run_game.dart';
 
 class HudOverlay extends StatelessWidget {
@@ -9,15 +12,32 @@ class HudOverlay extends StatelessWidget {
 
   final MidgardRunGame game;
 
+  /// Variant B combat plate — slightly wider than the old stacked card.
   @visibleForTesting
   static BoxConstraints panelConstraintsFor(Size screenSize) => BoxConstraints(
-        maxWidth: screenSize.width * 0.28,
-        maxHeight: screenSize.height * 0.30,
+        maxWidth: screenSize.width * 0.30,
+        maxHeight: screenSize.height * 0.22,
       );
 
   @visibleForTesting
   static List<Offset> skillOffsets(int count) =>
       _ActionCluster.skillOffsets(count);
+
+  @visibleForTesting
+  static String shortClassLabel(HeroClassId classId) => switch (classId) {
+        HeroClassId.archer => 'лук',
+        HeroClassId.mage => 'маг',
+        HeroClassId.paladin => 'пал',
+      };
+
+  @visibleForTesting
+  static String statusMetaLine({
+    required int baseXp,
+    required int jobXp,
+    required int gold,
+    required String biomeLabel,
+  }) =>
+      'XP $baseXp/$jobXp  ·  Золото $gold  ·  $biomeLabel';
 
   static String shortSkillLabel(SkillDef skill) => switch (skill.id) {
         'double_strafe' => 'ДС',
@@ -50,6 +70,7 @@ class HudOverlay extends StatelessWidget {
         final screen = MediaQuery.sizeOf(context);
         final hudConstraints = HudOverlay.panelConstraintsFor(screen);
         final skills = game.castableSkills;
+        final classId = game.hero.classId;
 
         return SafeArea(
           child: Padding(
@@ -60,47 +81,21 @@ class HudOverlay extends StatelessWidget {
                   alignment: Alignment.topLeft,
                   child: ConstrainedBox(
                     constraints: hudConstraints,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _HpBar(
-                              label:
-                                  'HP ${game.player.currentHp}/${game.player.maxHp}',
-                              value: game.hpFraction,
-                              maxWidth: hudConstraints.maxWidth - 16,
-                            ),
-                            const SizedBox(height: 6),
-                            _Bar(
-                              label:
-                                  'SP ${game.player.currentSp}/${game.player.maxSp}',
-                              value: game.spFraction,
-                              color: Colors.lightBlueAccent,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'XP ${rewards.baseXp}/${rewards.jobXp} · Золото ${rewards.gold}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                              ),
-                            ),
-                            Text(
-                              'Дистанция: ${game.distance.toStringAsFixed(0)} · ${game.biomeLabel}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
+                    child: _StatusPlate(
+                      portraitPath: ArtAtlas.heroIconPath(classId),
+                      classLabel: shortClassLabel(classId),
+                      className: ClassesCatalog.byId(classId).name,
+                      hpLabel:
+                          'HP  ${game.player.currentHp} / ${game.player.maxHp}',
+                      hpValue: game.hpFraction,
+                      spLabel:
+                          'SP  ${game.player.currentSp} / ${game.player.maxSp}',
+                      spValue: game.spFraction,
+                      meta: statusMetaLine(
+                        baseXp: rewards.baseXp,
+                        jobXp: rewards.jobXp,
+                        gold: rewards.gold,
+                        biomeLabel: game.biomeLabel,
                       ),
                     ),
                   ),
@@ -143,6 +138,202 @@ class HudOverlay extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Variant B — RO-lite combat plate: portrait + wide HP/SP + one meta line.
+class _StatusPlate extends StatelessWidget {
+  const _StatusPlate({
+    required this.portraitPath,
+    required this.classLabel,
+    required this.className,
+    required this.hpLabel,
+    required this.hpValue,
+    required this.spLabel,
+    required this.spValue,
+    required this.meta,
+  });
+
+  final String portraitPath;
+  final String classLabel;
+  final String className;
+  final String hpLabel;
+  final double hpValue;
+  final String spLabel;
+  final double spValue;
+  final String meta;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      key: const Key('hud-status-plate'),
+      decoration: BoxDecoration(
+        color: HubTheme.overlayEdge.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: HubTheme.border, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _ClassPortrait(
+              assetPath: portraitPath,
+              label: classLabel,
+              tooltip: className,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _FilledBar(
+                    label: hpLabel,
+                    value: hpValue,
+                    color: HubTheme.hp,
+                    height: 22,
+                  ),
+                  const SizedBox(height: 6),
+                  _FilledBar(
+                    label: spLabel,
+                    value: spValue,
+                    color: HubTheme.sp,
+                    height: 18,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: HubTheme.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClassPortrait extends StatelessWidget {
+  const _ClassPortrait({
+    required this.assetPath,
+    required this.label,
+    required this.tooltip,
+  });
+
+  final String assetPath;
+  final String label;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: 56,
+        height: 64,
+        child: Column(
+          children: [
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: HubTheme.cardBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: HubTheme.accent, width: 1.5),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8.5),
+                  child: Image.asset(
+                    ArtAtlas.flutterAsset(assetPath),
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                color: HubTheme.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilledBar extends StatelessWidget {
+  const _FilledBar({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.height,
+  });
+
+  final String label;
+  final double value;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final frac = value.clamp(0.0, 1.0);
+    return SizedBox(
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: HubTheme.overlayEdge),
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: frac,
+              child: ColoredBox(color: color),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: HubTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                    shadows: [
+                      Shadow(
+                        color: Color(0x88000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -316,85 +507,6 @@ class _SkillButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _HpBar extends StatelessWidget {
-  const _HpBar({
-    required this.label,
-    required this.value,
-    required this.maxWidth,
-  });
-
-  final String label;
-  final double value;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final barWidth = maxWidth.clamp(120.0, 220.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
-        ),
-        const SizedBox(height: 3),
-        Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            Image.asset(
-              ArtAtlas.flutterAsset(ArtAtlas.hpBarFrame),
-              width: barWidth,
-              height: 18,
-              fit: BoxFit.fill,
-              filterQuality: FilterQuality.none,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: SizedBox(
-                width: barWidth - 6,
-                child: LinearProgressIndicator(
-                  value: value.clamp(0, 1).toDouble(),
-                  color: Colors.redAccent,
-                  backgroundColor: Colors.transparent,
-                  minHeight: 10,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _Bar extends StatelessWidget {
-  const _Bar({required this.label, required this.value, required this.color});
-
-  final String label;
-  final double value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
-        ),
-        const SizedBox(height: 3),
-        LinearProgressIndicator(
-          value: value.clamp(0, 1).toDouble(),
-          color: color,
-          backgroundColor: Colors.white24,
-          minHeight: 8,
-        ),
-      ],
     );
   }
 }
