@@ -124,6 +124,53 @@ void main() {
     expect(game.terrain.features.any((f) => f.isPit), isTrue);
     expect(game.terrain.features.any((f) => f.isObstacle), isTrue);
     expect(find.textContaining('HP '), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('HUD status plate has no bottom overflow on short landscape', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      save: SaveService(
+        local: LocalSaveRepository(),
+        cloud: NoopCloudSavePort(),
+      ),
+    );
+    await controller.bootstrap();
+    await controller.createHero(HeroClassId.archer);
+
+    await tester.binding.setSurfaceSize(const Size(1280, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final game = MidgardRunGame(
+      hero: controller.hero!,
+      onDeath: (_) {},
+      initialRunState: controller.runState,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameWidget<MidgardRunGame>(
+          game: game,
+          overlayBuilderMap: {
+            MidgardRunGame.hudOverlayKey: (context, g) => HudOverlay(game: g),
+          },
+        ),
+      ),
+    );
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 600 && !game.isRunReady; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(game.isRunReady, isTrue);
+    expect(find.byKey(const Key('hud-status-plate')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('run level anchors camera and ground at layout groundY', (tester) async {

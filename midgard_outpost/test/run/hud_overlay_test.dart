@@ -10,7 +10,14 @@ void main() {
     final constraints = HudOverlay.panelConstraintsFor(screen);
 
     expect(constraints.maxWidth, closeTo(1280 * 0.30, 0.01));
-    expect(constraints.maxHeight, closeTo(720 * 0.22, 0.01));
+    expect(constraints.maxHeight, double.infinity);
+  });
+
+  test('status plate bars column stays within portrait height', () {
+    expect(
+      HudOverlay.statusBarsColumnMinHeight,
+      lessThanOrEqualTo(HudOverlay.statusPortraitSize),
+    );
   });
 
   test('action cluster places skills in an arc above the jump button', () {

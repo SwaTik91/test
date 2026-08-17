@@ -12,12 +12,25 @@ class HudOverlay extends StatelessWidget {
 
   final MidgardRunGame game;
 
-  /// Variant B combat plate — slightly wider than the old stacked card.
+  /// Variant B combat plate — width cap only; height follows content.
   @visibleForTesting
   static BoxConstraints panelConstraintsFor(Size screenSize) => BoxConstraints(
         maxWidth: screenSize.width * 0.30,
-        maxHeight: screenSize.height * 0.22,
       );
+
+  @visibleForTesting
+  static const double statusPortraitSize = 56;
+
+  @visibleForTesting
+  static const double statusHpBarHeight = 18;
+
+  @visibleForTesting
+  static const double statusSpBarHeight = 14;
+
+  /// Bars + gaps + meta must stay ≤ portrait so the Row cannot overflow.
+  @visibleForTesting
+  static double get statusBarsColumnMinHeight =>
+      statusHpBarHeight + 4 + statusSpBarHeight + 4 + 12;
 
   @visibleForTesting
   static List<Offset> skillOffsets(int count) =>
@@ -113,24 +126,33 @@ class HudOverlay extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.bottomRight,
-                  child: _ActionCluster(
-                    skills: [
-                      for (final skill in skills)
-                        _SkillButton(
-                          label: shortSkillLabel(skill),
-                          iconPath: ArtAtlas.skillIconPath(skill.id),
-                          cooldown: game.skillCooldownRemaining(skill.id),
-                          enabled: game.skillRank(skill.id) > 0 &&
-                              game.skillCooldownRemaining(skill.id) <= 0 &&
-                              game.player.currentSp > 0,
-                          onTap: () => game.tryCastSkill(skill.id),
+                  child: Builder(
+                    builder: (context) {
+                      final media = MediaQuery.of(context);
+                      final available = media.size.height -
+                          media.padding.vertical -
+                          16;
+                      return _ActionCluster(
+                        maxHeight: available,
+                        skills: [
+                          for (final skill in skills)
+                            _SkillButton(
+                              label: shortSkillLabel(skill),
+                              iconPath: ArtAtlas.skillIconPath(skill.id),
+                              cooldown: game.skillCooldownRemaining(skill.id),
+                              enabled: game.skillRank(skill.id) > 0 &&
+                                  game.skillCooldownRemaining(skill.id) <= 0 &&
+                                  game.player.currentSp > 0,
+                              onTap: () => game.tryCastSkill(skill.id),
+                            ),
+                        ],
+                        jump: _ImageTapButton(
+                          assetPath: ArtAtlas.btnJump,
+                          onTap: game.jump,
+                          size: 80,
                         ),
-                    ],
-                    jump: _ImageTapButton(
-                      assetPath: ArtAtlas.btnJump,
-                      onTap: game.jump,
-                      size: 80,
-                    ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -174,7 +196,7 @@ class _StatusPlate extends StatelessWidget {
         border: Border.all(color: HubTheme.border, width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -183,7 +205,7 @@ class _StatusPlate extends StatelessWidget {
               label: classLabel,
               tooltip: className,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -193,25 +215,25 @@ class _StatusPlate extends StatelessWidget {
                     label: hpLabel,
                     value: hpValue,
                     color: HubTheme.hp,
-                    height: 22,
+                    height: HudOverlay.statusHpBarHeight,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   _FilledBar(
                     label: spLabel,
                     value: spValue,
                     color: HubTheme.sp,
-                    height: 18,
+                    height: HudOverlay.statusSpBarHeight,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     meta,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: HubTheme.textSecondary,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      height: 1.2,
+                      height: 1.1,
                     ),
                   ),
                 ],
@@ -240,38 +262,51 @@ class _ClassPortrait extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: SizedBox(
-        width: 56,
-        height: 64,
-        child: Column(
-          children: [
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: HubTheme.cardBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: HubTheme.accent, width: 1.5),
+        width: HudOverlay.statusPortraitSize,
+        height: HudOverlay.statusPortraitSize,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: HubTheme.cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: HubTheme.accent, width: 1.5),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8.5),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  ArtAtlas.flutterAsset(assetPath),
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8.5),
-                  child: Image.asset(
-                    ArtAtlas.flutterAsset(assetPath),
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.medium,
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: HubTheme.textSecondary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                color: HubTheme.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -343,6 +378,7 @@ class _ActionCluster extends StatelessWidget {
   const _ActionCluster({
     required this.skills,
     required this.jump,
+    this.maxHeight = height,
   });
 
   static const double width = 216;
@@ -351,6 +387,7 @@ class _ActionCluster extends StatelessWidget {
 
   final List<Widget> skills;
   final Widget jump;
+  final double maxHeight;
 
   /// Skill top-left offsets inside the cluster (jump sits bottom-right).
   @visibleForTesting
@@ -374,7 +411,8 @@ class _ActionCluster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offsets = skillOffsets(skills.length);
-    return SizedBox(
+    final scale = (maxHeight / height).clamp(0.55, 1.0);
+    final child = SizedBox(
       key: const Key('hud-action-cluster'),
       width: width,
       height: height,
@@ -396,6 +434,14 @@ class _ActionCluster extends StatelessWidget {
           ),
         ],
       ),
+    );
+    if (scale >= 0.999) {
+      return child;
+    }
+    return Transform.scale(
+      alignment: Alignment.bottomRight,
+      scale: scale,
+      child: child,
     );
   }
 }
