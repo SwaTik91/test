@@ -48,3 +48,10 @@ Origin-style MVP tracker: Alive/Dead/Soon filters, respawn timers, locate/telepo
 - Static preview: [character-inventory-mockup.png](./character-inventory-mockup.png)
 
 Basic Info + basic menu, Status window (STR/AGI… + derived ATK/DEF), Inventory bag with Item/Equip/Etc tabs — aligned with existing goro UI packages.
+
+## Character Status & Inventory (modern redesign)
+
+- Interactive: [character-inventory-modern.html](./character-inventory-modern.html)
+- Static preview: [character-inventory-modern-mockup.png](./character-inventory-modern-mockup.png)
+
+Dark frosted panels, rose-gold accents, modern stat chips and inventory grid — same data as classic RO windows, new visual language for goro.
