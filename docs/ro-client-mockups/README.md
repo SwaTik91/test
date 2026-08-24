@@ -41,3 +41,10 @@ Party memorial dungeon entry: difficulty tabs, party ready checks, private insta
 - Static preview: [mvp-spawn-mockup.png](./mvp-spawn-mockup.png)
 
 Origin-style MVP tracker: Alive/Dead/Soon filters, respawn timers, locate/teleport actions.
+
+## Character Status & Inventory (goro-faithful)
+
+- Interactive: [character-inventory.html](./character-inventory.html)
+- Static preview: [character-inventory-mockup.png](./character-inventory-mockup.png)
+
+Basic Info + basic menu, Status window (STR/AGI… + derived ATK/DEF), Inventory bag with Item/Equip/Etc tabs — aligned with existing goro UI packages.

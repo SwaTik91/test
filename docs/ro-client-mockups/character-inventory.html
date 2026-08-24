@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — Character Status & Inventory Mockup</title>
+  <style>
+    :root {
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --body: #ffffff;
+      --panel: #fafcff;
+      --footer: #f4f6f8;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title: #163658;
+      --muted: #62707e;
+      --hp: #d64545;
+      --sp: #3b82f6;
+      --exp: #769fcf;
+      --slot: #e8eef6;
+      --bonus: #1f7a3f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px 12px 36px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 25% 15%, #c8dde8, transparent 50%),
+        linear-gradient(180deg, #7ea0b8, #5a7d68);
+    }
+    .note {
+      width: min(1080px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title);
+    }
+    .frame {
+      width: min(1080px, 100%);
+      height: 620px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(90,140,170,.28), rgba(40,70,55,.2)),
+        #6b8f78;
+      overflow: hidden;
+      user-select: none;
+    }
+    .ro {
+      position: absolute;
+      background: var(--body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.16);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--title);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+      cursor: move;
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); font-size: 10px; line-height: 12px; padding: 0; cursor: pointer;
+    }
+    .btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--btn-hover); }
+    .btn.plus {
+      width: 16px; height: 16px; padding: 0;
+      font-weight: 900; line-height: 14px;
+    }
+    .btn.plus:disabled { opacity: .4; cursor: default; }
+
+    /* Basic Info ~324x134 */
+    .basic {
+      left: 16px; top: 16px;
+      width: 324px;
+    }
+    .basic .body { padding: 9px 12px; display: grid; gap: 8px; }
+    .bars-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ratio { font-size: 10px; }
+    .ratio .lbl { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .bar {
+      height: 7px; border: 1px solid #5a6a78; background: #e0e8f2; overflow: hidden;
+    }
+    .bar > i { display: block; height: 100%; }
+    .bar.hp > i { width: 72%; background: var(--hp); }
+    .bar.sp > i { width: 48%; background: var(--sp); }
+    .exp-panel {
+      border: 1px solid #d3dbe6;
+      background: var(--panel);
+      border-radius: 5px;
+      padding: 4px 6px;
+      display: grid; gap: 2px;
+    }
+    .exp-row {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      gap: 6px;
+      align-items: center;
+      font-size: 10px;
+    }
+    .exp-row .bar { height: 6px; }
+    .exp-row .bar > i { background: var(--exp); }
+    .meta-row {
+      display: flex; justify-content: space-between;
+      font-size: 11px;
+    }
+    .meta-row.warn { color: #b42318; }
+
+    /* Basic menu */
+    .menu {
+      left: 16px; top: 168px;
+      width: 324px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px 6px;
+    }
+    .menu .btn { height: 24px; font-weight: 700; color: var(--title); }
+    .menu .btn.active { background: #d7ecff; border-color: #528ac8; }
+
+    /* Status window */
+    .status {
+      left: 352px; top: 16px;
+      width: 360px;
+    }
+    .status .body {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 10px;
+    }
+    .stat-rows { display: grid; gap: 2px; }
+    .stat-row {
+      display: grid;
+      grid-template-columns: 44px 56px 28px 1fr 16px;
+      align-items: center;
+      height: 18px;
+      background: var(--footer);
+      font-size: 11px;
+    }
+    .stat-row .lab {
+      background: var(--btn-hover);
+      height: 100%;
+      display: flex; align-items: center;
+      padding: 0 4px;
+      font-weight: 700;
+    }
+    .stat-row .val { padding: 0 4px; }
+    .stat-row .val .b { color: var(--bonus); }
+    .stat-row .cost { color: var(--muted); padding: 0 2px; }
+    .derived {
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+    }
+    .derived .pair {
+      display: grid;
+      grid-template-columns: 46px 62px 46px 62px;
+      gap: 4px;
+      align-items: center;
+    }
+    .derived .h { font-weight: 700; color: var(--title); }
+    .derived .v { text-align: right; }
+    .points {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--title);
+      font-weight: 800;
+    }
+
+    /* Inventory */
+    .inv {
+      left: 16px; top: 240px;
+      width: 324px;
+    }
+    .inv-body {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      height: 160px;
+    }
+    .tabs {
+      border-right: 1px solid #d3dbe6;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+    }
+    .tab {
+      height: 44px;
+      border: 0;
+      border-bottom: 1px solid #d3dbe6;
+      background: transparent;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .tab.active { background: #d7ecff; color: var(--title); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(8, 32px);
+      grid-template-rows: repeat(5, 32px);
+      background: #f3f6f9;
+    }
+    .slot {
+      width: 32px; height: 32px;
+      border-right: 1px solid #d5dde6;
+      border-bottom: 1px solid #d5dde6;
+      background: var(--slot);
+      display: grid;
+      place-items: center;
+      position: relative;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .slot:hover { outline: 1px solid #528ac8; outline-offset: -1px; z-index: 1; }
+    .slot .qty {
+      position: absolute; right: 1px; bottom: 0;
+      font-size: 9px; font-weight: 800; color: #fff;
+      text-shadow: 0 0 2px #000, 0 1px 0 #000;
+    }
+    .slot.empty { background: #eef2f6; }
+    .tooltip {
+      position: absolute;
+      z-index: 8;
+      min-width: 140px;
+      background: rgba(255,255,255,.97);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      font-size: 11px;
+      box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+      display: none;
+      pointer-events: none;
+    }
+    .tooltip b { color: var(--title); }
+    .toast {
+      position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+      background: rgba(20,28,36,.9); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 9;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Реалистичный макет под goro:</strong>
+    Basic Info + меню кнопок + окно <em>Status</em> (как <code>stats_window</code>) +
+    Inventory с вертикальными табами Item/Equip/Etc (как <code>inventory_bag_window</code>).
+  </div>
+  <div class="frame" id="frame">
+    <div class="toast" id="toast"></div>
+    <div class="tooltip" id="tip"></div>
+
+    <!-- Basic Info -->
+    <div class="ro basic" data-drag>
+      <div class="ro-title"><span>Aldric (Swordman)</span></div>
+      <div class="body">
+        <div class="bars-row">
+          <div class="ratio">
+            <div class="lbl"><span>HP</span><span>720 / 1000</span></div>
+            <div class="bar hp"><i></i></div>
+          </div>
+          <div class="ratio">
+            <div class="lbl"><span>SP</span><span>96 / 200</span></div>
+            <div class="bar sp"><i></i></div>
+          </div>
+        </div>
+        <div class="exp-panel">
+          <div class="exp-row"><span>Base Exp</span><div class="bar"><i style="width:46%"></i></div></div>
+          <div class="exp-row"><span>Job Exp</span><div class="bar"><i style="width:62%"></i></div></div>
+        </div>
+        <div class="meta-row">
+          <span>Weight : 320 / 2000</span>
+          <span>Zeny : 125,000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Basic menu -->
+    <div class="ro menu" id="menu">
+      <button class="btn active" data-open="status" type="button">Status</button>
+      <button class="btn" type="button">Option</button>
+      <button class="btn active" data-open="inv" type="button">Items</button>
+      <button class="btn" type="button">Equip</button>
+      <button class="btn" type="button">Skill</button>
+      <button class="btn" type="button">Map</button>
+      <button class="btn" type="button">Comm</button>
+      <button class="btn" type="button">Friend</button>
+    </div>
+
+    <!-- Status -->
+    <div class="ro status" id="statusWin" data-drag>
+      <div class="ro-title"><span>Status</span><button class="ro-close" type="button" data-close="statusWin">×</button></div>
+      <div class="body">
+        <div>
+          <div class="stat-rows" id="stats"></div>
+          <div class="points">Status Points : <span id="points">7</span></div>
+        </div>
+        <div class="derived">
+          <div class="pair"><span class="h">ATK</span><span class="v">85 + 12</span><span class="h">DEF</span><span class="v">18 + 5</span></div>
+          <div class="pair"><span class="h">MATK</span><span class="v">12 - 18</span><span class="h">MDEF</span><span class="v">6 + 2</span></div>
+          <div class="pair"><span class="h">HIT</span><span class="v">142</span><span class="h">FLEE</span><span class="v">98 + 4</span></div>
+          <div class="pair"><span class="h">CRIT</span><span class="v">7</span><span class="h">ASPD</span><span class="v">161</span></div>
+          <div class="pair"><span class="h">Base</span><span class="v">50</span><span class="h">Job</span><span class="v">30</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="ro inv" id="invWin" data-drag>
+      <div class="ro-title"><span>Inventory</span><button class="ro-close" type="button" data-close="invWin">×</button></div>
+      <div class="inv-body">
+        <div class="tabs" id="invTabs">
+          <button class="tab active" data-tab="item" type="button">Item</button>
+          <button class="tab" data-tab="equip" type="button">Equip</button>
+          <button class="tab" data-tab="etc" type="button">Etc</button>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const toast = document.getElementById("toast");
+    const tip = document.getElementById("tip");
+    let points = 7;
+
+    const primary = [
+      { k: "STR", v: 28, b: 3, cost: 4 },
+      { k: "AGI", v: 20, b: 1, cost: 2 },
+      { k: "VIT", v: 24, b: 2, cost: 3 },
+      { k: "INT", v: 10, b: 0, cost: 1 },
+      { k: "DEX", v: 22, b: 4, cost: 3 },
+      { k: "LUK", v: 12, b: 0, cost: 1 },
+    ];
+
+    const bags = {
+      item: [
+        { ico: "💊", name: "Red Potion", qty: 42 },
+        { ico: "🧪", name: "Blue Potion", qty: 12 },
+        { ico: "🍎", name: "Apple", qty: 8 },
+        { ico: "🍖", name: "Meat", qty: 5 },
+        { ico: "🦋", name: "Butterfly Wing", qty: 3 },
+        { ico: "📜", name: "Fly Wing", qty: 20 },
+      ],
+      equip: [
+        { ico: "⚔", name: "Blade [3]", qty: 1 },
+        { ico: "🛡", name: "Guard [1]", qty: 1 },
+        { ico: "🎩", name: "Cap", qty: 1 },
+        { ico: "🧥", name: "Adventure Suit", qty: 1 },
+        { ico: "👟", name: "Sandals", qty: 1 },
+      ],
+      etc: [
+        { ico: "💎", name: "Phracon", qty: 7 },
+        { ico: "🔩", name: "Iron", qty: 15 },
+        { ico: "🦴", name: "Skeleton Bone", qty: 23 },
+        { ico: "🃏", name: "Poring Card", qty: 1 },
+      ],
+    };
+    let tab = "item";
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1400);
+    }
+
+    function renderStats() {
+      document.getElementById("points").textContent = String(points);
+      document.getElementById("stats").innerHTML = primary.map((s, i) => `
+        <div class="stat-row">
+          <div class="lab">${s.k}</div>
+          <div class="val">${s.v}${s.b ? ` <span class="b">+ ${s.b}</span>` : ""}</div>
+          <div class="cost">${s.cost}</div>
+          <div></div>
+          <button class="btn plus" data-i="${i}" ${points < s.cost ? "disabled" : ""} type="button">+</button>
+        </div>
+      `).join("");
+      document.querySelectorAll(".stat-row .plus").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const s = primary[Number(btn.dataset.i)];
+          if (points < s.cost) return;
+          points -= s.cost;
+          s.v += 1;
+          s.cost = Math.min(12, s.cost + (s.v % 2 === 0 ? 1 : 0));
+          showToast(`${s.k} increased`);
+          renderStats();
+        });
+      });
+    }
+
+    function renderGrid() {
+      const items = bags[tab];
+      const cells = [];
+      for (let i = 0; i < 40; i++) {
+        const it = items[i];
+        if (!it) cells.push(`<div class="slot empty"></div>`);
+        else cells.push(`<div class="slot" data-name="${it.name}" data-qty="${it.qty}">${it.ico}${it.qty > 1 ? `<span class="qty">${it.qty}</span>` : ""}</div>`);
+      }
+      const grid = document.getElementById("grid");
+      grid.innerHTML = cells.join("");
+      grid.querySelectorAll(".slot[data-name]").forEach(slot => {
+        slot.addEventListener("mouseenter", (e) => {
+          tip.style.display = "block";
+          tip.innerHTML = `<b>${slot.dataset.name}</b><br/>Qty: ${slot.dataset.qty}`;
+        });
+        slot.addEventListener("mousemove", (e) => {
+          const r = document.getElementById("frame").getBoundingClientRect();
+          tip.style.left = (e.clientX - r.left + 12) + "px";
+          tip.style.top = (e.clientY - r.top + 12) + "px";
+        });
+        slot.addEventListener("mouseleave", () => tip.style.display = "none");
+        slot.addEventListener("dblclick", () => showToast(`Use/Equip: ${slot.dataset.name}`));
+      });
+    }
+
+    document.querySelectorAll("#invTabs .tab").forEach(t => {
+      t.addEventListener("click", () => {
+        document.querySelectorAll("#invTabs .tab").forEach(x => x.classList.remove("active"));
+        t.classList.add("active");
+        tab = t.dataset.tab;
+        renderGrid();
+      });
+    });
+
+    document.querySelectorAll("[data-close]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.getElementById(btn.dataset.close).style.display = "none";
+      });
+    });
+    document.querySelectorAll("#menu [data-open]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.open === "status" ? "statusWin" : "invWin";
+        const el = document.getElementById(id);
+        el.style.display = el.style.display === "none" ? "flex" : "flex";
+        btn.classList.add("active");
+      });
+    });
+
+    // simple drag
+    document.querySelectorAll("[data-drag]").forEach(win => {
+      const title = win.querySelector(".ro-title");
+      let ox=0, oy=0, dragging=false;
+      title.addEventListener("mousedown", (e) => {
+        if (e.target.closest(".ro-close")) return;
+        dragging = true;
+        ox = e.clientX - win.offsetLeft;
+        oy = e.clientY - win.offsetTop;
+      });
+      window.addEventListener("mouseup", () => dragging = false);
+      window.addEventListener("mousemove", (e) => {
+        if (!dragging) return;
+        win.style.left = Math.max(0, e.clientX - ox) + "px";
+        win.style.top = Math.max(0, e.clientY - oy) + "px";
+      });
+    });
+
+    renderStats();
+    renderGrid();
+  </script>
+</body>
+</html>
