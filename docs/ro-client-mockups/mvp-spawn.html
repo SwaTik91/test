@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — MVP Boss Spawn Mockup</title>
+  <style>
+    :root {
+      --win-body: #fff;
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --footer: #f4f6f8;
+      --footer-line: #aeb4bc;
+      --panel: #fafcff;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title-text: #163658;
+      --muted: #62707e;
+      --alive: #1f7a3f;
+      --dead: #6b7280;
+      --soon: #b45309;
+      --spawn: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 70% 20%, #8b3a3a44, transparent 40%),
+        linear-gradient(180deg, #5f7388, #4a6356);
+    }
+    .note {
+      width: min(980px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title-text);
+    }
+    .frame {
+      width: min(980px, 100%);
+      height: 600px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(60,80,100,.35), rgba(40,70,55,.25)),
+        #55685c;
+      overflow: hidden;
+    }
+    .ro-win {
+      position: absolute;
+      inset: 20px 24px;
+      background: var(--win-body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--title-text);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); cursor: pointer; font-size: 10px; line-height: 12px; padding: 0;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      background: var(--panel);
+      border-bottom: 1px solid #d3dbe6;
+    }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--title-text);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .tab.active { background: #d7ecff; border-color: #528ac8; }
+    input[type="search"] {
+      flex: 1;
+      min-width: 140px;
+      border: 1px solid var(--btn-border);
+      padding: 5px 8px;
+      font-size: 11px;
+    }
+    .ro-btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 5px 12px;
+      cursor: pointer;
+      min-width: 72px;
+    }
+    .ro-btn:hover { background: var(--btn-hover); }
+    .ro-btn.primary {
+      background: #d7ecff;
+      border-color: #528ac8;
+      font-weight: 800;
+      color: var(--title-text);
+    }
+    .ro-btn.ghost { min-width: auto; }
+    .list {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 10px 12px;
+      background: #f5f7fa;
+      display: grid;
+      gap: 8px;
+    }
+    .card {
+      display: grid;
+      grid-template-columns: 64px 1.2fr 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #d3dbe6;
+      padding: 8px;
+    }
+    .card:hover { border-color: #528ac8; }
+    .portrait {
+      width: 64px;
+      height: 64px;
+      border: 1px solid #9aa8b6;
+      background:
+        radial-gradient(circle at 50% 40%, #4a5564, #1f2732);
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      position: relative;
+    }
+    .portrait .rank {
+      position: absolute;
+      left: 2px; top: 2px;
+      font-size: 8px;
+      font-weight: 900;
+      color: #ffd666;
+      background: rgba(0,0,0,.45);
+      padding: 1px 3px;
+    }
+    .name {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--title-text);
+    }
+    .sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .status-col { text-align: left; }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      padding: 3px 8px;
+      border: 1px solid;
+    }
+    .badge.alive { color: var(--alive); border-color: #86efac; background: #ecfdf3; }
+    .badge.dead { color: var(--dead); border-color: #d1d5db; background: #f3f4f6; }
+    .badge.soon { color: var(--soon); border-color: #fcd34d; background: #fffbeb; }
+    .badge.spawn { color: var(--spawn); border-color: #f5a8a2; background: #fff1f0; }
+    .timer {
+      margin-top: 4px;
+      font-size: 16px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--title-text);
+    }
+    .timer.muted { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .actions { display: flex; flex-direction: column; gap: 4px; }
+    .ro-footer {
+      border-top: 1px solid var(--footer-line);
+      background: var(--footer);
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .toast {
+      position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+      background: rgba(20,28,36,.9); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 5;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 40px 10px;
+    }
+    @media (max-width: 720px) {
+      .card { grid-template-columns: 56px 1fr; }
+      .status-col, .actions { grid-column: 1 / -1; }
+      .actions { flex-direction: row; }
+    }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Макет окна спавна MVP (Origin-style).</strong>
+    Фильтры Alive / Dead / Soon, таймеры респавна, Locate / Teleport (mock).
+  </div>
+  <div class="frame">
+    <div class="toast" id="toast"></div>
+    <div class="ro-win">
+      <div class="ro-title"><span>MVP Boss Spawn</span><button class="ro-close" type="button">×</button></div>
+      <div class="toolbar">
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-filter="all" type="button">All</button>
+          <button class="tab" data-filter="alive" type="button">Alive</button>
+          <button class="tab" data-filter="dead" type="button">Dead</button>
+          <button class="tab" data-filter="soon" type="button">Soon</button>
+        </div>
+        <input type="search" id="search" placeholder="Search boss or map…" />
+        <button class="ro-btn" type="button" id="refresh">Refresh</button>
+      </div>
+      <div class="list" id="list"></div>
+      <div class="ro-footer">
+        <span id="sync">Timers sync from server · last update just now</span>
+        <button class="ro-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const bosses = [
+      { id: 1, name: "Baphomet", map: "prt_maze03", ico: "🐉", rank: "MVP", status: "alive", eta: 0, ch: "Ch.1" },
+      { id: 2, name: "Eddga", map: "pay_dun04", ico: "🐯", rank: "MVP", status: "soon", eta: 14 * 60 + 32, ch: "Ch.1" },
+      { id: 3, name: "Phreeoni", map: "moc_pryd06", ico: "🐛", rank: "MVP", status: "dead", eta: 58 * 60 + 10, ch: "Ch.2" },
+      { id: 4, name: "Moonlight Flower", map: "pay_dun04", ico: "🌙", rank: "MVP", status: "alive", eta: 0, ch: "Ch.1" },
+      { id: 5, name: "Dracula", map: "gef_dun02", ico: "🦇", rank: "MVP", status: "spawn", eta: 45, ch: "Ch.3" },
+      { id: 6, name: "Golden Thief Bug", map: "prt_sewb4", ico: "🪲", rank: "MVP", status: "dead", eta: 72 * 60, ch: "Ch.1" },
+      { id: 7, name: "Maya", map: "anthell02", ico: "🐜", rank: "MVP", status: "soon", eta: 8 * 60 + 5, ch: "Ch.2" },
+      { id: 8, name: "Osiris", map: "moc_pryd04", ico: "🏺", rank: "MVP", status: "dead", eta: 95 * 60, ch: "Ch.1" },
+    ];
+
+    let filter = "all";
+    let query = "";
+
+    const list = document.getElementById("list");
+    const toast = document.getElementById("toast");
+    const sync = document.getElementById("sync");
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1500);
+    }
+
+    function fmt(sec) {
+      if (sec <= 0) return "—";
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+      return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    }
+
+    function badge(status) {
+      const map = {
+        alive: ["ALIVE", "alive"],
+        dead: ["DEAD", "dead"],
+        soon: ["SOON", "soon"],
+        spawn: ["SPAWNING", "spawn"],
+      };
+      const [label, cls] = map[status];
+      return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function timerText(b) {
+      if (b.status === "alive") return `<div class="timer muted">On map now</div>`;
+      if (b.status === "spawn") return `<div class="timer" style="color:var(--spawn)">${fmt(b.eta)}</div>`;
+      return `<div class="timer">${fmt(b.eta)}</div>`;
+    }
+
+    function filtered() {
+      return bosses.filter(b => {
+        if (filter === "alive" && b.status !== "alive") return false;
+        if (filter === "dead" && b.status !== "dead") return false;
+        if (filter === "soon" && !(b.status === "soon" || b.status === "spawn")) return false;
+        if (query) {
+          const q = query.toLowerCase();
+          if (!b.name.toLowerCase().includes(q) && !b.map.toLowerCase().includes(q)) return false;
+        }
+        return true;
+      });
+    }
+
+    function render() {
+      const rows = filtered();
+      if (!rows.length) {
+        list.innerHTML = `<div class="empty">No bosses match filter</div>`;
+        return;
+      }
+      list.innerHTML = rows.map(b => `
+        <div class="card">
+          <div class="portrait"><span class="rank">${b.rank}</span>${b.ico}</div>
+          <div>
+            <div class="name">${b.name}</div>
+            <div class="sub">${b.map} · ${b.ch}</div>
+          </div>
+          <div class="status-col">
+            ${badge(b.status)}
+            ${timerText(b)}
+          </div>
+          <div class="actions">
+            <button class="ro-btn ghost" type="button" data-act="locate" data-id="${b.id}">Locate</button>
+            <button class="ro-btn primary" type="button" data-act="tp" data-id="${b.id}">Teleport</button>
+          </div>
+        </div>
+      `).join("");
+
+      list.querySelectorAll("[data-act]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const b = bosses.find(x => x.id === Number(btn.dataset.id));
+          if (btn.dataset.act === "locate") showToast(`Minimap mark → ${b.map}`);
+          else showToast(b.status === "alive" ? `Warp near ${b.name}` : `Warp to ${b.map} (spawn area)`);
+        });
+      });
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        filter = tab.dataset.filter;
+        render();
+      });
+    });
+
+    document.getElementById("search").addEventListener("input", (e) => {
+      query = e.target.value.trim();
+      render();
+    });
+
+    document.getElementById("refresh").addEventListener("click", () => {
+      sync.textContent = "Timers sync from server · last update just now";
+      showToast("MVP timers refreshed");
+      render();
+    });
+
+    // live countdown
+    setInterval(() => {
+      for (const b of bosses) {
+        if (b.status === "alive") continue;
+        if (b.eta > 0) b.eta -= 1;
+        if (b.eta <= 0 && b.status !== "alive") {
+          b.status = "alive";
+          b.eta = 0;
+        } else if (b.eta > 0 && b.eta <= 60 && b.status === "dead") {
+          b.status = "soon";
+        } else if (b.eta > 0 && b.eta <= 60 && b.status === "soon") {
+          b.status = "spawn";
+        }
+      }
+      render();
+    }, 1000);
+
+    render();
+  </script>
+</body>
+</html>

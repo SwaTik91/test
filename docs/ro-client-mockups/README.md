@@ -34,3 +34,10 @@ Origin-style card summons with **Seals** currency, ×1/×10 pulls, pity to SSR, 
 - Static preview: [dungeon-instance-mockup.png](./dungeon-instance-mockup.png)
 
 Party memorial dungeon entry: difficulty tabs, party ready checks, private instance create/warp.
+
+## MVP Boss Spawn
+
+- Interactive: [mvp-spawn.html](./mvp-spawn.html)
+- Static preview: [mvp-spawn-mockup.png](./mvp-spawn-mockup.png)
+
+Origin-style MVP tracker: Alive/Dead/Soon filters, respawn timers, locate/teleport actions.
