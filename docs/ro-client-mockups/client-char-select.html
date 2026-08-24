@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>goro client - character selection</title>
+<link rel="stylesheet" href="client-flow.css">
+<style>
+  /* ui/character_select_window.go: 576x373, centered on a 1280x720 window. */
+  .charsel {
+    left: 352px;
+    top: 173px;
+    width: 576px;
+    height: 373px;
+  }
+
+  /* Content padding top 12, left and right 24; 9px between sections. */
+  .charsel-body {
+    padding: 12px 24px 0 24px;
+  }
+
+  .slot-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 144px;
+  }
+
+  /* Arrow columns are IconButtonSize x slot height, 17x144. */
+  .arrow {
+    width: 17px;
+    height: 144px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .arrow i {
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  .arrow.left i {
+    border-right: 7px solid #62707e;
+  }
+
+  .arrow.right i {
+    border-left: 7px solid #62707e;
+  }
+
+  .slots {
+    display: flex;
+    gap: 25px;
+  }
+
+  /* Slots are 139x144, #FAFCFF with a 1px #76A0CE border; the selected one
+     is filled with the #DEEDFC selection color. */
+  .slot {
+    position: relative;
+    width: 139px;
+    height: 144px;
+    background: #fafcff;
+    border: 1px solid #76a0ce;
+  }
+
+  .slot.selected {
+    background: #deedfc;
+    border-color: #8aaed6;
+  }
+
+  .slot .create {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: center;
+    color: #62707e;
+  }
+
+  /* The preview is a cached bitmap: idle action, direction 0, scale 0.92,
+     anchored so the feet sit at y=119 with the body centred on x=69. */
+  .preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+
+  .page {
+    margin-top: 9px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+  }
+
+  /* Info panel is 318x105 with 2px padding and a 1px #76A0CE border. */
+  .info {
+    margin: 9px auto 0 auto;
+    width: 318px;
+    height: 105px;
+    padding: 2px;
+    background: #fafcff;
+    border: 1px solid #76a0ce;
+  }
+
+  /* Six 16px rows separated by 1px. */
+  .info-row {
+    display: flex;
+    height: 16px;
+  }
+
+  .info-row + .info-row {
+    margin-top: 1px;
+  }
+
+  .info-row .half {
+    display: flex;
+    width: 50%;
+  }
+
+  .cell {
+    height: 16px;
+    line-height: 16px;
+    padding: 0 4px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* Label cells use the selection color, value cells the footer color. */
+  .cell.key {
+    background: #deedfc;
+  }
+
+  .cell.value {
+    background: #f4f6f8;
+    flex: 1;
+  }
+
+  .half.left .key {
+    width: 44px;
+  }
+
+  .half.right .key {
+    width: 32px;
+  }
+
+  .half.right .value {
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="window charsel">
+    <div class="titlebar">Select Character</div>
+    <div class="charsel-body">
+      <div class="slot-row">
+        <div class="arrow left"><i></i></div>
+        <div class="slots">
+          <div class="slot selected">
+            <svg class="preview" width="139" height="144" viewBox="0 0 139 144">
+              <g shape-rendering="crispEdges">
+                <rect x="60" y="110" width="8" height="9" fill="#5a4633"/>
+                <rect x="71" y="110" width="8" height="9" fill="#5a4633"/>
+                <rect x="61" y="96" width="7" height="15" fill="#6f7f96"/>
+                <rect x="71" y="96" width="7" height="15" fill="#6f7f96"/>
+                <rect x="58" y="72" width="23" height="26" fill="#8a94a8"/>
+                <rect x="58" y="72" width="23" height="5" fill="#a7b0c2"/>
+                <rect x="61" y="86" width="17" height="6" fill="#6b7488"/>
+                <rect x="52" y="75" width="6" height="18" fill="#8a94a8"/>
+                <rect x="81" y="75" width="6" height="18" fill="#8a94a8"/>
+                <rect x="52" y="92" width="6" height="6" fill="#e3bb92"/>
+                <rect x="81" y="92" width="6" height="6" fill="#e3bb92"/>
+                <rect x="63" y="66" width="13" height="8" fill="#e3bb92"/>
+                <rect x="61" y="57" width="17" height="10" fill="#7a4a2b"/>
+                <rect x="61" y="66" width="4" height="5" fill="#7a4a2b"/>
+                <rect x="74" y="66" width="4" height="5" fill="#7a4a2b"/>
+                <rect x="66" y="69" width="2" height="2" fill="#3b2f27"/>
+                <rect x="71" y="69" width="2" height="2" fill="#3b2f27"/>
+                <rect x="86" y="70" width="3" height="26" fill="#c9ced8"/>
+                <rect x="84" y="94" width="7" height="4" fill="#6a5334"/>
+                <ellipse cx="69" cy="121" rx="18" ry="4" fill="#000" opacity="0.16"/>
+              </g>
+            </svg>
+          </div>
+          <div class="slot">
+            <div class="create">Create</div>
+          </div>
+          <div class="slot">
+            <div class="create">Create</div>
+          </div>
+        </div>
+        <div class="arrow right"><i></i></div>
+      </div>
+
+      <div class="page muted">1 / 3</div>
+
+      <div class="info">
+        <div class="info-row">
+          <div class="half left"><div class="cell key">Name</div><div class="cell value">Sirius</div></div>
+          <div class="half right"><div class="cell key">STR</div><div class="cell value">45</div></div>
+        </div>
+        <div class="info-row">
+          <div class="half left"><div class="cell key">Job</div><div class="cell value">Swordman</div></div>
+          <div class="half right"><div class="cell key">AGI</div><div class="cell value">30</div></div>
+        </div>
+        <div class="info-row">
+          <div class="half left"><div class="cell key">Level</div><div class="cell value">42 / 21</div></div>
+          <div class="half right"><div class="cell key">VIT</div><div class="cell value">38</div></div>
+        </div>
+        <div class="info-row">
+          <div class="half left"><div class="cell key">Exp</div><div class="cell value">128450</div></div>
+          <div class="half right"><div class="cell key">INT</div><div class="cell value">12</div></div>
+        </div>
+        <div class="info-row">
+          <div class="half left"><div class="cell key">HP</div><div class="cell value">1240 / 1240</div></div>
+          <div class="half right"><div class="cell key">DEX</div><div class="cell value">25</div></div>
+        </div>
+        <div class="info-row">
+          <div class="half left"><div class="cell key">SP</div><div class="cell value">180 / 180</div></div>
+          <div class="half right"><div class="cell key">LUK</div><div class="cell value">18</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete is enabled for an occupied slot, Make only for an empty one. -->
+    <div class="footer">
+      <div class="btn">Delete</div>
+      <div class="spacer"></div>
+      <div class="btn disabled">Make</div>
+      <div class="btn">OK</div>
+      <div class="btn">Cancel</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

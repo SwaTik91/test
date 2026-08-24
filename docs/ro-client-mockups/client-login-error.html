@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>goro client - connection failed</title>
+<link rel="stylesheet" href="client-flow.css">
+<style>
+  .login {
+    left: 488px;
+    top: 401px;
+    width: 304px;
+    height: 159px;
+  }
+
+  .login-body {
+    padding: 18px 20px 0 24px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    height: 22px;
+  }
+
+  .row + .row {
+    margin-top: 11px;
+  }
+
+  .row .label {
+    width: 56px;
+  }
+
+  .row .gap {
+    width: 12px;
+  }
+
+  /* ui/confirm_modal.go: alert prompts are 286x156 and centered. */
+  .modal {
+    left: 497px;
+    top: 282px;
+    width: 286px;
+    height: 156px;
+  }
+
+  /* 12px side padding, a four line block of 14px lines centred in the
+     86px content area between the title bar and the footer. */
+  .modal-body {
+    height: 86px;
+    padding: 0 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .modal-line {
+    height: 14px;
+    line-height: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="window login">
+    <div class="titlebar">Login</div>
+    <div class="login-body">
+      <div class="row">
+        <div class="label">Account</div>
+        <div class="gap"></div>
+        <div class="field">
+          <div class="text"><span>testaccount</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Password</div>
+        <div class="gap"></div>
+        <div class="field">
+          <div class="text"><span>**********</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="spacer"></div>
+      <div class="btn">Login</div>
+    </div>
+  </div>
+
+  <div class="window modal">
+    <div class="titlebar">Disconnected</div>
+    <div class="modal-body">
+      <div class="modal-line">Failed to Connect to Server.</div>
+      <div class="modal-line"></div>
+      <div class="modal-line"></div>
+      <div class="modal-line"></div>
+    </div>
+    <div class="footer">
+      <div class="spacer"></div>
+      <div class="btn">OK</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -2,6 +2,55 @@
 
 Interactive and static UI sketches for custom systems on top of a classic RO client.
 
+Note that the first section below is different in kind from the rest: it reproduces
+what the goro client draws today, rather than proposing something new.
+
+## Current client flow (reproduction of goro as it exists today)
+
+Every color, size and string here is taken from the client source, so these are
+the screens as the client actually paints them, not a redesign. Shared widget
+styling lives in [client-flow.css](./client-flow.css); the source of each value
+is cited in the comments there and in each page.
+
+- Launch: [client-login-launch.html](./client-login-launch.html) — [client-login-launch.png](./client-login-launch.png)
+- Credentials entered: [client-login-filled.html](./client-login-filled.html) — [client-login-filled.png](./client-login-filled.png)
+- Connection failure: [client-login-error.html](./client-login-error.html) — [client-login-error.png](./client-login-error.png)
+- Character selection: [client-char-select.html](./client-char-select.html) — [client-char-select.png](./client-char-select.png)
+
+Rendered at the default window size of 1280x720 (`config/config.go`).
+
+What the screens reflect about the current implementation:
+
+- The login dialog is 304x159 (`ui/login_window.go`), positioned two thirds down
+  the window, and holds exactly two fields labelled `Account` and `Password`
+  plus a single `Login` button. There is no remember-me checkbox, no exit
+  button, no version text and no visible server list.
+- Widgets are drawn by `ui/rotheme`, not from RO interface bitmaps. The palette
+  is a light blue-on-white theme (`#D6E8FA` title gradient, `#76A0CE` borders,
+  `#FAFCFF` panels) at 11px DejaVu Sans. `login_interface/win_select.bmp` is
+  loaded but never drawn.
+- The background is `bgi_temp.bmp` from the data directory for a 2008 client
+  date. The screenshots show the fallback fill `#0A0D16` that appears when the
+  asset is missing, which is also what a first run without a data directory
+  looks like.
+- The password field masks input as one asterisk per rune, and the focused field
+  draws a 1px caret with no blink. Account has focus on start.
+- Server selection has no UI at all. A manual login always uses the first entry
+  from `clientinfo.xml`, defaulting to `Local rAthena` at `127.0.0.1:6900`.
+- Failures surface as a modal titled `Disconnected`; the internal status strings
+  such as `CA_LOGIN sent` are never painted on screen. A wrong password is worth
+  watching during the first server run: `0x006A` (`AC_REFUSE_LOGIN`) has no
+  handler, so the rejection is likely to arrive as a generic disconnect instead
+  of a specific message.
+- Character selection is 576x373 with three slots of 139x144 per page, a `1 / 3`
+  page label, and a 318x105 info table. The table shows name, job, level, exp,
+  HP and SP against the six primary stats; zeny and last map are not displayed.
+  `Delete` is enabled only for an occupied slot and `Make` only for an empty one.
+- The character preview is a cached still frame, not a live animation: idle
+  action, front facing, scale 0.92, feet anchored 25px above the slot bottom.
+  It needs job sprites from the data directory, and the figure in the screenshot
+  is a stand-in for that sprite rather than a real ACT/SPR render.
+
 ## Auto Battle
 
 - Interactive: [autobattle.html](./autobattle.html)
