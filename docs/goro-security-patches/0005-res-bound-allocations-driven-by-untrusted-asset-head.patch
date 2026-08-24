@@ -1,0 +1,1381 @@
+From d2cf41cb03376e054404756c4d5f4c452249bc1a Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 24 Aug 2026 23:03:20 +0000
+Subject: [PATCH 5/6] res: bound allocations driven by untrusted asset headers
+
+Every parser here reads data an operator ships, and each of these counts and
+sizes was trusted before the first element was read, so tiny files caused fatal
+out of memory aborts a recover cannot catch. GRF entries are validated against
+the real archive size, PackedSize can no longer exceed AlignedSize, and
+decompression is bounded rather than trusting the declared size. ACT, GND, IMF,
+RSM, SPR, TGA and GR2 counts are checked against the bytes that remain, GAT
+dimensions no longer overflow past their truncation check, and the resource
+manager confirms a resolved path stays inside the data directory.
+---
+ res/act.go                    |  34 +++-
+ res/gat.go                    |  11 +-
+ res/gnd.go                    |  48 +++++-
+ res/gr2.go                    |  30 +++-
+ res/gr2_bink.go               |   3 +
+ res/grf.go                    |  73 +++++++--
+ res/grf_hardening_test.go     | 202 +++++++++++++++++++++++
+ res/imf.go                    |  23 ++-
+ res/manager.go                |  11 ++
+ res/parsers_hardening_test.go | 294 ++++++++++++++++++++++++++++++++++
+ res/rsm.go                    |  46 ++++--
+ res/spr.go                    |  29 +++-
+ res/tga.go                    |  25 ++-
+ 13 files changed, 775 insertions(+), 54 deletions(-)
+ create mode 100644 res/grf_hardening_test.go
+ create mode 100644 res/parsers_hardening_test.go
+
+diff --git a/res/act.go b/res/act.go
+index e09d781..c007c35 100644
+--- a/res/act.go
++++ b/res/act.go
+@@ -55,6 +55,9 @@ func ParseACT(data []byte) (*ACT, error) {
+ 	}
+ 	actionCount := int(reader.u16())
+ 	reader.skip(10)
++	if err := reader.checkCount("action", int64(actionCount), 4); err != nil {
++		return nil, err
++	}
+ 	act.Actions = make([]ACTAction, actionCount)
+ 	for i := range act.Actions {
+ 		animations, err := reader.readAnimations(act)
+@@ -66,8 +69,8 @@ func ParseACT(data []byte) (*ACT, error) {
+ 
+ 	if act.versionAtLeast(2, 1) {
+ 		soundCount := int(reader.i32())
+-		if soundCount < 0 {
+-			return nil, fmt.Errorf("act negative sound count")
++		if err := reader.checkCount("sound", int64(soundCount), 40); err != nil {
++			return nil, err
+ 		}
+ 		act.Sounds = make([]string, soundCount)
+ 		for i := range act.Sounds {
+@@ -100,8 +103,8 @@ func (a *ACT) ActionFor(action, direction int) (ACTAction, bool) {
+ 
+ func (r *actReader) readAnimations(act *ACT) ([]ACTAnimation, error) {
+ 	count := int(r.u32())
+-	if count < 0 {
+-		return nil, fmt.Errorf("act negative animation count")
++	if err := r.checkCount("animation", int64(count), 36); err != nil {
++		return nil, err
+ 	}
+ 	animations := make([]ACTAnimation, count)
+ 	for i := range animations {
+@@ -117,8 +120,8 @@ func (r *actReader) readAnimations(act *ACT) ([]ACTAnimation, error) {
+ 
+ func (r *actReader) readLayers(act *ACT) (ACTAnimation, error) {
+ 	count := int(r.u32())
+-	if count < 0 {
+-		return ACTAnimation{}, fmt.Errorf("act negative layer count")
++	if err := r.checkCount("layer", int64(count), 16); err != nil {
++		return ACTAnimation{}, err
+ 	}
+ 	anim := ACTAnimation{Layers: make([]ACTLayer, count), Sound: -1}
+ 	for i := range anim.Layers {
+@@ -156,8 +159,8 @@ func (r *actReader) readLayers(act *ACT) (ACTAnimation, error) {
+ 	}
+ 	if act.versionAtLeast(2, 3) {
+ 		count := int(r.i32())
+-		if count < 0 {
+-			return ACTAnimation{}, fmt.Errorf("act negative position count")
++		if err := r.checkCount("position", int64(count), 16); err != nil {
++			return ACTAnimation{}, err
+ 		}
+ 		anim.Pos = make([]ACTPosition, count)
+ 		for i := range anim.Pos {
+@@ -194,6 +197,21 @@ func (r *actReader) skip(n int) {
+ 	_ = r.bytes(n)
+ }
+ 
++func (r *actReader) remaining() int {
++	if r.err != nil || r.offset >= len(r.data) {
++		return 0
++	}
++	return len(r.data) - r.offset
++}
++
++func (r *actReader) checkCount(label string, count int64, bytesPerElem int) error {
++	err := checkParsedCount("act", label, count, bytesPerElem, r.remaining())
++	if err != nil && r.err == nil {
++		r.err = err
++	}
++	return err
++}
++
+ func (r *actReader) u8() byte {
+ 	data := r.bytes(1)
+ 	if r.err != nil {
+diff --git a/res/gat.go b/res/gat.go
+index cc32011..fb41bae 100644
+--- a/res/gat.go
++++ b/res/gat.go
+@@ -41,10 +41,9 @@ func ParseGAT(data []byte) (*GAT, error) {
+ 		return nil, fmt.Errorf("invalid gat size %dx%d", width, height)
+ 	}
+ 
+-	cellCount := width * height
+-	expected := 14 + cellCount*20
+-	if len(data) < expected {
+-		return nil, fmt.Errorf("gat truncated: have %d want %d", len(data), expected)
++	cellCount := uint64(width) * uint64(height)
++	if cellCount > (uint64(len(data))-14)/20 {
++		return nil, fmt.Errorf("gat truncated: have %d want %d cells", len(data), cellCount)
+ 	}
+ 
+ 	gat := &GAT{
+@@ -52,11 +51,11 @@ func ParseGAT(data []byte) (*GAT, error) {
+ 		VersionMinor: data[5],
+ 		Width:        width,
+ 		Height:       height,
+-		Cells:        make([]GATCell, cellCount),
++		Cells:        make([]GATCell, int(cellCount)),
+ 	}
+ 
+ 	offset := 14
+-	for i := 0; i < cellCount; i++ {
++	for i := 0; i < int(cellCount); i++ {
+ 		cell := GATCell{}
+ 		for h := 0; h < 4; h++ {
+ 			cell.Heights[h] = -math.Float32frombits(binary.LittleEndian.Uint32(data[offset:offset+4])) * 0.2
+diff --git a/res/gnd.go b/res/gnd.go
+index 7cd57e1..b3a55aa 100644
+--- a/res/gnd.go
++++ b/res/gnd.go
+@@ -79,6 +79,9 @@ func ParseGND(data []byte) (*GND, error) {
+ 	if textureCount < 0 || textureNameLength <= 0 {
+ 		return nil, fmt.Errorf("invalid gnd texture table count=%d length=%d", textureCount, textureNameLength)
+ 	}
++	if err := reader.checkCount("texture", int64(textureCount), textureNameLength); err != nil {
++		return nil, err
++	}
+ 	textures := make([]string, textureCount)
+ 	for i := range textures {
+ 		textures[i] = fixedBinaryString(reader.bytes(textureNameLength))
+@@ -94,6 +97,13 @@ func ParseGND(data []byte) (*GND, error) {
+ 	if lightmapWidth <= 0 || lightmapHeight <= 0 || lightmapFormat <= 0 {
+ 		return nil, fmt.Errorf("invalid gnd lightmap header count=%d size=%dx%d format=%d", lightmapCount, lightmapWidth, lightmapHeight, lightmapFormat)
+ 	}
++	lightmapEntrySize := 16
++	if minor == 7 {
++		lightmapEntrySize = 256
++	}
++	if err := reader.checkCount("lightmap", int64(lightmapCount), lightmapEntrySize); err != nil {
++		return nil, err
++	}
+ 	lightmaps := make([]GNDLightmap, lightmapCount)
+ 	if minor == 7 {
+ 		for i := range lightmaps {
+@@ -108,6 +118,9 @@ func ParseGND(data []byte) (*GND, error) {
+ 		if colorChannelCount < 0 {
+ 			return nil, fmt.Errorf("invalid gnd color channel count=%d", colorChannelCount)
+ 		}
++		if err := reader.checkCount("color channel", int64(colorChannelCount), 40); err != nil {
++			return nil, err
++		}
+ 		colorChannels := make([][40]byte, colorChannelCount)
+ 		for i := range colorChannels {
+ 			copy(colorChannels[i][:], reader.bytes(40))
+@@ -121,6 +134,9 @@ func ParseGND(data []byte) (*GND, error) {
+ 	if surfaceCount < 0 {
+ 		return nil, fmt.Errorf("invalid gnd surface count=%d", surfaceCount)
+ 	}
++	if err := reader.checkCount("surface", int64(surfaceCount), 40); err != nil {
++		return nil, err
++	}
+ 	surfaces := make([]GNDSurface, surfaceCount)
+ 	for i := range surfaces {
+ 		var surface GNDSurface
+@@ -140,8 +156,11 @@ func ParseGND(data []byte) (*GND, error) {
+ 		surfaces[i] = surface
+ 	}
+ 
+-	cellCount := width * height
+-	cells := make([]GNDCell, cellCount)
++	cellCount := int64(width) * int64(height)
++	if err := reader.checkCount("cell", cellCount, 28); err != nil {
++		return nil, err
++	}
++	cells := make([]GNDCell, int(cellCount))
+ 	for i := range cells {
+ 		var cell GNDCell
+ 		for j := range cell.Heights {
+@@ -169,7 +188,11 @@ func ParseGND(data []byte) (*GND, error) {
+ 			SplitHeight: reader.i32(),
+ 		}
+ 		if minor >= 9 && water.SplitWidth > 0 && water.SplitHeight > 0 {
+-			reader.skip(int(water.SplitWidth * water.SplitHeight * 24))
++			meshCells := int64(water.SplitWidth) * int64(water.SplitHeight)
++			if err := reader.checkCount("water mesh", meshCells, 24); err != nil {
++				return nil, err
++			}
++			reader.skip(int(meshCells) * 24)
+ 		}
+ 	}
+ 
+@@ -290,6 +313,17 @@ func isASCIIWhitespace(c byte) bool {
+ 	}
+ }
+ 
++// maxParsedImageDimension is far above anything the client ships, so it only
++// rejects sizes that could never be backed by real pixel data.
++const maxParsedImageDimension = 8192
++
++func checkParsedCount(format, label string, count int64, bytesPerElem, remaining int) error {
++	if count < 0 || (bytesPerElem > 0 && count > int64(remaining)/int64(bytesPerElem)) {
++		return fmt.Errorf("%s implausible %s count %d", format, label, count)
++	}
++	return nil
++}
++
+ type gndReader struct {
+ 	data   []byte
+ 	offset int
+@@ -313,6 +347,14 @@ func (r *gndReader) skip(n int) {
+ 	_ = r.bytes(n)
+ }
+ 
++func (r *gndReader) checkCount(label string, count int64, bytesPerElem int) error {
++	err := checkParsedCount("gnd", label, count, bytesPerElem, r.remaining())
++	if err != nil && r.err == nil {
++		r.err = err
++	}
++	return err
++}
++
+ func (r *gndReader) remaining() int {
+ 	if r.err != nil || r.offset >= len(r.data) {
+ 		return 0
+diff --git a/res/gr2.go b/res/gr2.go
+index 855b086..525f4c2 100644
+--- a/res/gr2.go
++++ b/res/gr2.go
+@@ -14,6 +14,10 @@ const (
+ 	gr2SectorSize   = 44
+ 	gr2FixupSize    = 12
+ 	gr2OodleTailPad = 4
++
++	// gr2MaxDecompressedSize bounds the oodle output, whose declared length is
++	// not tied to the compressed input size.
++	gr2MaxDecompressedSize = 256 << 20
+ )
+ 
+ var (
+@@ -92,11 +96,11 @@ func ParseGR2Container(data []byte) (*GR2Container, error) {
+ 	}
+ 
+ 	sectorTable := gr2HeaderSize + fileInfoSize
+-	if sectorTable+sectorCount*gr2SectorSize > len(data) {
++	if sectorCount < 0 || sectorCount > (len(data)-sectorTable)/gr2SectorSize {
+ 		return nil, fmt.Errorf("gr2: sector table truncated")
+ 	}
+ 	sectors := make([]GR2SectorInfo, 0, sectorCount)
+-	total := 0
++	total := int64(0)
+ 	for i := 0; i < sectorCount; i++ {
+ 		base := sectorTable + i*gr2SectorSize
+ 		sector := GR2SectorInfo{
+@@ -110,10 +114,13 @@ func ParseGR2Container(data []byte) (*GR2Container, error) {
+ 			FixupCount:    readGR2U32At(data, base+32),
+ 		}
+ 		sectors = append(sectors, sector)
+-		total += int(sector.DecompressLen)
++		total += int64(sector.DecompressLen)
++		if total > gr2MaxDecompressedSize {
++			return nil, fmt.Errorf("gr2: decompressed size %d exceeds limit", total)
++		}
+ 	}
+ 
+-	out := make([]byte, total)
++	out := make([]byte, int(total))
+ 	sectorOffsets := make([]int, 0, sectorCount)
+ 	offset := 0
+ 	for _, sector := range sectors {
+@@ -407,6 +414,10 @@ func (n *gr2Nav) array(slot int) (count int, ptr int, err error) {
+ 	return int(rawCount), int(rawPtr), nil
+ }
+ 
++func (n *gr2Nav) checkCount(label string, count, bytesPerElem int) error {
++	return checkParsedCount("gr2", label, int64(count), bytesPerElem, len(n.data))
++}
++
+ func (n *gr2Nav) variantArray(slot int) (typ int, count int, ptr int, err error) {
+ 	rawType, err := n.u32(slot)
+ 	if err != nil {
+@@ -534,7 +545,7 @@ func (t GR2Texture) HasAlpha() bool {
+ 
+ func (t GR2Texture) RGBA() ([]byte, error) {
+ 	width, height := int(t.Width), int(t.Height)
+-	if width <= 0 || height <= 0 {
++	if width <= 0 || height <= 0 || width > maxParsedImageDimension || height > maxParsedImageDimension {
+ 		return nil, fmt.Errorf("gr2 texture: invalid size %dx%d", width, height)
+ 	}
+ 	switch {
+@@ -841,6 +852,9 @@ func parseGR2Array[T any](nav *gr2Nav, root []gr2Field, name string, parse func(
+ 	if err != nil {
+ 		return nil, nil, err
+ 	}
++	if err := nav.checkCount(name, count, 4); err != nil {
++		return nil, nil, err
++	}
+ 	out := make([]T, 0, count)
+ 	offsets := make([]int, 0, count)
+ 	for i := 0; i < count; i++ {
+@@ -1157,6 +1171,9 @@ func parseGR2TopologyIndices(nav *gr2Nav, fields []gr2Field, name string, bytesP
+ 	if err != nil || ptr == 0 {
+ 		return nil, err
+ 	}
++	if err := nav.checkCount(name, count, bytesPerIndex); err != nil {
++		return nil, err
++	}
+ 	indices := make([]uint32, 0, count)
+ 	for i := 0; i < count; i++ {
+ 		switch bytesPerIndex {
+@@ -1342,6 +1359,9 @@ func parseGR2Curve(nav *gr2Nav, typeOff, slot int) (GR2Curve, error) {
+ 		if err != nil || ptr == 0 {
+ 			return nil, err
+ 		}
++		if err := nav.checkCount(name, count, 4); err != nil {
++			return nil, err
++		}
+ 		out := make([]float32, 0, count)
+ 		for i := 0; i < count; i++ {
+ 			value, err := nav.f32(ptr + i*4)
+diff --git a/res/gr2_bink.go b/res/gr2_bink.go
+index 6f538fd..925e7da 100644
+--- a/res/gr2_bink.go
++++ b/res/gr2_bink.go
+@@ -378,6 +378,9 @@ func decodeGR2BinkPlanes(pixels []byte, width, height int, hasAlpha bool) (gr2Bi
+ 	}
+ 	off := 4
+ 	for i := 0; i < n; i++ {
++		if off > len(pixels) {
++			return gr2BinkDecodedPlanes{}, fmt.Errorf("gr2 bink: plane %d truncated", i)
++		}
+ 		plane := make([]int16, w*h)
+ 		flags := make([]byte, h)
+ 		consumed, err := decodeGR2BinkPlane(pixels[off:], plane, w, h, flags)
+diff --git a/res/grf.go b/res/grf.go
+index baf676b..4eaf62b 100644
+--- a/res/grf.go
++++ b/res/grf.go
+@@ -21,6 +21,10 @@ const (
+ 	grfHeaderSize = 46
+ 	grfVersion200 = 0x200
+ 	grfVersion300 = 0x300
++
++	// grfMaxUnpackedSize bounds zlib output, whose expansion ratio is otherwise
++	// unlimited; no shipped archive holds a single entry anywhere near this.
++	grfMaxUnpackedSize = 256 << 20
+ )
+ 
+ var (
+@@ -32,6 +36,7 @@ var (
+ type GRF struct {
+ 	path    string
+ 	file    *os.File
++	size    int64
+ 	version uint32
+ 	entries map[string]GRFEntry
+ }
+@@ -50,10 +55,16 @@ func OpenGRF(path string) (*GRF, error) {
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	info, err := file.Stat()
++	if err != nil {
++		_ = file.Close()
++		return nil, err
++	}
+ 
+ 	grf := &GRF{
+ 		path:    path,
+ 		file:    file,
++		size:    info.Size(),
+ 		entries: make(map[string]GRFEntry),
+ 	}
+ 	if err := grf.load(); err != nil {
+@@ -119,6 +130,9 @@ func (g *GRF) ReadFile(name string) ([]byte, error) {
+ 	if !ok {
+ 		return nil, ErrGRFNotFound
+ 	}
++	if entry.AlignedSize > grfMaxUnpackedSize || entry.RealSize > grfMaxUnpackedSize {
++		return nil, fmt.Errorf("grf entry %s too large: aligned=%d real=%d", entry.Name, entry.AlignedSize, entry.RealSize)
++	}
+ 	raw := make([]byte, entry.AlignedSize)
+ 	if _, err := g.file.ReadAt(raw, int64(entry.Offset+grfHeaderSize)); err != nil {
+ 		return nil, err
+@@ -141,12 +155,23 @@ func (g *GRF) ReadFile(name string) ([]byte, error) {
+ 	defer reader.Close()
+ 
+ 	out := bytes.NewBuffer(make([]byte, 0, entry.RealSize))
+-	if _, err := io.Copy(out, reader); err != nil {
+-		return nil, err
++	if err := copyBounded(out, reader, int64(entry.RealSize)); err != nil {
++		return nil, fmt.Errorf("grf entry %s: %w", entry.Name, err)
+ 	}
+ 	return out.Bytes(), nil
+ }
+ 
++func copyBounded(dst io.Writer, src io.Reader, limit int64) error {
++	written, err := io.CopyN(dst, src, limit+1)
++	if err != nil && !errors.Is(err, io.EOF) {
++		return err
++	}
++	if written > limit {
++		return fmt.Errorf("decompressed past declared size %d", limit)
++	}
++	return nil
++}
++
+ func decryptGRFEntry(raw []byte, entry GRFEntry) error {
+ 	switch {
+ 	case entry.Type&0x02 != 0:
+@@ -188,7 +213,7 @@ func (g *GRF) load() error {
+ 		tableOffset := uint64(binary.LittleEndian.Uint32(header[30:34])) + grfHeaderSize
+ 		skip := binary.LittleEndian.Uint32(header[34:38])
+ 		fileCountRaw := binary.LittleEndian.Uint32(header[38:42])
+-		if fileCountRaw < skip+7 {
++		if uint64(fileCountRaw) < uint64(skip)+7 {
+ 			return fmt.Errorf("invalid grf file count")
+ 		}
+ 		return g.loadTable(tableOffset, fileCountRaw-skip-7, false)
+@@ -208,6 +233,12 @@ func (g *GRF) loadTable(offset uint64, count uint32, wideOffset bool) error {
+ 	}
+ 	packedSize := binary.LittleEndian.Uint32(tableHeader[:4])
+ 	realSize := binary.LittleEndian.Uint32(tableHeader[4:8])
++	if end := offset + 8 + uint64(packedSize); end < offset || end > uint64(g.size) {
++		return fmt.Errorf("grf file table truncated: packed=%d", packedSize)
++	}
++	if realSize > grfMaxUnpackedSize {
++		return fmt.Errorf("grf file table too large: %d", realSize)
++	}
+ 
+ 	packed := make([]byte, packedSize)
+ 	if _, err := g.file.ReadAt(packed, int64(offset+8)); err != nil {
+@@ -221,15 +252,23 @@ func (g *GRF) loadTable(offset uint64, count uint32, wideOffset bool) error {
+ 	defer reader.Close()
+ 
+ 	table := bytes.NewBuffer(make([]byte, 0, realSize))
+-	if _, err := io.Copy(table, reader); err != nil {
+-		return err
++	if err := copyBounded(table, reader, int64(realSize)); err != nil {
++		return fmt.Errorf("grf file table: %w", err)
+ 	}
+-	return g.parseEntries(table.Bytes(), int(count), wideOffset)
++	return g.parseEntries(table.Bytes(), count, wideOffset)
+ }
+ 
+-func (g *GRF) parseEntries(table []byte, count int, wideOffset bool) error {
++func (g *GRF) parseEntries(table []byte, count uint32, wideOffset bool) error {
++	metaSize := 17
++	if wideOffset {
++		metaSize = 21
++	}
++	if uint64(count) > uint64(len(table)/(metaSize+1)) {
++		return fmt.Errorf("invalid grf file count %d", count)
++	}
++
+ 	pos := 0
+-	for i := 0; i < count; i++ {
++	for i := 0; i < int(count); i++ {
+ 		start := pos
+ 		for pos < len(table) && table[pos] != 0 {
+ 			pos++
+@@ -240,10 +279,6 @@ func (g *GRF) parseEntries(table []byte, count int, wideOffset bool) error {
+ 		name := normalizeGRFName(decodeGRFName(table[start:pos]))
+ 		pos++
+ 
+-		metaSize := 17
+-		if wideOffset {
+-			metaSize = 21
+-		}
+ 		if len(table)-pos < metaSize {
+ 			return fmt.Errorf("truncated grf metadata at entry %d", i)
+ 		}
+@@ -262,11 +297,25 @@ func (g *GRF) parseEntries(table []byte, count int, wideOffset bool) error {
+ 		}
+ 		pos += metaSize
+ 
++		if err := g.validateEntry(entry, i); err != nil {
++			return err
++		}
+ 		g.entries[name] = entry
+ 	}
+ 	return nil
+ }
+ 
++func (g *GRF) validateEntry(entry GRFEntry, index int) error {
++	if entry.PackedSize > entry.AlignedSize {
++		return fmt.Errorf("grf entry %d packed size %d exceeds aligned size %d", index, entry.PackedSize, entry.AlignedSize)
++	}
++	end := entry.Offset + grfHeaderSize + uint64(entry.AlignedSize)
++	if end < entry.Offset || end > uint64(g.size) {
++		return fmt.Errorf("grf entry %d extends past end of archive: offset=%d aligned=%d", index, entry.Offset, entry.AlignedSize)
++	}
++	return nil
++}
++
+ func normalizeGRFName(name string) string {
+ 	if !utf8.ValidString(name) {
+ 		name = decodeGRFName([]byte(name))
+diff --git a/res/grf_hardening_test.go b/res/grf_hardening_test.go
+new file mode 100644
+index 0000000..4fdc186
+--- /dev/null
++++ b/res/grf_hardening_test.go
+@@ -0,0 +1,202 @@
++package res
++
++import (
++	"bytes"
++	"encoding/binary"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++type hardeningGRFEntry struct {
++	name        string
++	packedSize  uint32
++	alignedSize uint32
++	realSize    uint32
++	entryType   byte
++	offset      uint32
++}
++
++func buildHardeningGRF(body []byte, entries []hardeningGRFEntry) []byte {
++	var table bytes.Buffer
++	for _, entry := range entries {
++		table.WriteString(entry.name)
++		table.WriteByte(0)
++		writeU32(&table, entry.packedSize)
++		writeU32(&table, entry.alignedSize)
++		writeU32(&table, entry.realSize)
++		table.WriteByte(entry.entryType)
++		writeU32(&table, entry.offset)
++	}
++	compressedTable := zlibBytes(table.Bytes())
++
++	var out bytes.Buffer
++	header := make([]byte, grfHeaderSize)
++	copy(header[:15], []byte("Master of Magic"))
++	binary.LittleEndian.PutUint32(header[30:34], uint32(len(body)))
++	binary.LittleEndian.PutUint32(header[34:38], 0)
++	binary.LittleEndian.PutUint32(header[38:42], uint32(len(entries))+7)
++	binary.LittleEndian.PutUint32(header[42:46], grfVersion200)
++	out.Write(header)
++	out.Write(body)
++	writeU32(&out, uint32(len(compressedTable)))
++	writeU32(&out, uint32(table.Len()))
++	out.Write(compressedTable)
++	return out.Bytes()
++}
++
++func writeHardeningGRF(t *testing.T, data []byte) string {
++	t.Helper()
++	path := filepath.Join(t.TempDir(), "data.grf")
++	if err := os.WriteFile(path, data, 0o644); err != nil {
++		t.Fatal(err)
++	}
++	return path
++}
++
++func TestOpenGRFRejectsPackedSizeAboveAlignedSize(t *testing.T) {
++	body := zlibBytes([]byte("hello world"))
++	data := buildHardeningGRF(body, []hardeningGRFEntry{{
++		name:        `data\hello.txt`,
++		packedSize:  1024,
++		alignedSize: uint32(len(body)),
++		realSize:    11,
++		entryType:   0x01,
++	}})
++
++	_, err := OpenGRF(writeHardeningGRF(t, data))
++	if err == nil {
++		t.Fatal("expected rejection of packed size above aligned size")
++	}
++	if !strings.Contains(err.Error(), "packed size") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestOpenGRFRejectsEntryPastArchiveEnd(t *testing.T) {
++	body := zlibBytes([]byte("hello world"))
++	data := buildHardeningGRF(body, []hardeningGRFEntry{{
++		name:        `data\hello.txt`,
++		packedSize:  uint32(len(body)),
++		alignedSize: 0xFFFFFFF0,
++		realSize:    11,
++		entryType:   0x01,
++	}})
++
++	_, err := OpenGRF(writeHardeningGRF(t, data))
++	if err == nil {
++		t.Fatal("expected rejection of entry reaching past the archive")
++	}
++	if !strings.Contains(err.Error(), "past end of archive") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestGRFReadFileCapsDecompressionBomb(t *testing.T) {
++	body := zlibBytes(bytes.Repeat([]byte("A"), 4<<20))
++	data := buildHardeningGRF(body, []hardeningGRFEntry{{
++		name:        `data\bomb.txt`,
++		packedSize:  uint32(len(body)),
++		alignedSize: uint32(len(body)),
++		realSize:    16,
++		entryType:   0x01,
++	}})
++
++	grf, err := OpenGRF(writeHardeningGRF(t, data))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer grf.Close()
++
++	out, err := grf.ReadFile("data/bomb.txt")
++	if err == nil {
++		t.Fatalf("expected bomb rejection, got %d bytes", len(out))
++	}
++	if !strings.Contains(err.Error(), "declared size") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestOpenGRFRejectsOversizedFileTable(t *testing.T) {
++	body := zlibBytes([]byte("hello world"))
++	entries := []hardeningGRFEntry{{
++		name:        `data\hello.txt`,
++		packedSize:  uint32(len(body)),
++		alignedSize: uint32(len(body)),
++		realSize:    11,
++		entryType:   0x01,
++	}}
++	tableHeader := grfHeaderSize + len(body)
++
++	t.Run("packed size past archive end", func(t *testing.T) {
++		data := buildHardeningGRF(body, entries)
++		binary.LittleEndian.PutUint32(data[tableHeader:tableHeader+4], 0xFFFFFFF0)
++		_, err := OpenGRF(writeHardeningGRF(t, data))
++		if err == nil || !strings.Contains(err.Error(), "file table truncated") {
++			t.Fatalf("err = %v", err)
++		}
++	})
++
++	t.Run("real size above cap", func(t *testing.T) {
++		data := buildHardeningGRF(body, entries)
++		binary.LittleEndian.PutUint32(data[tableHeader+4:tableHeader+8], 0xFFFFFFF0)
++		_, err := OpenGRF(writeHardeningGRF(t, data))
++		if err == nil || !strings.Contains(err.Error(), "file table too large") {
++			t.Fatalf("err = %v", err)
++		}
++	})
++}
++
++func TestOpenGRFRejectsFileCountAboveTableSize(t *testing.T) {
++	body := zlibBytes([]byte("hello world"))
++	data := buildHardeningGRF(body, []hardeningGRFEntry{{
++		name:        `data\hello.txt`,
++		packedSize:  uint32(len(body)),
++		alignedSize: uint32(len(body)),
++		realSize:    11,
++		entryType:   0x01,
++	}})
++	binary.LittleEndian.PutUint32(data[38:42], 0xFFFFFFF0)
++
++	_, err := OpenGRF(writeHardeningGRF(t, data))
++	if err == nil || !strings.Contains(err.Error(), "invalid grf file count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestManagerFindRejectsPathTraversal(t *testing.T) {
++	base := t.TempDir()
++	root := filepath.Join(base, "ro")
++	if err := os.MkdirAll(filepath.Join(root, "data"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(base, "secret.txt"), []byte("top secret"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(root, "data", "clientinfo.xml"), []byte("<clientinfo/>"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++
++	manager := &Manager{Root: root}
++	for _, name := range []string{
++		"../secret.txt",
++		`..\secret.txt`,
++		"./../secret.txt",
++		"data/../../secret.txt",
++		`data\..\..\secret.txt`,
++	} {
++		if path, ok := manager.Find(name); ok {
++			t.Fatalf("Find(%q) escaped the root: %s", name, path)
++		}
++		if data, err := manager.ReadFile(name); err == nil {
++			t.Fatalf("ReadFile(%q) returned %q", name, data)
++		}
++	}
++
++	for _, name := range []string{"data/clientinfo.xml", `data\clientinfo.xml`, "./data/clientinfo.xml"} {
++		if _, ok := manager.Find(name); !ok {
++			t.Fatalf("Find(%q) should still resolve inside the root", name)
++		}
++	}
++}
+diff --git a/res/imf.go b/res/imf.go
+index f1e48fb..daa45c8 100644
+--- a/res/imf.go
++++ b/res/imf.go
+@@ -38,14 +38,14 @@ func ParseIMF(data []byte) (*IMF, error) {
+ 	imf.Layers = make([]IMFLayer, layerCount)
+ 	for layerIndex := range imf.Layers {
+ 		actionCount := int(reader.i32())
+-		if actionCount < 0 {
+-			return nil, fmt.Errorf("imf negative action count")
++		if err := reader.checkCount("action", int64(actionCount), 4); err != nil {
++			return nil, err
+ 		}
+ 		actions := make([]IMFAction, actionCount)
+ 		for actionIndex := range actions {
+ 			motionCount := int(reader.i32())
+-			if motionCount < 0 {
+-				return nil, fmt.Errorf("imf negative motion count")
++			if err := reader.checkCount("motion", int64(motionCount), 12); err != nil {
++				return nil, err
+ 			}
+ 			motions := make([]IMFMotion, motionCount)
+ 			for motionIndex := range motions {
+@@ -117,6 +117,21 @@ type imfReader struct {
+ 	err    error
+ }
+ 
++func (r *imfReader) remaining() int {
++	if r.err != nil || r.offset >= len(r.data) {
++		return 0
++	}
++	return len(r.data) - r.offset
++}
++
++func (r *imfReader) checkCount(label string, count int64, bytesPerElem int) error {
++	err := checkParsedCount("imf", label, count, bytesPerElem, r.remaining())
++	if err != nil && r.err == nil {
++		r.err = err
++	}
++	return err
++}
++
+ func (r *imfReader) i32() int32 {
+ 	if r.err != nil {
+ 		return 0
+diff --git a/res/manager.go b/res/manager.go
+index fbc9d6b..59e69ca 100644
+--- a/res/manager.go
++++ b/res/manager.go
+@@ -102,6 +102,9 @@ func (m *Manager) Find(name string) (string, bool) {
+ 	}
+ 
+ 	for _, candidate := range candidates {
++		if !m.contains(candidate) {
++			continue
++		}
+ 		if stat, err := os.Stat(candidate); err == nil && !stat.IsDir() {
+ 			return candidate, true
+ 		}
+@@ -109,6 +112,14 @@ func (m *Manager) Find(name string) (string, bool) {
+ 	return "", false
+ }
+ 
++func (m *Manager) contains(candidate string) bool {
++	rel, err := filepath.Rel(m.Root, candidate)
++	if err != nil {
++		return false
++	}
++	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
++}
++
+ func (m *Manager) ReadFile(name string) ([]byte, error) {
+ 	path, ok := m.Find(name)
+ 	if ok {
+diff --git a/res/parsers_hardening_test.go b/res/parsers_hardening_test.go
+new file mode 100644
+index 0000000..ff4f2fc
+--- /dev/null
++++ b/res/parsers_hardening_test.go
+@@ -0,0 +1,294 @@
++package res
++
++import (
++	"bytes"
++	"encoding/binary"
++	"hash/crc32"
++	"strings"
++	"testing"
++)
++
++func TestParseACTRejectsAbsurdAnimationCount(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("AC")
++	buf.WriteByte(5)
++	buf.WriteByte(2)
++	writeU16(&buf, 1)
++	buf.Write(make([]byte, 10))
++	writeU32(&buf, 0xFFFFFFF0)
++
++	if _, err := ParseACT(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd animation count")
++	} else if !strings.Contains(err.Error(), "implausible animation count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseACTRejectsAbsurdActionCount(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("AC")
++	buf.WriteByte(5)
++	buf.WriteByte(2)
++	writeU16(&buf, 0xFFFF)
++	buf.Write(make([]byte, 10))
++
++	if _, err := ParseACT(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd action count")
++	} else if !strings.Contains(err.Error(), "implausible action count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func buildHardeningGND(width, height, lightmapCount uint32) []byte {
++	var buf bytes.Buffer
++	buf.WriteString("GRGN")
++	buf.WriteByte(1)
++	buf.WriteByte(8)
++	writeU32(&buf, width)
++	writeU32(&buf, height)
++	writeF32(&buf, 1)
++	writeU32(&buf, 0)
++	writeU32(&buf, 40)
++	writeU32(&buf, lightmapCount)
++	writeU32(&buf, 8)
++	writeU32(&buf, 8)
++	writeU32(&buf, 1)
++	return buf.Bytes()
++}
++
++func TestParseGNDRejectsAbsurdLightmapCount(t *testing.T) {
++	if _, err := ParseGND(buildHardeningGND(1, 1, 0x7FFFFFF0)); err == nil {
++		t.Fatal("expected rejection of absurd lightmap count")
++	} else if !strings.Contains(err.Error(), "implausible lightmap count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseGNDRejectsAbsurdCellCount(t *testing.T) {
++	data := buildHardeningGND(0x40000000, 0x40000000, 0)
++	var buf bytes.Buffer
++	buf.Write(data)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0)
++
++	if _, err := ParseGND(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd cell count")
++	} else if !strings.Contains(err.Error(), "implausible cell count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseGNDRejectsAbsurdWaterMesh(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("GRGN")
++	buf.WriteByte(1)
++	buf.WriteByte(9)
++	writeU32(&buf, 1)
++	writeU32(&buf, 1)
++	writeF32(&buf, 1)
++	writeU32(&buf, 0)
++	writeU32(&buf, 40)
++	writeU32(&buf, 0)
++	writeU32(&buf, 8)
++	writeU32(&buf, 8)
++	writeU32(&buf, 1)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0)
++	buf.Write(make([]byte, 28))
++	writeF32(&buf, 0)
++	writeU32(&buf, 0)
++	writeF32(&buf, 0)
++	writeF32(&buf, 0)
++	writeF32(&buf, 0)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0x40000000)
++	writeU32(&buf, 0x40000000)
++
++	if _, err := ParseGND(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd water mesh size")
++	} else if !strings.Contains(err.Error(), "implausible water mesh count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseIMFRejectsAbsurdActionCount(t *testing.T) {
++	var buf bytes.Buffer
++	writeU32(&buf, 1)
++	writeU32(&buf, 0)
++	writeU32(&buf, 1)
++	writeU32(&buf, 0x7FFFFFF0)
++
++	if _, err := ParseIMF(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd action count")
++	} else if !strings.Contains(err.Error(), "implausible action count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseIMFRejectsAbsurdMotionCount(t *testing.T) {
++	var buf bytes.Buffer
++	writeU32(&buf, 1)
++	writeU32(&buf, 0)
++	writeU32(&buf, 1)
++	writeU32(&buf, 1)
++	writeU32(&buf, 0x7FFFFFF0)
++
++	if _, err := ParseIMF(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd motion count")
++	} else if !strings.Contains(err.Error(), "implausible motion count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func buildHardeningTGA(imageType byte, width, height uint16, pixels []byte) []byte {
++	header := make([]byte, 18)
++	header[2] = imageType
++	binary.LittleEndian.PutUint16(header[12:14], width)
++	binary.LittleEndian.PutUint16(header[14:16], height)
++	header[16] = 32
++	return append(header, pixels...)
++}
++
++func TestDecodeTGARejectsAbsurdDimensions(t *testing.T) {
++	if _, err := decodeTGA(buildHardeningTGA(2, 65535, 65535, nil)); err == nil {
++		t.Fatal("expected rejection of absurd tga size")
++	} else if !strings.Contains(err.Error(), "invalid tga size") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestDecodeTGARejectsImplausiblePixelBudget(t *testing.T) {
++	for _, imageType := range []byte{2, 10} {
++		if _, err := decodeTGA(buildHardeningTGA(imageType, 8192, 8192, make([]byte, 32))); err == nil {
++			t.Fatalf("expected rejection of truncated tga type %d", imageType)
++		} else if !strings.Contains(err.Error(), "truncated tga pixels") {
++			t.Fatalf("type %d err = %v", imageType, err)
++		}
++	}
++}
++
++func TestParseGATRejectsDimensionOverflow(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("GRAT")
++	buf.WriteByte(1)
++	buf.WriteByte(2)
++	writeU32(&buf, 0xFFFFFFFF)
++	writeU32(&buf, 0xFFFFFFFF)
++
++	if _, err := ParseGAT(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of overflowing gat dimensions")
++	} else if !strings.Contains(err.Error(), "gat truncated") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseSPRRejectsOversizedRLEFrame(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("SP")
++	buf.WriteByte(1)
++	buf.WriteByte(2)
++	writeU16(&buf, 1)
++	writeU16(&buf, 0)
++	writeU16(&buf, 65535)
++	writeU16(&buf, 65535)
++	writeU16(&buf, 0)
++
++	if _, err := ParseSPR(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd rle frame size")
++	} else if !strings.Contains(err.Error(), "indexed frame invalid size") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseSPRRejectsRLEFrameLargerThanCompressedData(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("SP")
++	buf.WriteByte(1)
++	buf.WriteByte(2)
++	writeU16(&buf, 1)
++	writeU16(&buf, 0)
++	writeU16(&buf, 4096)
++	writeU16(&buf, 4096)
++	writeU16(&buf, 8)
++	buf.Write(make([]byte, 8))
++
++	if _, err := ParseSPR(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of rle frame larger than its compressed data")
++	} else if !strings.Contains(err.Error(), "exceeds") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseSPRRejectsAbsurdFrameCount(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("SP")
++	buf.WriteByte(1)
++	buf.WriteByte(2)
++	writeU16(&buf, 0xFFFF)
++	writeU16(&buf, 0xFFFF)
++
++	if _, err := ParseSPR(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd frame count")
++	} else if !strings.Contains(err.Error(), "implausible frame count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseRSMRejectsAbsurdNodeCount(t *testing.T) {
++	var buf bytes.Buffer
++	buf.WriteString("GRSM")
++	buf.WriteByte(2)
++	buf.WriteByte(2)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0)
++	buf.WriteByte(255)
++	writeF32(&buf, 60)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0)
++	writeU32(&buf, 0x7FFFFFF0)
++
++	if _, err := ParseRSM(buf.Bytes()); err == nil {
++		t.Fatal("expected rejection of absurd node count")
++	} else if !strings.Contains(err.Error(), "implausible node count") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestDecodeGR2BinkRejectsShortPixelBuffer(t *testing.T) {
++	if _, err := decodeGR2Bink(nil, 32, 32, false); err == nil {
++		t.Fatal("expected rejection of empty bink pixel buffer")
++	} else if !strings.Contains(err.Error(), "truncated") {
++		t.Fatalf("err = %v", err)
++	}
++	if _, err := decodeGR2Bink([]byte{0, 0}, 32, 32, false); err == nil {
++		t.Fatal("expected rejection of short bink pixel buffer")
++	}
++}
++
++func TestGR2TextureRejectsAbsurdDimensions(t *testing.T) {
++	texture := GR2Texture{Width: 65535, Height: 65535, Encoding: GR2TextureEncodingBink, BytesPerPixel: 4}
++	if _, err := texture.RGBA(); err == nil {
++		t.Fatal("expected rejection of absurd texture size")
++	} else if !strings.Contains(err.Error(), "invalid size") {
++		t.Fatalf("err = %v", err)
++	}
++}
++
++func TestParseGR2ContainerRejectsAbsurdSectorSize(t *testing.T) {
++	data := make([]byte, 0x44+gr2SectorSize)
++	for i, word := range gr2MagicFF6LE {
++		binary.LittleEndian.PutUint32(data[i*4:], word)
++	}
++	binary.LittleEndian.PutUint32(data[0x20:], 6)
++	binary.LittleEndian.PutUint32(data[0x24:], uint32(len(data)))
++	binary.LittleEndian.PutUint32(data[0x2c:], 0x44-gr2HeaderSize)
++	binary.LittleEndian.PutUint32(data[0x30:], 1)
++	binary.LittleEndian.PutUint32(data[0x44+12:], 0xFFFFFFF0)
++	binary.LittleEndian.PutUint32(data[0x28:], crc32.ChecksumIEEE(data[0x44:]))
++
++	if _, err := ParseGR2Container(data); err == nil {
++		t.Fatal("expected rejection of absurd decompressed size")
++	} else if !strings.Contains(err.Error(), "exceeds limit") {
++		t.Fatalf("err = %v", err)
++	}
++}
+diff --git a/res/rsm.go b/res/rsm.go
+index 41b4441..238a903 100644
+--- a/res/rsm.go
++++ b/res/rsm.go
+@@ -147,6 +147,9 @@ func ParseRSM(data []byte) (*RSM, error) {
+ 	if nodeCount < 0 {
+ 		return nil, fmt.Errorf("invalid rsm node count=%d", nodeCount)
+ 	}
++	if err := reader.checkCount("node", int64(nodeCount), 64); err != nil {
++		return nil, err
++	}
+ 	rsm.Nodes = make([]RSMNode, int(nodeCount))
+ 	for i := range rsm.Nodes {
+ 		rsm.Nodes[i] = readRSMNode(&reader, rsm, len(rsm.Nodes) == 1)
+@@ -165,6 +168,9 @@ func ParseRSM(data []byte) (*RSM, error) {
+ 		if volumeCount < 0 {
+ 			return nil, fmt.Errorf("invalid rsm volume count=%d", volumeCount)
+ 		}
++		if err := reader.checkCount("volume", int64(volumeCount), 36); err != nil {
++			return nil, err
++		}
+ 		rsm.VolumeBoxes = make([]RSMVolumeBox, int(volumeCount))
+ 		for i := range rsm.VolumeBoxes {
+ 			rsm.VolumeBoxes[i] = RSMVolumeBox{
+@@ -222,6 +228,13 @@ func readRSMStringTable(reader *rsmReader, lengthPrefixed bool) []string {
+ 	if count <= 0 {
+ 		return nil
+ 	}
++	entrySize := 40
++	if lengthPrefixed {
++		entrySize = 4
++	}
++	if reader.checkCount("string", int64(count), entrySize) != nil {
++		return nil
++	}
+ 	out := make([]string, int(count))
+ 	for i := range out {
+ 		if lengthPrefixed {
+@@ -249,7 +262,7 @@ func readRSMNode(reader *rsmReader, rsm *RSM, only bool) RSMNode {
+ 	}
+ 
+ 	textureCount := reader.i32()
+-	if textureCount > 0 {
++	if textureCount > 0 && reader.checkCount("node texture", int64(textureCount), 4) == nil {
+ 		node.TextureRefs = make([]RSMTextureRef, int(textureCount))
+ 		for i := range node.TextureRefs {
+ 			if rsm.versionAtLeast(2, 3) {
+@@ -274,7 +287,7 @@ func readRSMNode(reader *rsmReader, rsm *RSM, only bool) RSMNode {
+ 	}
+ 
+ 	vertexCount := reader.i32()
+-	if vertexCount > 0 {
++	if vertexCount > 0 && reader.checkCount("vertex", int64(vertexCount), 12) == nil {
+ 		node.Vertices = make([]RSMVector3, int(vertexCount))
+ 		for i := range node.Vertices {
+ 			node.Vertices[i] = reader.vector3()
+@@ -282,7 +295,7 @@ func readRSMNode(reader *rsmReader, rsm *RSM, only bool) RSMNode {
+ 	}
+ 
+ 	textureVertexCount := reader.i32()
+-	if textureVertexCount > 0 {
++	if textureVertexCount > 0 && reader.checkCount("texture vertex", int64(textureVertexCount), 8) == nil {
+ 		node.TextureVertices = make([]RSMTextureVertex, int(textureVertexCount))
+ 		for i := range node.TextureVertices {
+ 			if rsm.versionAtLeast(1, 2) {
+@@ -301,7 +314,7 @@ func readRSMNode(reader *rsmReader, rsm *RSM, only bool) RSMNode {
+ 	}
+ 
+ 	faceCount := reader.i32()
+-	if faceCount > 0 {
++	if faceCount > 0 && reader.checkCount("face", int64(faceCount), 20) == nil {
+ 		node.Faces = make([]RSMFace, int(faceCount))
+ 		for i := range node.Faces {
+ 			faceLen := int32(-1)
+@@ -348,7 +361,7 @@ func readRSMNode(reader *rsmReader, rsm *RSM, only bool) RSMNode {
+ 
+ func readRSMScaleKeyframes(reader *rsmReader) []RSMScaleKeyframe {
+ 	count := reader.i32()
+-	if count <= 0 {
++	if count <= 0 || reader.checkCount("scale keyframe", int64(count), 20) != nil {
+ 		return nil
+ 	}
+ 	out := make([]RSMScaleKeyframe, int(count))
+@@ -364,7 +377,7 @@ func readRSMScaleKeyframes(reader *rsmReader) []RSMScaleKeyframe {
+ 
+ func readRSMRotationKeyframes(reader *rsmReader) []RSMRotationKeyframe {
+ 	count := reader.i32()
+-	if count <= 0 {
++	if count <= 0 || reader.checkCount("rotation keyframe", int64(count), 20) != nil {
+ 		return nil
+ 	}
+ 	out := make([]RSMRotationKeyframe, int(count))
+@@ -379,7 +392,7 @@ func readRSMRotationKeyframes(reader *rsmReader) []RSMRotationKeyframe {
+ 
+ func readRSMPositionKeyframes(reader *rsmReader) []RSMPositionKeyframe {
+ 	count := reader.i32()
+-	if count <= 0 {
++	if count <= 0 || reader.checkCount("position keyframe", int64(count), 20) != nil {
+ 		return nil
+ 	}
+ 	out := make([]RSMPositionKeyframe, int(count))
+@@ -395,7 +408,7 @@ func readRSMPositionKeyframes(reader *rsmReader) []RSMPositionKeyframe {
+ 
+ func readRSMLegacyPositionKeyframes(reader *rsmReader) []RSMPositionKeyframe {
+ 	count := reader.i32()
+-	if count <= 0 {
++	if count <= 0 || reader.checkCount("position keyframe", int64(count), 20) != nil {
+ 		return nil
+ 	}
+ 	out := make([]RSMPositionKeyframe, int(count))
+@@ -411,21 +424,21 @@ func readRSMLegacyPositionKeyframes(reader *rsmReader) []RSMPositionKeyframe {
+ 
+ func readRSMTextureKeyframeGroups(reader *rsmReader) []RSMTextureKeyframeGroup {
+ 	count := reader.i32()
+-	if count <= 0 {
++	if count <= 0 || reader.checkCount("texture keyframe group", int64(count), 8) != nil {
+ 		return nil
+ 	}
+ 	out := make([]RSMTextureKeyframeGroup, int(count))
+ 	for i := range out {
+ 		out[i].TextureID = reader.i32()
+ 		animCount := reader.i32()
+-		if animCount <= 0 {
++		if animCount <= 0 || reader.checkCount("texture animation", int64(animCount), 8) != nil {
+ 			continue
+ 		}
+ 		out[i].Animation = make([]RSMTextureAnimation, int(animCount))
+ 		for j := range out[i].Animation {
+ 			out[i].Animation[j].Type = reader.i32()
+ 			frameCount := reader.i32()
+-			if frameCount <= 0 {
++			if frameCount <= 0 || reader.checkCount("texture keyframe", int64(frameCount), 8) != nil {
+ 				continue
+ 			}
+ 			out[i].Animation[j].Frames = make([]RSMTextureKeyframe, int(frameCount))
+@@ -466,9 +479,20 @@ type rsmReader struct {
+ }
+ 
+ func (r *rsmReader) remaining() int {
++	if r.err != nil {
++		return 0
++	}
+ 	return len(r.data) - r.offset
+ }
+ 
++func (r *rsmReader) checkCount(label string, count int64, bytesPerElem int) error {
++	err := checkParsedCount("rsm", label, count, bytesPerElem, r.remaining())
++	if err != nil && r.err == nil {
++		r.err = err
++	}
++	return err
++}
++
+ func (r *rsmReader) bytes(n int) []byte {
+ 	if r.err != nil {
+ 		return nil
+diff --git a/res/spr.go b/res/spr.go
+index 8b48042..d67e74b 100644
+--- a/res/spr.go
++++ b/res/spr.go
+@@ -42,6 +42,9 @@ func ParseSPR(data []byte) (*SPR, error) {
+ 		spr.RGBACount = int(reader.u16())
+ 	}
+ 	spr.RGBAIndex = spr.IndexedCount
++	if err := reader.checkCount("frame", int64(spr.IndexedCount)+int64(spr.RGBACount), 4); err != nil {
++		return nil, err
++	}
+ 	spr.Frames = make([]SPRFrame, spr.IndexedCount+spr.RGBACount)
+ 
+ 	for i := 0; i < spr.IndexedCount; i++ {
+@@ -54,8 +57,8 @@ func ParseSPR(data []byte) (*SPR, error) {
+ 	for i := 0; i < spr.RGBACount; i++ {
+ 		width := int(reader.i16())
+ 		height := int(reader.i16())
+-		if width < 0 || height < 0 {
+-			return nil, fmt.Errorf("spr rgba frame %d negative size %dx%d", i, width, height)
++		if width < 0 || height < 0 || width > maxParsedImageDimension || height > maxParsedImageDimension {
++			return nil, fmt.Errorf("spr rgba frame %d invalid size %dx%d", i, width, height)
+ 		}
+ 		pixels := reader.bytes(width * height * 4)
+ 		if reader.err != nil {
+@@ -158,7 +161,7 @@ func (r *sprReader) readIndexedFrame(rle bool) (SPRFrame, error) {
+ 	width := int(r.u16())
+ 	height := int(r.u16())
+ 	size := width * height
+-	if width < 0 || height < 0 || size < 0 {
++	if width > maxParsedImageDimension || height > maxParsedImageDimension {
+ 		return SPRFrame{}, fmt.Errorf("spr indexed frame invalid size %dx%d", width, height)
+ 	}
+ 	frame := SPRFrame{Type: SPRFramePalette, Width: width, Height: height}
+@@ -175,6 +178,11 @@ func (r *sprReader) readIndexedFrame(rle bool) (SPRFrame, error) {
+ 	if end < r.offset || end > len(r.data) {
+ 		return SPRFrame{}, fmt.Errorf("spr rle frame truncated")
+ 	}
++	// A zero byte plus a run length is the densest encoding, so each compressed
++	// byte can stand for at most 255 pixels.
++	if size > (end-r.offset)*255 {
++		return SPRFrame{}, fmt.Errorf("spr rle frame size %dx%d exceeds %d compressed bytes", width, height, end-r.offset)
++	}
+ 	frame.Data = make([]byte, size)
+ 	write := 0
+ 	for r.offset < end {
+@@ -209,6 +217,21 @@ func (r *sprReader) readIndexedFrame(rle bool) (SPRFrame, error) {
+ 	return frame, nil
+ }
+ 
++func (r *sprReader) remaining() int {
++	if r.err != nil || r.offset >= len(r.data) {
++		return 0
++	}
++	return len(r.data) - r.offset
++}
++
++func (r *sprReader) checkCount(label string, count int64, bytesPerElem int) error {
++	err := checkParsedCount("spr", label, count, bytesPerElem, r.remaining())
++	if err != nil && r.err == nil {
++		r.err = err
++	}
++	return err
++}
++
+ func (r *sprReader) bytes(n int) []byte {
+ 	if r.err != nil {
+ 		return nil
+diff --git a/res/tga.go b/res/tga.go
+index 64d1c6a..4fef69d 100644
+--- a/res/tga.go
++++ b/res/tga.go
+@@ -21,7 +21,7 @@ func decodeTGA(data []byte) (image.Image, error) {
+ 	height := int(binary.LittleEndian.Uint16(data[14:16]))
+ 	bpp := int(data[16])
+ 	descriptor := data[17]
+-	if width <= 0 || height <= 0 {
++	if width <= 0 || height <= 0 || width > maxParsedImageDimension || height > maxParsedImageDimension {
+ 		return nil, fmt.Errorf("invalid tga size %dx%d", width, height)
+ 	}
+ 	if bpp != 24 && bpp != 32 {
+@@ -32,8 +32,12 @@ func decodeTGA(data []byte) (image.Image, error) {
+ 		return nil, fmt.Errorf("invalid tga id length")
+ 	}
+ 
+-	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+ 	bytesPerPixel := bpp / 8
++	if err := checkTGAPixelBudget(imageType, width*height, bytesPerPixel, len(data)-offset); err != nil {
++		return nil, err
++	}
++
++	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+ 	topOrigin := descriptor&0x20 != 0
+ 	switch imageType {
+ 	case 2:
+@@ -79,6 +83,23 @@ func decodeTGA(data []byte) (image.Image, error) {
+ 	return img, nil
+ }
+ 
++func checkTGAPixelBudget(imageType byte, pixelCount, bytesPerPixel, available int) error {
++	var minimum int
++	switch imageType {
++	case 2:
++		minimum = pixelCount * bytesPerPixel
++	case 10:
++		// An rle packet spans at most 128 pixels and costs a header byte plus one pixel.
++		minimum = pixelCount / 128 * (1 + bytesPerPixel)
++	default:
++		return nil
++	}
++	if minimum > available {
++		return fmt.Errorf("truncated tga pixels: have %d want at least %d", available, minimum)
++	}
++	return nil
++}
++
+ func setTGAPixel(img *image.NRGBA, index int, topOrigin bool, px []byte) {
+ 	width := img.Bounds().Dx()
+ 	x := index % width
