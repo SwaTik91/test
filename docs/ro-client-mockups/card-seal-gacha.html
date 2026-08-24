@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — Card Seal Gacha Mockup</title>
+  <style>
+    :root {
+      --win-body: #fff;
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --footer: #f4f6f8;
+      --footer-line: #aeb4bc;
+      --panel: #fafcff;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title-text: #163658;
+      --muted: #62707e;
+      --n: #7a8794;
+      --r: #3b82f6;
+      --sr: #a855f7;
+      --ssr: #d4a017;
+      --seal: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 20% 30%, #c9a22755, transparent 40%),
+        radial-gradient(ellipse at 80% 70%, #b4231833, transparent 45%),
+        linear-gradient(180deg, #6e8fa8, #4f6d5c);
+    }
+    .note {
+      width: min(980px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title-text);
+    }
+    .frame {
+      width: min(980px, 100%);
+      height: 600px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(90,140,170,.28), rgba(40,70,55,.22)),
+        #627e6a;
+      overflow: hidden;
+    }
+    .ro-win {
+      position: absolute;
+      inset: 20px 24px;
+      background: var(--win-body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--title-text);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); cursor: pointer; font-size: 10px; line-height: 12px; padding: 0;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid #d3dbe6;
+      font-size: 11px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--btn-border);
+      background: #fff;
+      padding: 4px 10px;
+      font-weight: 700;
+    }
+    .pill.seal { border-color: #d9a39d; color: var(--seal); background: #fff5f4; }
+    .pill.pity { border-color: #c9a227; color: #6a4d00; background: #fff8e6; }
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+    }
+    .summon-pane {
+      border-right: 1px solid #d3dbe6;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background:
+        radial-gradient(circle at 50% 42%, #fff6e8, transparent 42%),
+        linear-gradient(180deg, #f7f9fc, #eef2f7);
+    }
+    .altar {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      border: 3px solid #c9a227;
+      background:
+        radial-gradient(circle at 50% 45%, #fff 0%, #f5e6b8 35%, #e8c56a 60%, #8a5a20 100%);
+      box-shadow:
+        inset 0 0 0 8px rgba(255,255,255,.35),
+        0 0 0 6px rgba(180,35,24,.12),
+        0 10px 24px rgba(0,0,0,.18);
+      display: grid;
+      place-items: center;
+      position: relative;
+      transition: transform .15s ease;
+    }
+    .altar.pulse { transform: scale(1.04); }
+    .altar .seal-stamp {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 30%, #ff6b5a, #b42318 55%, #6b100c);
+      border: 4px solid #7a1a12;
+      color: #ffe3a0;
+      display: grid;
+      place-items: center;
+      font-size: 34px;
+      font-weight: 900;
+      text-shadow: 0 1px 0 #4a0c08;
+      box-shadow: inset 0 0 12px rgba(0,0,0,.35);
+    }
+    .altar .ring-text {
+      position: absolute;
+      bottom: 18px;
+      font-size: 10px;
+      font-weight: 800;
+      color: #6a4d00;
+      letter-spacing: .06em;
+    }
+    .summon-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .ro-btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 7px 14px;
+      cursor: pointer;
+      min-width: 110px;
+    }
+    .ro-btn:hover { background: var(--btn-hover); }
+    .ro-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .ro-btn.primary { background: #d7ecff; border-color: #528ac8; font-weight: 700; color: var(--title-text); }
+    .ro-btn.seal-btn {
+      background: linear-gradient(180deg, #ffe0dc, #f2b0a8);
+      border-color: #c45b52;
+      color: #6b100c;
+      font-weight: 800;
+    }
+    .ro-btn.seal-btn.x10 {
+      background: linear-gradient(180deg, #fff3c4, #f0d78a);
+      border-color: #c9a227;
+      color: #6a4d00;
+    }
+    .cost {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .info-pane {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      background: var(--panel);
+    }
+    .section {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--title-text);
+      margin-bottom: 6px;
+    }
+    .featured {
+      display: grid;
+      grid-template-columns: 84px 1fr;
+      gap: 10px;
+      border: 1px solid #c9a227;
+      background: linear-gradient(180deg, #fffaf0, #fff);
+      padding: 8px;
+    }
+    .card-art {
+      width: 84px;
+      height: 110px;
+      border: 2px solid #c9a227;
+      background:
+        linear-gradient(180deg, #2a3540, #1a222c),
+        #222;
+      color: #f5e6b8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-art .mob { font-size: 28px; }
+    .card-art .star { color: #ffd666; letter-spacing: 1px; }
+    .featured h4 { margin: 0 0 4px; font-size: 13px; color: var(--title-text); }
+    .featured p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    .rates {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      font-size: 10px;
+    }
+    .rate {
+      border: 1px solid #d3dbe6;
+      background: #fff;
+      padding: 6px 4px;
+      text-align: center;
+    }
+    .rate b { display: block; font-size: 11px; }
+    .rate.n b { color: var(--n); }
+    .rate.r b { color: var(--r); }
+    .rate.sr b { color: var(--sr); }
+    .rate.ssr b { color: var(--ssr); }
+    .history {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .history-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      min-height: 74px;
+    }
+    .mini {
+      width: 52px;
+      height: 68px;
+      flex: 0 0 auto;
+      border: 2px solid #9aa8b6;
+      background: #eef2f6;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      position: relative;
+      font-weight: 800;
+    }
+    .mini span {
+      position: absolute;
+      left: 2px; top: 1px;
+      font-size: 8px;
+      font-weight: 900;
+    }
+    .mini.n { border-color: var(--n); }
+    .mini.r { border-color: var(--r); background: #e8f1ff; }
+    .mini.sr { border-color: var(--sr); background: #f5e8ff; }
+    .mini.ssr { border-color: var(--ssr); background: #fff6d8; box-shadow: 0 0 0 1px #f0d78a; }
+    .empty-hist { font-size: 11px; color: var(--muted); padding: 18px 0; }
+    .ro-footer {
+      border-top: 1px solid var(--footer-line);
+      background: var(--footer);
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left { display: flex; gap: 8px; }
+    .toast {
+      position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+      background: rgba(20,28,36,.9); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 6;
+      white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis;
+    }
+    .toast.show { opacity: 1; }
+    .reveal {
+      position: absolute;
+      inset: 0;
+      background: rgba(15,20,28,.72);
+      display: none;
+      place-items: center;
+      z-index: 5;
+      padding: 20px;
+    }
+    .reveal.open { display: grid; }
+    .reveal-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      width: min(520px, 100%);
+      max-height: 90%;
+      overflow: auto;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+    }
+    .reveal-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      padding: 12px;
+    }
+    .reveal-grid.single { grid-template-columns: 1fr; place-items: center; }
+    .reveal-grid.single .mini { width: 96px; height: 128px; font-size: 28px; }
+    .reveal-grid.single .mini span { font-size: 12px; left: 6px; top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Макет гачи карт с печатями (Origin-style).</strong>
+    Summon x1 / x10 тратят печати. Pity до SSR. После крутки — окно результата.
+  </div>
+  <div class="frame">
+    <div class="toast" id="toast"></div>
+    <div class="reveal" id="reveal">
+      <div class="reveal-box">
+        <div class="ro-title"><span>Summon Result</span><button class="ro-close" type="button" id="closeReveal">×</button></div>
+        <div class="reveal-grid" id="revealGrid"></div>
+        <div class="ro-footer" style="justify-content:flex-end">
+          <button class="ro-btn primary" type="button" id="okReveal">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ro-win">
+      <div class="ro-title"><span>Card Seal Gacha</span><button class="ro-close" type="button">×</button></div>
+
+      <div class="topbar">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="pill seal">🔏 Seals: <span id="seals">128</span></div>
+          <div class="pill pity">Pity SSR: <span id="pity">42</span> left</div>
+        </div>
+        <div style="color:var(--muted)">Banner: Midgard Card Pack · Week 12</div>
+      </div>
+
+      <div class="body">
+        <div class="summon-pane">
+          <div class="altar" id="altar">
+            <div class="seal-stamp">印</div>
+            <div class="ring-text">SEAL ALTAR</div>
+          </div>
+          <div class="summon-actions">
+            <div>
+              <button class="ro-btn seal-btn" type="button" id="pull1">Summon ×1</button>
+              <div class="cost">Cost: 1 Seal</div>
+            </div>
+            <div>
+              <button class="ro-btn seal-btn x10" type="button" id="pull10">Summon ×10</button>
+              <div class="cost">Cost: 10 Seals</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-pane">
+          <div>
+            <div class="section">Featured SSR</div>
+            <div class="featured">
+              <div class="card-art">
+                <div class="mob">🐉</div>
+                <div class="star">★★★★</div>
+                <div>Baphomet</div>
+              </div>
+              <div>
+                <h4>Baphomet Card</h4>
+                <p>Featured SSR this week. Higher rate in this banner. Equip: Weapon — CRIT + related bonuses (placeholder).</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section">Rates</div>
+            <div class="rates">
+              <div class="rate n"><b>N</b>78%</div>
+              <div class="rate r"><b>R</b>16%</div>
+              <div class="rate sr"><b>SR</b>5%</div>
+              <div class="rate ssr"><b>SSR</b>1%</div>
+            </div>
+          </div>
+
+          <div class="history">
+            <div class="section">Recent pulls</div>
+            <div class="history-row" id="history"><div class="empty-hist">No pulls yet — try Summon</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ro-footer">
+        <div class="footer-left">
+          <button class="ro-btn" type="button" id="shopBtn">Seal Shop</button>
+          <button class="ro-btn" type="button" id="oddsBtn">Odds</button>
+        </div>
+        <button class="ro-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const POOL = {
+      N: [
+        { name: "Poring", ico: "🐷" },
+        { name: "Fabre", ico: "🐛" },
+        { name: "Lunatic", ico: "🐰" },
+        { name: "Drops", ico: "🟠" },
+      ],
+      R: [
+        { name: "Wolf", ico: "🐺" },
+        { name: "Goblin", ico: "👺" },
+        { name: "Orc", ico: "👹" },
+      ],
+      SR: [
+        { name: "Drake", ico: "🐊" },
+        { name: "Doppel", ico: "👤" },
+        { name: "Maya", ico: "🪲" },
+      ],
+      SSR: [
+        { name: "Baphomet", ico: "🐉" },
+        { name: "Phreeoni", ico: "🐛" },
+        { name: "Eddga", ico: "🐯" },
+      ],
+    };
+
+    let seals = 128;
+    let pity = 42; // pulls until hard pity SSR
+    const history = [];
+
+    const sealsEl = document.getElementById("seals");
+    const pityEl = document.getElementById("pity");
+    const historyEl = document.getElementById("history");
+    const toast = document.getElementById("toast");
+    const altar = document.getElementById("altar");
+    const reveal = document.getElementById("reveal");
+    const revealGrid = document.getElementById("revealGrid");
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1600);
+    }
+
+    function sync() {
+      sealsEl.textContent = String(seals);
+      pityEl.textContent = String(pity);
+    }
+
+    function rollRarity(forceSSR) {
+      if (forceSSR || pity <= 1) return "SSR";
+      const r = Math.random() * 100;
+      if (r < 1) return "SSR";
+      if (r < 6) return "SR";
+      if (r < 22) return "R";
+      return "N";
+    }
+
+    function pickCard(rarity) {
+      const list = POOL[rarity];
+      return { rarity, ...list[Math.floor(Math.random() * list.length)] };
+    }
+
+    function pullOne() {
+      const force = pity <= 1;
+      const rarity = rollRarity(force);
+      const card = pickCard(rarity);
+      if (rarity === "SSR") pity = 70;
+      else pity -= 1;
+      history.unshift(card);
+      if (history.length > 20) history.pop();
+      return card;
+    }
+
+    function renderHistory() {
+      if (!history.length) {
+        historyEl.innerHTML = '<div class="empty-hist">No pulls yet — try Summon</div>';
+        return;
+      }
+      historyEl.innerHTML = history.map(c =>
+        `<div class="mini ${c.rarity.toLowerCase()}" title="${c.name}"><span>${c.rarity}</span>${c.ico}</div>`
+      ).join("");
+    }
+
+    function showReveal(cards) {
+      revealGrid.className = "reveal-grid" + (cards.length === 1 ? " single" : "");
+      revealGrid.innerHTML = cards.map(c =>
+        `<div class="mini ${c.rarity.toLowerCase()}" title="${c.name}"><span>${c.rarity}</span>${c.ico}</div>`
+      ).join("");
+      reveal.classList.add("open");
+    }
+
+    function doPull(count) {
+      const cost = count;
+      if (seals < cost) {
+        showToast("Not enough Seals");
+        return;
+      }
+      seals -= cost;
+      altar.classList.add("pulse");
+      setTimeout(() => altar.classList.remove("pulse"), 180);
+
+      const got = [];
+      for (let i = 0; i < count; i++) got.push(pullOne());
+      sync();
+      renderHistory();
+      showReveal(got);
+
+      const ssr = got.filter(c => c.rarity === "SSR").length;
+      if (ssr) showToast(`SSR ×${ssr}!`);
+      else showToast(`Summoned ×${count}`);
+    }
+
+    document.getElementById("pull1").addEventListener("click", () => doPull(1));
+    document.getElementById("pull10").addEventListener("click", () => doPull(10));
+    document.getElementById("shopBtn").addEventListener("click", () => {
+      seals += 10;
+      sync();
+      showToast("+10 Seals (shop mock)");
+    });
+    document.getElementById("oddsBtn").addEventListener("click", () => {
+      showToast("N 78% · R 16% · SR 5% · SSR 1% · Pity 70");
+    });
+    const closeReveal = () => reveal.classList.remove("open");
+    document.getElementById("closeReveal").addEventListener("click", closeReveal);
+    document.getElementById("okReveal").addEventListener("click", closeReveal);
+
+    sync();
+  </script>
+</body>
+</html>
