@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — Passive Skill Tree Mockup</title>
+  <style>
+    :root {
+      --win-body: #fff;
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --footer: #f4f6f8;
+      --footer-line: #aeb4bc;
+      --panel: #fafcff;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title-text: #163658;
+      --muted: #62707e;
+      --unlocked: #1f7a3f;
+      --available: #b8860b;
+      --locked: #8a939c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 30% 20%, #c5dceb, transparent 50%),
+        linear-gradient(180deg, #7ea0b8, #5a7d68);
+    }
+    .note {
+      width: min(920px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.85);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title-text);
+    }
+    .frame {
+      width: min(920px, 100%);
+      height: 560px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(90,140,170,.3), rgba(40,70,55,.2)),
+        #6b8f78;
+      overflow: hidden;
+    }
+    .ro-win {
+      position: absolute;
+      inset: 28px 40px 28px 40px;
+      background: var(--win-body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--title-text);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); cursor: pointer; font-size: 10px; line-height: 12px; padding: 0;
+    }
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 168px 1fr;
+      min-height: 0;
+    }
+    .side {
+      border-right: 1px solid #d3dbe6;
+      background: var(--panel);
+      padding: 12px;
+      font-size: 11px;
+    }
+    .points {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--title-text);
+      line-height: 1;
+      margin: 4px 0 12px;
+    }
+    .legend div { display: flex; align-items: center; gap: 8px; margin: 6px 0; color: var(--muted); }
+    .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
+    .dot.u { background: #d8f5e2; border-color: var(--unlocked); }
+    .dot.a { background: #fff3c4; border-color: var(--available); }
+    .dot.l { background: #e8ebef; border-color: var(--locked); }
+    .hint { margin-top: 16px; color: var(--muted); line-height: 1.4; }
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 40%, #f7fbff, #e8eef6);
+      cursor: grab;
+    }
+    .canvas-wrap:active { cursor: grabbing; }
+    .canvas {
+      position: absolute;
+      width: 900px;
+      height: 700px;
+      left: 20px;
+      top: 10px;
+      transform-origin: 0 0;
+    }
+    svg.links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .node {
+      position: absolute;
+      width: 54px;
+      height: 54px;
+      margin: -27px 0 0 -27px;
+      border-radius: 50%;
+      border: 2px solid;
+      display: grid;
+      place-items: center;
+      font-size: 10px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.1;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 1px 0 rgba(0,0,0,.12);
+    }
+    .node small {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--title-text);
+    }
+    .node.unlocked { background: linear-gradient(180deg,#e7ffef,#c9f0d6); border-color: var(--unlocked); color: var(--unlocked); }
+    .node.available { background: linear-gradient(180deg,#fff8d6,#ffe08a); border-color: var(--available); color: #7a5a00; }
+    .node.locked { background: #eef1f4; border-color: var(--locked); color: var(--locked); }
+    .node.selected { outline: 2px solid #528ac8; outline-offset: 2px; }
+    .tooltip {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 200px;
+      background: rgba(255,255,255,.95);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      font-size: 11px;
+      box-shadow: 1px 1px 0 rgba(0,0,0,.12);
+      display: none;
+    }
+    .tooltip h4 { margin: 0 0 4px; font-size: 12px; color: var(--title-text); }
+    .tooltip p { margin: 0; color: var(--muted); line-height: 1.35; }
+    .ro-footer {
+      border-top: 1px solid var(--footer-line);
+      background: var(--footer);
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .ro-btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 12px;
+      cursor: pointer;
+      min-width: 72px;
+    }
+    .ro-btn:hover { background: var(--btn-hover); }
+    .ro-btn.primary { background: #d7ecff; border-color: #528ac8; font-weight: 700; color: var(--title-text); }
+    .toast {
+      position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+      background: rgba(20,28,36,.88); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 5;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="note"><strong>Макет дерева пассивок.</strong> Жёлтые ноды можно открыть за очко. Перетаскивайте поле мышью (pan). Колёсико — zoom.</div>
+  <div class="frame">
+    <div class="toast" id="toast"></div>
+    <div class="ro-win">
+      <div class="ro-title"><span>Passive Skill Tree</span><button class="ro-close" type="button">×</button></div>
+      <div class="layout">
+        <aside class="side">
+          <div style="color:var(--muted)">Points available</div>
+          <div class="points" id="points">12</div>
+          <div class="legend">
+            <div><span class="dot u"></span> Unlocked</div>
+            <div><span class="dot a"></span> Available</div>
+            <div><span class="dot l"></span> Locked</div>
+          </div>
+          <div class="hint">Отдельное окно прогрессии. Источник очков подключается позже.</div>
+        </aside>
+        <div class="canvas-wrap" id="wrap">
+          <div class="canvas" id="canvas">
+            <svg class="links" id="links"></svg>
+          </div>
+          <div class="tooltip" id="tip">
+            <h4 id="tipTitle">Node</h4>
+            <p id="tipBody">Bonus</p>
+          </div>
+        </div>
+      </div>
+      <div class="ro-footer">
+        <button class="ro-btn" type="button" id="reset">Reset</button>
+        <button class="ro-btn primary" type="button" id="unlock">Unlock selected</button>
+        <button class="ro-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const nodes = [
+      { id: "root", x: 120, y: 320, label: "CORE", name: "Core Ascension", desc: "Entry node. +1 all stats.", state: "unlocked", req: [] },
+      { id: "hp1", x: 250, y: 220, label: "HP+", name: "Vitality I", desc: "Max HP +150.", state: "unlocked", req: ["root"] },
+      { id: "atk1", x: 250, y: 320, label: "ATK", name: "Might I", desc: "ATK +5.", state: "unlocked", req: ["root"] },
+      { id: "sp1", x: 250, y: 420, label: "SP+", name: "Spirit I", desc: "Max SP +50.", state: "available", req: ["root"] },
+      { id: "crit", x: 400, y: 260, label: "CRT", name: "Keen Edge", desc: "Critical +3.", state: "available", req: ["atk1"] },
+      { id: "drop", x: 400, y: 180, label: "DROP", name: "Fortune I", desc: "Drop rate +1%.", state: "available", req: ["hp1"] },
+      { id: "cast", x: 400, y: 420, label: "CAST", name: "Focus I", desc: "Cast time -2%.", state: "locked", req: ["sp1"] },
+      { id: "exp", x: 550, y: 220, label: "EXP", name: "Scholar", desc: "EXP +2%.", state: "locked", req: ["drop"] },
+      { id: "aspd", x: 550, y: 320, label: "ASPD", name: "Swift Hands", desc: "ASPD +1%.", state: "locked", req: ["crit"] },
+      { id: "res", x: 550, y: 420, label: "RES", name: "Ward I", desc: "Soft def +10.", state: "locked", req: ["cast"] },
+      { id: "cap", x: 720, y: 320, label: "CAP", name: "Keystone", desc: "All bonuses +10% while active.", state: "locked", req: ["exp","aspd","res"] },
+    ];
+
+    const canvas = document.getElementById("canvas");
+    const links = document.getElementById("links");
+    const tip = document.getElementById("tip");
+    const tipTitle = document.getElementById("tipTitle");
+    const tipBody = document.getElementById("tipBody");
+    const pointsEl = document.getElementById("points");
+    const toast = document.getElementById("toast");
+    let points = 12;
+    let selected = null;
+    let scale = 1, panX = 20, panY = 10;
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1400);
+    }
+
+    function byId(id) { return nodes.find(n => n.id === id); }
+
+    function refreshLocks() {
+      for (const n of nodes) {
+        if (n.state === "unlocked") continue;
+        const ok = n.req.every(r => byId(r).state === "unlocked");
+        n.state = ok ? "available" : "locked";
+      }
+    }
+
+    function drawLinks() {
+      let html = "";
+      for (const n of nodes) {
+        for (const r of n.req) {
+          const p = byId(r);
+          const active = p.state === "unlocked";
+          html += `<line x1="${p.x}" y1="${p.y}" x2="${n.x}" y2="${n.y}" stroke="${active ? "#6aa84f" : "#b0bac6}" stroke-width="2" />`;
+        }
+      }
+      links.innerHTML = html;
+    }
+
+    function renderNodes() {
+      canvas.querySelectorAll(".node").forEach(el => el.remove());
+      for (const n of nodes) {
+        const el = document.createElement("div");
+        el.className = `node ${n.state}` + (selected === n.id ? " selected" : "");
+        el.style.left = n.x + "px";
+        el.style.top = n.y + "px";
+        el.innerHTML = `${n.label}<small>${n.name.split(" ")[0]}</small>`;
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          selected = n.id;
+          tip.style.display = "block";
+          tipTitle.textContent = n.name;
+          tipBody.textContent = n.desc + (n.state === "available" ? " · Cost: 1 point" : n.state === "locked" ? " · Locked" : " · Unlocked");
+          renderNodes();
+        });
+        canvas.appendChild(el);
+      }
+    }
+
+    function applyTransform() {
+      canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    document.getElementById("unlock").addEventListener("click", () => {
+      const n = byId(selected);
+      if (!n) return showToast("Select a node");
+      if (n.state !== "available") return showToast("Node not available");
+      if (points <= 0) return showToast("No points left");
+      points -= 1;
+      pointsEl.textContent = String(points);
+      n.state = "unlocked";
+      refreshLocks();
+      drawLinks();
+      renderNodes();
+      tipBody.textContent = n.desc + " · Unlocked";
+      showToast("Node unlocked");
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+      let refund = 0;
+      for (const n of nodes) {
+        if (n.id === "root") continue;
+        if (n.state === "unlocked") refund++;
+        n.state = "locked";
+      }
+      byId("root").state = "unlocked";
+      byId("hp1").state = "unlocked";
+      byId("atk1").state = "unlocked";
+      points += refund;
+      // re-calc properly from initial unlocked set
+      points = 12;
+      nodes.forEach(n => {
+        if (["root","hp1","atk1"].includes(n.id)) n.state = "unlocked";
+        else n.state = "locked";
+      });
+      refreshLocks();
+      pointsEl.textContent = String(points);
+      drawLinks();
+      renderNodes();
+      showToast("Tree reset (mock)");
+    });
+
+    const wrap = document.getElementById("wrap");
+    let dragging = false, lx = 0, ly = 0;
+    wrap.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".node")) return;
+      dragging = true; lx = e.clientX; ly = e.clientY;
+    });
+    window.addEventListener("mouseup", () => dragging = false);
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      panX += e.clientX - lx;
+      panY += e.clientY - ly;
+      lx = e.clientX; ly = e.clientY;
+      applyTransform();
+    });
+    wrap.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      scale = Math.min(1.6, Math.max(0.6, scale + (e.deltaY < 0 ? 0.08 : -0.08)));
+      applyTransform();
+    }, { passive: false });
+
+    refreshLocks();
+    drawLinks();
+    renderNodes();
+    applyTransform();
+  </script>
+</body>
+</html>

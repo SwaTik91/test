@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Modern Character & Inventory — Goro concept</title>
+  <style>
+    :root {
+      --bg0: #0f141b;
+      --panel: rgba(22, 28, 36, 0.88);
+      --panel2: rgba(30, 38, 48, 0.92);
+      --stroke: rgba(255,255,255,0.08);
+      --stroke2: rgba(232, 196, 140, 0.35);
+      --text: #edf2f7;
+      --muted: #9aa7b5;
+      --accent: #e8c48c;
+      --accent2: #7ec8c4;
+      --hp: #ff6b6b;
+      --sp: #5aa7ff;
+      --ok: #5ddea0;
+      --danger: #ff7b72;
+      --shadow: 0 20px 50px rgba(0,0,0,.45);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "Segoe UI", "Avenir Next", "Trebuchet MS", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 20% 10%, #3a4d5f 0%, transparent 45%),
+        radial-gradient(ellipse at 80% 80%, #2d4a3f 0%, transparent 40%),
+        linear-gradient(160deg, #1a2330, #121820 60%, #0d1218);
+    }
+    .note {
+      width: min(1100px, 100%);
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .note strong { color: var(--accent); }
+    .stage {
+      width: min(1100px, 100%);
+      min-height: 640px;
+      position: relative;
+      border-radius: 20px;
+      border: 1px solid var(--stroke);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      background:
+        linear-gradient(180deg, rgba(90,120,140,.18), rgba(40,60,50,.12)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cpath d='M0 40h80M40 0v80' stroke='rgba(255,255,255,0.03)' stroke-width='1'/%3E%3C/svg%3E"),
+        #1b2633;
+    }
+    .panel {
+      position: absolute;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--stroke);
+      cursor: move;
+    }
+    .panel-head h3 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .x {
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      border: 1px solid var(--stroke);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .x:hover { color: var(--text); border-color: var(--stroke2); }
+
+    /* STATUS */
+    .status {
+      left: 28px; top: 28px;
+      width: 420px;
+    }
+    .status-body { padding: 14px; display: grid; gap: 14px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+    .avatar {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 2px solid var(--stroke2);
+      background:
+        radial-gradient(circle at 35% 30%, #6f879c, #2a3544 70%);
+      display: grid; place-items: center;
+      font-size: 30px;
+      box-shadow: inset 0 0 18px rgba(0,0,0,.35);
+    }
+    .hero h2 { margin: 0; font-size: 18px; }
+    .hero .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .pills { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+    }
+    .pill.accent { border-color: var(--stroke2); color: var(--accent); }
+
+    .vitals { display: grid; gap: 8px; }
+    .vital .top {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    }
+    .track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+    .track > i { display:block; height: 100%; border-radius: inherit; }
+    .track.hp > i { width: 72%; background: linear-gradient(90deg, #ff5252, #ff8a7a); }
+    .track.sp > i { width: 48%; background: linear-gradient(90deg, #3b82f6, #7dd3fc); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--stroke);
+    }
+    .stat .k { font-size: 11px; font-weight: 800; color: var(--muted); width: 28px; }
+    .stat .v { flex: 1; font-size: 13px; font-weight: 700; }
+    .stat .v .b { color: var(--ok); font-size: 11px; }
+    .plus {
+      width: 24px; height: 24px;
+      border-radius: 8px;
+      border: 1px solid var(--stroke2);
+      background: rgba(232,196,140,.12);
+      color: var(--accent);
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .plus:disabled { opacity: .35; cursor: default; }
+    .combat {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .combat div {
+      text-align: center;
+      padding: 8px 4px;
+      border-radius: 10px;
+      background: var(--panel2);
+      border: 1px solid var(--stroke);
+    }
+    .combat .l { display:block; font-size: 10px; color: var(--muted); }
+    .combat .n { display:block; font-size: 13px; font-weight: 800; margin-top: 2px; }
+    .points {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: var(--muted);
+      padding-top: 2px;
+    }
+    .points b { color: var(--accent); font-size: 16px; }
+
+    /* INVENTORY */
+    .inv {
+      right: 28px; top: 28px;
+      width: 460px;
+    }
+    .inv-body { padding: 14px; display: grid; gap: 12px; }
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--stroke);
+    }
+    .seg button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .seg button.active {
+      background: rgba(232,196,140,.16);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--stroke2);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      min-height: 268px;
+      align-content: start;
+    }
+    .cell {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      display: grid;
+      place-items: center;
+      position: relative;
+      cursor: pointer;
+      font-size: 22px;
+      transition: transform .12s ease, border-color .12s ease;
+    }
+    .cell:hover { transform: translateY(-1px); border-color: var(--stroke2); }
+    .cell.empty { opacity: .35; cursor: default; }
+    .cell .qty {
+      position: absolute; right: 5px; bottom: 4px;
+      font-size: 10px; font-weight: 800;
+      color: var(--text);
+      background: rgba(0,0,0,.45);
+      padding: 1px 4px;
+      border-radius: 6px;
+    }
+    .foot {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    .weight .top {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    }
+    .weight .track > i { width: 16%; background: linear-gradient(90deg, var(--accent2), #b7ebe8); }
+    .zeny {
+      text-align: right;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .zeny b { display:block; color: var(--accent); font-size: 16px; margin-top: 2px; }
+
+    .toast {
+      position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: rgba(8,10,14,.92);
+      border: 1px solid var(--stroke2);
+      color: var(--text);
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      opacity: 0;
+      transition: opacity .2s;
+      z-index: 5;
+    }
+    .toast.show { opacity: 1; }
+    .tip {
+      position: absolute;
+      z-index: 6;
+      min-width: 150px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(12,16,22,.96);
+      border: 1px solid var(--stroke2);
+      font-size: 12px;
+      display: none;
+      pointer-events: none;
+    }
+    .tip b { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Современный концепт</strong> тех же окон Status + Inventory для goro:
+    тёмные панели, мягкое стекло, акцент rose-gold — без классических RO titlebar’ов.
+  </div>
+  <div class="stage" id="stage">
+    <div class="toast" id="toast"></div>
+    <div class="tip" id="tip"></div>
+
+    <section class="panel status" data-drag>
+      <div class="panel-head"><h3>Character</h3><button class="x" type="button">×</button></div>
+      <div class="status-body">
+        <div class="hero">
+          <div class="avatar">⚔</div>
+          <div>
+            <h2>Aldric</h2>
+            <div class="sub">Swordman · Prontera</div>
+            <div class="pills">
+              <span class="pill accent">Base 50</span>
+              <span class="pill">Job 30</span>
+              <span class="pill">Guild: none</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="vitals">
+          <div class="vital">
+            <div class="top"><span>HP</span><span>720 / 1000</span></div>
+            <div class="track hp"><i></i></div>
+          </div>
+          <div class="vital">
+            <div class="top"><span>SP</span><span>96 / 200</span></div>
+            <div class="track sp"><i></i></div>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="stats"></div>
+
+        <div class="combat">
+          <div><span class="l">ATK</span><span class="n">97</span></div>
+          <div><span class="l">DEF</span><span class="n">23</span></div>
+          <div><span class="l">HIT</span><span class="n">142</span></div>
+          <div><span class="l">FLEE</span><span class="n">102</span></div>
+        </div>
+
+        <div class="points">
+          <span>Status points</span>
+          <b id="points">7</b>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel inv" data-drag>
+      <div class="panel-head"><h3>Inventory</h3><button class="x" type="button">×</button></div>
+      <div class="inv-body">
+        <div class="seg" id="seg">
+          <button class="active" data-tab="item" type="button">Item</button>
+          <button data-tab="equip" type="button">Equip</button>
+          <button data-tab="etc" type="button">Etc</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="foot">
+          <div class="weight">
+            <div class="top"><span>Weight</span><span>320 / 2000</span></div>
+            <div class="track"><i></i></div>
+          </div>
+          <div class="zeny">Zeny<b>125,000</b></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let points = 7;
+    const primary = [
+      { k: "STR", v: 28, b: 3, cost: 4 },
+      { k: "AGI", v: 20, b: 1, cost: 2 },
+      { k: "VIT", v: 24, b: 2, cost: 3 },
+      { k: "INT", v: 10, b: 0, cost: 1 },
+      { k: "DEX", v: 22, b: 4, cost: 3 },
+      { k: "LUK", v: 12, b: 0, cost: 1 },
+    ];
+    const bags = {
+      item: [
+        { ico: "💊", name: "Red Potion", qty: 42 },
+        { ico: "🧪", name: "Blue Potion", qty: 12 },
+        { ico: "🍎", name: "Apple", qty: 8 },
+        { ico: "🦋", name: "Butterfly Wing", qty: 3 },
+        { ico: "📜", name: "Fly Wing", qty: 20 },
+        { ico: "🍖", name: "Meat", qty: 5 },
+      ],
+      equip: [
+        { ico: "⚔", name: "Blade [3]", qty: 1 },
+        { ico: "🛡", name: "Guard [1]", qty: 1 },
+        { ico: "🎩", name: "Cap", qty: 1 },
+        { ico: "🧥", name: "Suit", qty: 1 },
+        { ico: "👟", name: "Sandals", qty: 1 },
+      ],
+      etc: [
+        { ico: "💎", name: "Phracon", qty: 7 },
+        { ico: "🔩", name: "Iron", qty: 15 },
+        { ico: "🃏", name: "Poring Card", qty: 1 },
+        { ico: "🦴", name: "Bone", qty: 23 },
+      ],
+    };
+    let tab = "item";
+    const toast = document.getElementById("toast");
+    const tip = document.getElementById("tip");
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1400);
+    }
+
+    function renderStats() {
+      document.getElementById("points").textContent = String(points);
+      document.getElementById("stats").innerHTML = primary.map((s, i) => `
+        <div class="stat">
+          <span class="k">${s.k}</span>
+          <span class="v">${s.v}${s.b ? ` <span class="b">+${s.b}</span>` : ""}</span>
+          <button class="plus" data-i="${i}" ${points < s.cost ? "disabled" : ""} type="button">+</button>
+        </div>`).join("");
+      document.querySelectorAll(".plus").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const s = primary[Number(btn.dataset.i)];
+          if (points < s.cost) return;
+          points -= s.cost;
+          s.v += 1;
+          showToast(`${s.k} +1`);
+          renderStats();
+        });
+      });
+    }
+
+    function renderGrid() {
+      const items = bags[tab];
+      const cells = [];
+      for (let i = 0; i < 18; i++) {
+        const it = items[i];
+        if (!it) cells.push(`<div class="cell empty"></div>`);
+        else cells.push(`<div class="cell" data-name="${it.name}" data-qty="${it.qty}">${it.ico}${it.qty>1?`<span class="qty">${it.qty}</span>`:""}</div>`);
+      }
+      const grid = document.getElementById("grid");
+      grid.innerHTML = cells.join("");
+      grid.querySelectorAll(".cell[data-name]").forEach(cell => {
+        cell.addEventListener("mouseenter", () => {
+          tip.style.display = "block";
+          tip.innerHTML = `<b>${cell.dataset.name}</b><br/>Qty ${cell.dataset.qty}`;
+        });
+        cell.addEventListener("mousemove", (e) => {
+          const r = document.getElementById("stage").getBoundingClientRect();
+          tip.style.left = (e.clientX - r.left + 14) + "px";
+          tip.style.top = (e.clientY - r.top + 14) + "px";
+        });
+        cell.addEventListener("mouseleave", () => tip.style.display = "none");
+        cell.addEventListener("dblclick", () => showToast(`Use: ${cell.dataset.name}`));
+      });
+    }
+
+    document.querySelectorAll("#seg button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#seg button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        tab = btn.dataset.tab;
+        renderGrid();
+      });
+    });
+
+    document.querySelectorAll("[data-drag]").forEach(win => {
+      const head = win.querySelector(".panel-head");
+      let drag=false, ox=0, oy=0;
+      head.addEventListener("mousedown", (e) => {
+        if (e.target.closest(".x")) return;
+        drag = true;
+        ox = e.clientX - win.offsetLeft;
+        oy = e.clientY - win.offsetTop;
+      });
+      window.addEventListener("mouseup", () => drag=false);
+      window.addEventListener("mousemove", (e) => {
+        if (!drag) return;
+        win.style.left = Math.max(8, e.clientX - ox) + "px";
+        win.style.top = Math.max(8, e.clientY - oy) + "px";
+        win.style.right = "auto";
+      });
+    });
+
+    renderStats();
+    renderGrid();
+  </script>
+</body>
+</html>
