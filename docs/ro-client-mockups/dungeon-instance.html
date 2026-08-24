@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — Dungeon Instance Mockup</title>
+  <style>
+    :root {
+      --win-body: #fff;
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --footer: #f4f6f8;
+      --footer-line: #aeb4bc;
+      --panel: #fafcff;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title-text: #163658;
+      --muted: #62707e;
+      --ok: #1f7a3f;
+      --warn: #b45309;
+      --bad: #b42318;
+      --hard: #7c3aed;
+      --hell: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 30% 20%, #3d4a5c88, transparent 45%),
+        linear-gradient(180deg, #4a5d6e, #3a4f45);
+    }
+    .note {
+      width: min(960px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title-text);
+    }
+    .frame {
+      width: min(960px, 100%);
+      height: 580px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(40,50,70,.45), rgba(40,70,55,.25)),
+        #4a5a52;
+      overflow: hidden;
+    }
+    .ro-win {
+      position: absolute;
+      inset: 22px 28px;
+      background: var(--win-body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--title-text);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); cursor: pointer; font-size: 10px; line-height: 12px; padding: 0;
+    }
+    .layout {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+    }
+    .art {
+      border-right: 1px solid #d3dbe6;
+      background:
+        linear-gradient(180deg, rgba(20,24,32,.35), rgba(20,24,32,.55)),
+        radial-gradient(circle at 50% 30%, #6b7c8f, #2a3340 70%);
+      color: #f4f7fb;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .poster {
+      height: 160px;
+      border: 1px solid rgba(255,255,255,.25);
+      background:
+        radial-gradient(circle at 50% 80%, #8b5a2b55, transparent 40%),
+        linear-gradient(180deg, #3d4f63, #1b222c);
+      display: grid;
+      place-items: center;
+      font-size: 54px;
+      position: relative;
+      overflow: hidden;
+    }
+    .poster::after {
+      content: "MEMORIAL";
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      font-size: 10px;
+      letter-spacing: .12em;
+      opacity: .7;
+      font-weight: 800;
+    }
+    .art h2 {
+      margin: 0;
+      font-size: 16px;
+      color: #fff;
+    }
+    .meta {
+      display: grid;
+      gap: 6px;
+      font-size: 11px;
+      color: #d7dee8;
+    }
+    .meta div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px dashed rgba(255,255,255,.15);
+      padding-bottom: 4px;
+    }
+    .meta b { color: #fff; font-weight: 700; }
+    .note-box {
+      margin-top: auto;
+      font-size: 10px;
+      line-height: 1.4;
+      color: #c9d3e0;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 8px;
+    }
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      background: var(--panel);
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px 0;
+    }
+    .tab {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--title-text);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .tab.active { background: #d7ecff; border-color: #528ac8; }
+    .tab.hard.active { background: #efe7ff; border-color: var(--hard); color: #4c1d95; }
+    .tab.hell.active { background: #ffe8e6; border-color: var(--hell); color: var(--hell); }
+    .content {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 12px;
+    }
+    .panel {
+      border: 1px solid #d3dbe6;
+      background: #fff;
+      padding: 10px;
+    }
+    .section {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--title-text);
+      margin-bottom: 8px;
+    }
+    .diff-desc {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin-bottom: 10px;
+      min-height: 48px;
+    }
+    .rewards {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      border: 1px solid var(--btn-border);
+      background: #f3f7fb;
+      font-size: 10px;
+      padding: 4px 8px;
+      font-weight: 700;
+    }
+    .member {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 11px;
+      padding: 6px 0;
+      border-bottom: 1px solid #eef2f6;
+    }
+    .member:last-child { border-bottom: 0; }
+    .ready {
+      color: var(--ok);
+      font-weight: 800;
+      font-size: 10px;
+    }
+    .not-ready {
+      color: var(--warn);
+      font-weight: 800;
+      font-size: 10px;
+    }
+    .role {
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .checks {
+      display: grid;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .checks label {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      color: var(--text);
+    }
+    .checks .ok { color: var(--ok); font-weight: 800; }
+    .checks .bad { color: var(--bad); font-weight: 800; }
+    .ro-footer {
+      border-top: 1px solid var(--footer-line);
+      background: var(--footer);
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ro-btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 6px 14px;
+      cursor: pointer;
+      min-width: 96px;
+    }
+    .ro-btn:hover { background: var(--btn-hover); }
+    .ro-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .ro-btn.primary {
+      background: #d7ecff;
+      border-color: #528ac8;
+      font-weight: 800;
+      color: var(--title-text);
+    }
+    .status {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .toast {
+      position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+      background: rgba(20,28,36,.9); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 5;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+    .overlay {
+      position: absolute; inset: 0;
+      background: rgba(12,16,22,.7);
+      display: none;
+      place-items: center;
+      z-index: 4;
+    }
+    .overlay.open { display: grid; }
+    .overlay .box {
+      width: min(360px, 92%);
+      background: #fff;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+    }
+    .overlay .box .body {
+      padding: 16px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Макет инстанс-данжа.</strong>
+    Каждая пати получает <em>свою копию</em> карты. Выберите сложность и Enter Instance.
+  </div>
+  <div class="frame">
+    <div class="toast" id="toast"></div>
+    <div class="overlay" id="overlay">
+      <div class="box">
+        <div class="ro-title"><span>Instance Created</span><button class="ro-close" type="button" id="closeOverlay">×</button></div>
+        <div class="body" id="overlayBody">
+          Private map created for your party.<br />
+          Warping to <strong>1@culvert</strong>…
+        </div>
+        <div class="ro-footer" style="justify-content:flex-end">
+          <button class="ro-btn primary" type="button" id="okOverlay">Enter</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ro-win">
+      <div class="ro-title"><span>Dungeon Instance</span><button class="ro-close" type="button">×</button></div>
+      <div class="layout">
+        <aside class="art">
+          <div class="poster">🏰</div>
+          <h2 id="dungName">Culvert Memorial</h2>
+          <div class="meta">
+            <div><span>Level</span><b>50–70</b></div>
+            <div><span>Party</span><b>2–5</b></div>
+            <div><span>Time limit</span><b>60 min</b></div>
+            <div><span>Daily clears</span><b id="clears">1 / 1</b></div>
+          </div>
+          <div class="note-box">
+            Each party enters a private instance of the same dungeon map.
+            Other parties cannot see or interfere with you.
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="tabs">
+            <button class="tab active" data-diff="normal" type="button">Normal</button>
+            <button class="tab hard" data-diff="hard" type="button">Hard</button>
+            <button class="tab hell" data-diff="hell" type="button">Hell</button>
+          </div>
+          <div class="content">
+            <div class="panel">
+              <div class="section">Difficulty</div>
+              <div class="diff-desc" id="diffDesc">Balanced mobs and boss. Good for first clears and weekly rewards.</div>
+              <div class="section">Rewards</div>
+              <div class="rewards" id="rewards"></div>
+              <div class="section" style="margin-top:12px">Requirements</div>
+              <div class="checks" id="checks"></div>
+            </div>
+            <div class="panel">
+              <div class="section">Party <span style="font-weight:600;color:var(--muted)" id="partyCount">(3/5)</span></div>
+              <div id="members"></div>
+            </div>
+          </div>
+          <div class="ro-footer">
+            <div class="status" id="status">Ready to create private instance</div>
+            <div style="display:flex;gap:8px">
+              <button class="ro-btn" type="button" id="queueBtn">Party Queue</button>
+              <button class="ro-btn primary" type="button" id="enterBtn">Enter Instance</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const diffs = {
+      normal: {
+        desc: "Balanced mobs and boss. Good for first clears and weekly rewards.",
+        rewards: ["Zeny Chest", "Card Scrap x2", "BP XP +200"],
+        mult: "×1.0"
+      },
+      hard: {
+        desc: "Stronger mobs, enrage timer on boss. Better crystal and seal drops.",
+        rewards: ["Crystal Shard", "Seal x3", "Rare Box", "BP XP +400"],
+        mult: "×1.5"
+      },
+      hell: {
+        desc: "Brutal scaling. Wipe on boss enrage. Best seasonal rewards.",
+        rewards: ["SSR Ticket Scrap", "Seal x8", "Hell Badge", "BP XP +800"],
+        mult: "×2.5"
+      }
+    };
+
+    const members = [
+      { name: "You", role: "Leader · Knight", ready: true },
+      { name: "AcolyteMia", role: "Priest", ready: true },
+      { name: "ArrowKid", role: "Hunter", ready: false },
+    ];
+
+    let diff = "normal";
+    let arrowReady = false;
+
+    const toast = document.getElementById("toast");
+    const overlay = document.getElementById("overlay");
+    const overlayBody = document.getElementById("overlayBody");
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1600);
+    }
+
+    function render() {
+      const d = diffs[diff];
+      document.getElementById("diffDesc").textContent = d.desc + " Reward mult " + d.mult + ".";
+      document.getElementById("rewards").innerHTML = d.rewards.map(r => `<span class="chip">${r}</span>`).join("");
+
+      members[2].ready = arrowReady;
+      document.getElementById("partyCount").textContent = `(${members.length}/5)`;
+      document.getElementById("members").innerHTML = members.map((m, i) => `
+        <div class="member">
+          <div>
+            <div><strong>${m.name}</strong></div>
+            <div class="role">${m.role}</div>
+          </div>
+          <div class="${m.ready ? "ready" : "not-ready"}">${m.ready ? "READY" : "WAIT"}</div>
+          <div>${i === 2 ? `<button class="ro-btn" style="min-width:auto;padding:3px 8px" type="button" data-toggle="arrow">${m.ready ? "Unready" : "Ready"}</button>` : ""}</div>
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-toggle=arrow]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          arrowReady = !arrowReady;
+          render();
+        });
+      });
+
+      const allReady = members.every(m => m.ready);
+      const checks = [
+        { ok: true, text: "You are party leader" },
+        { ok: members.length >= 2, text: "Party size 2–5" },
+        { ok: allReady, text: "All members ready" },
+        { ok: true, text: "No active instance" },
+        { ok: true, text: "Daily clear available (1/1)" },
+      ];
+      document.getElementById("checks").innerHTML = checks.map(c =>
+        `<label><span class="${c.ok ? "ok" : "bad"}">${c.ok ? "✔" : "✖"}</span><span>${c.text}</span></label>`
+      ).join("");
+
+      const canEnter = checks.every(c => c.ok);
+      document.getElementById("enterBtn").disabled = !canEnter;
+      document.getElementById("status").textContent = canEnter
+        ? `Ready · ${diff.toUpperCase()} · private map for this party`
+        : "Waiting for party ready checks";
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        diff = tab.dataset.diff;
+        render();
+      });
+    });
+
+    document.getElementById("queueBtn").addEventListener("click", () => {
+      showToast("Queued for Culvert Memorial · " + diff);
+    });
+
+    document.getElementById("enterBtn").addEventListener("click", () => {
+      overlayBody.innerHTML = `Private instance created for your party.<br/>Difficulty: <strong>${diff.toUpperCase()}</strong><br/>Warping to <strong>1@culvert</strong>…`;
+      overlay.classList.add("open");
+      showToast("Instance map spawned");
+    });
+
+    const close = () => overlay.classList.remove("open");
+    document.getElementById("closeOverlay").addEventListener("click", close);
+    document.getElementById("okOverlay").addEventListener("click", () => {
+      close();
+      showToast("Entered 1@culvert (mock)");
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -27,3 +27,10 @@ Origin-style card summons with **Seals** currency, ×1/×10 pulls, pity to SSR, 
 ## Card art (client replacement samples)
 
 - [poring-card.png](./poring-card.png) — Poring Card illustration mock for client replacement (export/convert to RO card asset format as needed)
+
+## Dungeon Instance
+
+- Interactive: [dungeon-instance.html](./dungeon-instance.html)
+- Static preview: [dungeon-instance-mockup.png](./dungeon-instance-mockup.png)
+
+Party memorial dungeon entry: difficulty tabs, party ready checks, private instance create/warp.
