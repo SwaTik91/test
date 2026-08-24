@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goro — Battle Pass Mockup</title>
+  <style>
+    :root {
+      --win-body: #fff;
+      --title-top: #d6e8fa;
+      --title-bot: #b8d6f2;
+      --border: #769fcf;
+      --footer: #f4f6f8;
+      --footer-line: #aeb4bc;
+      --panel: #fafcff;
+      --btn: #ecf4fc;
+      --btn-hover: #daebfa;
+      --btn-border: #8aaed6;
+      --text: #26303a;
+      --title-text: #163658;
+      --muted: #62707e;
+      --premium: #b8860b;
+      --free: #4a78a8;
+      --ok: #1f7a3f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      font-family: "DejaVu Sans", "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 70% 10%, #d7c58a, transparent 40%),
+        linear-gradient(180deg, #7ea0b8, #5a7d68);
+    }
+    .note {
+      width: min(960px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,255,255,.85);
+      border: 1px solid rgba(22,54,88,.25);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--title-text);
+    }
+    .frame {
+      width: min(960px, 100%);
+      height: 560px;
+      position: relative;
+      border: 2px solid #2a3d4a;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+      background:
+        linear-gradient(180deg, rgba(90,140,170,.3), rgba(40,70,55,.2)),
+        #6b8f78;
+      overflow: hidden;
+    }
+    .ro-win {
+      position: absolute;
+      inset: 24px 28px;
+      background: var(--win-body);
+      border: 1px solid var(--border);
+      box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+      display: flex;
+      flex-direction: column;
+    }
+    .ro-title {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--title-text);
+      background: linear-gradient(180deg, var(--title-top), var(--title-bot));
+      border-bottom: 1px solid var(--border);
+    }
+    .ro-close {
+      width: 14px; height: 14px; border: 1px solid var(--btn-border);
+      background: var(--btn); cursor: pointer; font-size: 10px; line-height: 12px; padding: 0;
+    }
+    .head {
+      padding: 12px 14px 8px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel);
+      border-bottom: 1px solid #d3dbe6;
+    }
+    .season {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--title-text);
+    }
+    .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .xp {
+      margin-top: 8px;
+      height: 12px;
+      border: 1px solid #5a6a78;
+      background: #1d2430;
+      overflow: hidden;
+      position: relative;
+    }
+    .xp > i {
+      display: block;
+      height: 100%;
+      width: 64%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    }
+    .xp-label {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      font-size: 9px; color: #fff; font-weight: 700;
+      text-shadow: 0 0 2px #000;
+    }
+    .head-actions { display: flex; flex-direction: column; gap: 6px; }
+    .ro-btn {
+      border: 1px solid var(--btn-border);
+      background: var(--btn);
+      color: var(--text);
+      font-size: 11px;
+      padding: 5px 12px;
+      cursor: pointer;
+      min-width: 120px;
+    }
+    .ro-btn:hover { background: var(--btn-hover); }
+    .ro-btn.primary { background: #d7ecff; border-color: #528ac8; font-weight: 700; color: var(--title-text); }
+    .ro-btn.gold {
+      background: linear-gradient(180deg, #fff3c4, #f0d78a);
+      border-color: #c9a227;
+      color: #6a4d00;
+      font-weight: 800;
+    }
+    .tracks {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px 14px;
+      background: #f7f9fc;
+    }
+    .track {
+      margin-bottom: 14px;
+    }
+    .track-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: var(--title-text);
+    }
+    .track-label .tag {
+      font-size: 10px;
+      padding: 1px 6px;
+      border: 1px solid;
+    }
+    .tag.free { color: var(--free); border-color: #8aaed6; background: #e8f2ff; }
+    .tag.prem { color: #6a4d00; border-color: #c9a227; background: #fff3c4; }
+    .row {
+      display: flex;
+      gap: 8px;
+      min-width: max-content;
+      padding-bottom: 4px;
+    }
+    .tier {
+      width: 72px;
+      flex: 0 0 auto;
+    }
+    .tier-num {
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+    .tier.current .tier-num { color: var(--title-text); }
+    .card {
+      height: 78px;
+      border: 1px solid var(--btn-border);
+      background: linear-gradient(180deg, #fff, #eef3f8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10px;
+      position: relative;
+      cursor: pointer;
+      text-align: center;
+      padding: 4px;
+    }
+    .card .ico { font-size: 18px; line-height: 1; }
+    .card.claimed { opacity: .72; }
+    .card.claimed::after {
+      content: "✓";
+      position: absolute;
+      right: 4px; top: 2px;
+      color: var(--ok);
+      font-weight: 900;
+    }
+    .card.locked { filter: grayscale(.35); opacity: .55; }
+    .card.ready {
+      border-color: #2f7d4a;
+      box-shadow: inset 0 0 0 1px #9de0b5;
+      background: linear-gradient(180deg, #f0fff5, #d8f5e2);
+    }
+    .card.premium-locked {
+      border-color: #c9a227;
+      background: linear-gradient(180deg, #fffaf0, #f5e6b8);
+    }
+    .card.premium-locked::before {
+      content: "♛";
+      position: absolute;
+      left: 4px; top: 2px;
+      color: var(--premium);
+      font-size: 11px;
+    }
+    .tier.current .card {
+      outline: 2px solid #528ac8;
+      outline-offset: 1px;
+    }
+    .ro-footer {
+      border-top: 1px solid var(--footer-line);
+      background: var(--footer);
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .toast {
+      position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+      background: rgba(20,28,36,.88); color: #fff; font-size: 12px;
+      padding: 6px 12px; opacity: 0; transition: opacity .2s; z-index: 5;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="note"><strong>Макет Battle Pass.</strong> Зелёные награды можно забрать. Premium-трек закрыт, пока не нажата «Activate Premium».</div>
+  <div class="frame">
+    <div class="toast" id="toast"></div>
+    <div class="ro-win">
+      <div class="ro-title"><span>Battle Pass — Season 1</span><button class="ro-close" type="button">×</button></div>
+      <div class="head">
+        <div>
+          <div class="season">Season 1 · Midgard Trail</div>
+          <div class="meta">Level <strong id="lvl">14</strong> · <span id="days">18</span> days left</div>
+          <div class="xp"><i id="xpFill"></i><div class="xp-label" id="xpText">320 / 500 XP</div></div>
+        </div>
+        <div class="head-actions">
+          <button class="ro-btn gold" type="button" id="premiumBtn">Activate Premium</button>
+          <button class="ro-btn primary" type="button" id="claimAll">Claim All</button>
+        </div>
+      </div>
+      <div class="tracks" id="tracks"></div>
+      <div class="ro-footer">
+        <span id="premiumState">Premium: locked</span>
+        <button class="ro-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const currentLevel = 14;
+    let premium = false;
+    const freeRewards = [
+      ["💊","Red Pot x20"],["🪙","5,000z"],["📦","Gift Box"],["🧪","SP Pot x10"],
+      ["🎫","Warp Scroll"],["🪙","10,000z"],["🎀","Costume Box"],["💎","Crystal Shard"],
+      ["🧪","White Pot x5"],["🪙","20,000z"],["🎩","Hat Box"],["💎","Crystal x2"],
+      ["💊","Mix Pot"],["🪙","30,000z"],["⭐","Aura Trial"],["👑","Title Token"],
+      ["🪙","40k z"],["📦","Supply Crate"],["💎","Crystal x3"],["🏆","Season Badge"]
+    ];
+    const premRewards = [
+      ["♛","VIP 1d"],["💎","Crystal x3"],["🎀","Premium Box"],["🪙","25,000z"],
+      ["✨","Aura Dye"],["💎","Crystal x5"],["🎩","Rare Costume"],["♛","VIP 3d"],
+      ["🪙","50,000z"],["💎","Crystal x8"],["⚔️","Weapon Skin"],["♛","VIP 7d"],
+      ["🎀","Premium Box"],["💎","Crystal x10"],["✨","Glow Trail"],["👑","Premium Title"],
+      ["🪙","100k z"],["💎","Crystal x15"],["🦄","Mount Trial"],["🏆","Gold Badge"]
+    ];
+
+    const tracks = document.getElementById("tracks");
+    const toast = document.getElementById("toast");
+    const claimed = new Set();
+
+    function showToast(t) {
+      toast.textContent = t;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove("show"), 1400);
+    }
+
+    function cardState(tier, isPremium) {
+      if (tier > currentLevel) return "locked";
+      if (isPremium && !premium) return "premium-locked";
+      const key = (isPremium ? "p" : "f") + tier;
+      if (claimed.has(key)) return "claimed";
+      return "ready";
+    }
+
+    function render() {
+      const mkRow = (label, tagClass, tagText, rewards, isPremium) => {
+        let cards = "";
+        for (let i = 0; i < rewards.length; i++) {
+          const tier = i + 1;
+          const [ico, name] = rewards[i];
+          const st = cardState(tier, isPremium);
+          const cur = tier === currentLevel ? " current" : "";
+          cards += `<div class="tier${cur}" data-tier="${tier}" data-prem="${isPremium ? 1 : 0}">
+            <div class="tier-num">Lv ${tier}</div>
+            <div class="card ${st}" title="${name}">
+              <div class="ico">${ico}</div>
+              <div>${name}</div>
+            </div>
+          </div>`;
+        }
+        return `<div class="track">
+          <div class="track-label">${label} <span class="tag ${tagClass}">${tagText}</span></div>
+          <div class="row">${cards}</div>
+        </div>`;
+      };
+
+      tracks.innerHTML =
+        mkRow("Free track", "free", "FREE", freeRewards, false) +
+        mkRow("Premium track", "prem", "PREMIUM", premRewards, true);
+
+      tracks.querySelectorAll(".card.ready").forEach((el) => {
+        el.addEventListener("click", () => {
+          const tier = el.closest(".tier");
+          const key = (tier.dataset.prem === "1" ? "p" : "f") + tier.dataset.tier;
+          claimed.add(key);
+          showToast("Reward claimed");
+          render();
+        });
+      });
+      tracks.querySelectorAll(".card.premium-locked").forEach((el) => {
+        el.addEventListener("click", () => showToast("Activate Premium to unlock"));
+      });
+      tracks.querySelectorAll(".card.locked").forEach((el) => {
+        el.addEventListener("click", () => showToast("Reach this level first"));
+      });
+
+      // scroll current into view roughly
+      const cur = tracks.querySelector(".tier.current");
+      if (cur) cur.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }
+
+    document.getElementById("premiumBtn").addEventListener("click", () => {
+      premium = true;
+      document.getElementById("premiumBtn").textContent = "Premium Active";
+      document.getElementById("premiumBtn").disabled = true;
+      document.getElementById("premiumState").textContent = "Premium: active";
+      showToast("Premium track unlocked");
+      render();
+    });
+
+    document.getElementById("claimAll").addEventListener("click", () => {
+      let n = 0;
+      for (let i = 1; i <= currentLevel; i++) {
+        const fk = "f" + i;
+        if (!claimed.has(fk)) { claimed.add(fk); n++; }
+        if (premium) {
+          const pk = "p" + i;
+          if (!claimed.has(pk)) { claimed.add(pk); n++; }
+        }
+      }
+      showToast(n ? `Claimed ${n} rewards` : "Nothing to claim");
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
