@@ -23,3 +23,7 @@ Interactive and static UI sketches for custom systems on top of a classic RO cli
 - Static preview: [card-seal-gacha-mockup.png](./card-seal-gacha-mockup.png)
 
 Origin-style card summons with **Seals** currency, ×1/×10 pulls, pity to SSR, featured banner card, rates, recent pulls, result reveal.
+
+## Card art (client replacement samples)
+
+- [poring-card.png](./poring-card.png) — Poring Card illustration mock for client replacement (export/convert to RO card asset format as needed)
