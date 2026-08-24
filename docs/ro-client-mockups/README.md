@@ -55,3 +55,10 @@ Basic Info + basic menu, Status window (STR/AGI… + derived ATK/DEF), Inventory
 - Static preview: [character-inventory-modern-mockup.png](./character-inventory-modern-mockup.png)
 
 Dark frosted panels, rose-gold accents, modern stat chips and inventory grid — same data as classic RO windows, new visual language for goro.
+
+## Character Status & Inventory (Ragnarok Origin style)
+
+- Interactive: [character-inventory-origin.html](./character-inventory-origin.html)
+- Static preview: [character-inventory-origin-mockup.png](./character-inventory-origin-mockup.png)
+
+Warm parchment + gold frame + orange actions — closer to Origin HUD than classic RO or dark-minimal redesign.

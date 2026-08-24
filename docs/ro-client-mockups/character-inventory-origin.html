@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Origin-style Character & Inventory</title>
+  <style>
+    :root {
+      --cream: #f7efd8;
+      --cream2: #fff8e8;
+      --panel: #f3e6c4;
+      --panel-deep: #e8d4a8;
+      --ink: #4a3420;
+      --muted: #7a6248;
+      --gold: #c9973a;
+      --gold2: #e8bf62;
+      --gold-border: #b8893a;
+      --orange: #e89a3a;
+      --orange2: #f0b45a;
+      --hp: #e85a4f;
+      --sp: #4f8fd9;
+      --ok: #3f9a55;
+      --slot: #fffaf0;
+      --slot-border: #d2b57a;
+      --shadow: 0 14px 34px rgba(70, 40, 10, .28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px 14px 32px;
+      font-family: "Segoe UI", "Trebuchet MS", "Avenir Next", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 30% 20%, #cfe6f5, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, #d7e8c8, transparent 45%),
+        linear-gradient(180deg, #9ec4df, #7fa98a);
+    }
+    .note {
+      width: min(1100px, 100%);
+      margin-bottom: 12px;
+      background: rgba(255,248,232,.92);
+      border: 1px solid #d2b57a;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .note strong { color: var(--ink); }
+    .stage {
+      width: min(1100px, 100%);
+      height: 640px;
+      position: relative;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 2px solid rgba(74,52,32,.25);
+      box-shadow: var(--shadow);
+      background:
+        linear-gradient(180deg, rgba(180,210,230,.35), rgba(120,160,120,.2)),
+        #6f9a7a;
+    }
+    .win {
+      position: absolute;
+      width: 430px;
+      background:
+        linear-gradient(180deg, var(--cream2), var(--cream));
+      border: 3px solid var(--gold-border);
+      border-radius: 18px;
+      box-shadow:
+        var(--shadow),
+        inset 0 0 0 2px rgba(255,255,255,.45);
+      overflow: hidden;
+    }
+    .win::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border: 1px solid rgba(184,137,58,.35);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    .head {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 8px;
+      background: linear-gradient(180deg, #f3c86a, #d9a03d);
+      border-bottom: 2px solid #a87428;
+      color: #5a3a12;
+      cursor: move;
+    }
+    .head h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      text-shadow: 0 1px 0 rgba(255,255,255,.35);
+    }
+    .x {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid #a87428;
+      background: linear-gradient(180deg, #ffe0a8, #efb85a);
+      color: #6a4010;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    /* Character */
+    .char { left: 28px; top: 28px; }
+    .body { padding: 12px 14px 14px; position: relative; z-index: 1; }
+    .hero {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 10px;
+      align-items: center;
+      background: linear-gradient(180deg, #fff8e8, #f0e0b8);
+      border: 2px solid var(--slot-border);
+      border-radius: 14px;
+      padding: 8px;
+    }
+    .portrait {
+      width: 86px; height: 86px;
+      border-radius: 14px;
+      border: 2px solid var(--gold-border);
+      background:
+        radial-gradient(circle at 40% 30%, #f5d7a8, #c98a4a 70%);
+      display: grid; place-items: center;
+      font-size: 40px;
+      box-shadow: inset 0 -8px 16px rgba(0,0,0,.12);
+    }
+    .hero h2 { margin: 0; font-size: 18px; color: var(--ink); }
+    .hero .job { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .lvls { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .chip {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #fff, #f0dfb0);
+      border: 1px solid var(--slot-border);
+      color: #6a4010;
+    }
+
+    .bars { display: grid; gap: 8px; margin-top: 10px; }
+    .bar-row .lab {
+      display: flex; justify-content: space-between;
+      font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 3px;
+    }
+    .track {
+      height: 14px;
+      border-radius: 999px;
+      background: #dcc590;
+      border: 1px solid #b8924f;
+      overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.15);
+    }
+    .track > i { display:block; height:100%; }
+    .track.hp > i { width: 72%; background: linear-gradient(180deg, #ff8f86, var(--hp)); }
+    .track.sp > i { width: 48%; background: linear-gradient(180deg, #8ec2ff, var(--sp)); }
+
+    .stats {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .stat {
+      display: grid;
+      grid-template-columns: 36px 1fr 28px;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 6px 6px 8px;
+      border-radius: 10px;
+      background: var(--slot);
+      border: 1px solid var(--slot-border);
+      font-size: 12px;
+    }
+    .stat .k { font-weight: 900; color: #8a5a18; }
+    .stat .v { font-weight: 800; }
+    .stat .v .b { color: var(--ok); font-size: 11px; }
+    .plus {
+      width: 26px; height: 26px;
+      border-radius: 8px;
+      border: 1px solid #a87428;
+      background: linear-gradient(180deg, var(--orange2), var(--orange));
+      color: #fff;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(255,255,255,.35) inset;
+    }
+    .plus:disabled { opacity: .4; cursor: default; }
+
+    .combat {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .combat div {
+      text-align: center;
+      background: var(--panel-deep);
+      border: 1px solid var(--slot-border);
+      border-radius: 10px;
+      padding: 6px 2px;
+    }
+    .combat .l { display:block; font-size: 10px; color: var(--muted); font-weight: 700; }
+    .combat .n { display:block; font-size: 13px; font-weight: 900; margin-top: 2px; }
+    .points {
+      margin-top: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: var(--muted); font-weight: 700;
+    }
+    .points b {
+      color: #8a5a18;
+      background: #fff;
+      border: 1px solid var(--slot-border);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 14px;
+    }
+
+    /* Inventory */
+    .inv { right: 28px; top: 28px; }
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .seg button {
+      border: 2px solid var(--gold-border);
+      border-radius: 999px;
+      background: linear-gradient(180deg, #fff6de, #ebcfa0);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 7px 8px;
+      cursor: pointer;
+    }
+    .seg button.active {
+      background: linear-gradient(180deg, var(--orange2), var(--orange));
+      color: #fff;
+      border-color: #b86a20;
+      text-shadow: 0 1px 0 rgba(0,0,0,.15);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      background: rgba(210,181,122,.25);
+      border: 2px solid var(--slot-border);
+      border-radius: 14px;
+      padding: 10px;
+      min-height: 290px;
+      align-content: start;
+    }
+    .cell {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      border: 2px solid var(--slot-border);
+      background: linear-gradient(180deg, #fff, var(--slot));
+      display: grid;
+      place-items: center;
+      position: relative;
+      font-size: 22px;
+      cursor: pointer;
+      box-shadow: inset 0 -3px 0 rgba(180,140,70,.15);
+    }
+    .cell:hover { border-color: var(--orange); transform: translateY(-1px); }
+    .cell.empty { opacity: .45; cursor: default; background: #f0e2c0; }
+    .cell .qty {
+      position: absolute; right: 4px; bottom: 2px;
+      font-size: 10px; font-weight: 900; color: #5a3a12;
+      background: rgba(255,255,255,.85);
+      border-radius: 6px;
+      padding: 0 3px;
+    }
+    .foot {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1.3fr .9fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .weight .lab {
+      display: flex; justify-content: space-between;
+      font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 3px;
+    }
+    .weight .track > i { width: 16%; background: linear-gradient(180deg, #9fe0a8, #4fad62); }
+    .zeny {
+      text-align: right;
+      background: #fff8e8;
+      border: 1px solid var(--slot-border);
+      border-radius: 12px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .zeny b { display:block; color: #8a5a18; font-size: 15px; margin-top: 2px; }
+
+    .toast {
+      position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+      background: rgba(74,52,32,.92);
+      color: #fff8e8;
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--gold2);
+      opacity: 0;
+      transition: opacity .2s;
+      z-index: 5;
+    }
+    .toast.show { opacity: 1; }
+    .tip {
+      position: absolute; z-index: 6; display: none; pointer-events: none;
+      min-width: 140px; padding: 8px 10px; border-radius: 10px;
+      background: #fff8e8; border: 2px solid var(--gold-border);
+      font-size: 12px; color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .tip b { color: #8a5a18; }
+  </style>
+</head>
+<body>
+  <div class="note">
+    <strong>Стиль как в Ragnarok Origin:</strong> тёплый пергамент, золотая рамка, оранжевые кнопки — без тёмного «кибер»-минимализма.
+  </div>
+  <div class="stage" id="stage">
+    <div class="toast" id="toast"></div>
+    <div class="tip" id="tip"></div>
+
+    <section class="win char" data-drag>
+      <div class="head"><h3>Character</h3><button class="x" type="button">×</button></div>
+      <div class="body">
+        <div class="hero">
+          <div class="portrait">⚔</div>
+          <div>
+            <h2>Aldric</h2>
+            <div class="job">Swordman</div>
+            <div class="lvls">
+              <span class="chip">Base Lv.50</span>
+              <span class="chip">Job Lv.30</span>
+            </div>
+          </div>
+        </div>
+        <div class="bars">
+          <div class="bar-row">
+            <div class="lab"><span>HP</span><span>720/1000</span></div>
+            <div class="track hp"><i></i></div>
+          </div>
+          <div class="bar-row">
+            <div class="lab"><span>SP</span><span>96/200</span></div>
+            <div class="track sp"><i></i></div>
+          </div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="combat">
+          <div><span class="l">ATK</span><span class="n">97</span></div>
+          <div><span class="l">DEF</span><span class="n">23</span></div>
+          <div><span class="l">HIT</span><span class="n">142</span></div>
+          <div><span class="l">FLEE</span><span class="n">102</span></div>
+        </div>
+        <div class="points"><span>Status Points</span><b id="points">7</b></div>
+      </div>
+    </section>
+
+    <section class="win inv" data-drag>
+      <div class="head"><h3>Inventory</h3><button class="x" type="button">×</button></div>
+      <div class="body">
+        <div class="seg" id="seg">
+          <button class="active" data-tab="item" type="button">Item</button>
+          <button data-tab="equip" type="button">Equip</button>
+          <button data-tab="etc" type="button">Etc</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="foot">
+          <div class="weight">
+            <div class="lab"><span>Weight</span><span>320/2000</span></div>
+            <div class="track"><i></i></div>
+          </div>
+          <div class="zeny">Zeny<b>125,000</b></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+    let points = 7;
+    const primary = [
+      { k:"STR", v:28, b:3, cost:4 },
+      { k:"AGI", v:20, b:1, cost:2 },
+      { k:"VIT", v:24, b:2, cost:3 },
+      { k:"INT", v:10, b:0, cost:1 },
+      { k:"DEX", v:22, b:4, cost:3 },
+      { k:"LUK", v:12, b:0, cost:1 },
+    ];
+    const bags = {
+      item: [
+        {ico:"💊",name:"Red Potion",qty:42},
+        {ico:"🧪",name:"Blue Potion",qty:12},
+        {ico:"🍎",name:"Apple",qty:8},
+        {ico:"🦋",name:"Butterfly Wing",qty:3},
+        {ico:"📜",name:"Fly Wing",qty:20},
+        {ico:"🍖",name:"Meat",qty:5},
+        {ico:"🍬",name:"Candy",qty:9},
+      ],
+      equip: [
+        {ico:"⚔",name:"Blade [3]",qty:1},
+        {ico:"🛡",name:"Guard [1]",qty:1},
+        {ico:"🎩",name:"Cap",qty:1},
+        {ico:"🧥",name:"Suit",qty:1},
+        {ico:"👟",name:"Sandals",qty:1},
+      ],
+      etc: [
+        {ico:"💎",name:"Phracon",qty:7},
+        {ico:"🔩",name:"Iron",qty:15},
+        {ico:"🃏",name:"Poring Card",qty:1},
+        {ico:"🦴",name:"Bone",qty:23},
+      ],
+    };
+    let tab = "item";
+    const toast = document.getElementById("toast");
+    const tip = document.getElementById("tip");
+
+    function showToast(t){
+      toast.textContent=t; toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t=setTimeout(()=>toast.classList.remove("show"),1400);
+    }
+    function renderStats(){
+      document.getElementById("points").textContent=String(points);
+      document.getElementById("stats").innerHTML = primary.map((s,i)=>`
+        <div class="stat">
+          <span class="k">${s.k}</span>
+          <span class="v">${s.v}${s.b?` <span class="b">+${s.b}</span>`:""}</span>
+          <button class="plus" data-i="${i}" ${points<s.cost?"disabled":""} type="button">+</button>
+        </div>`).join("");
+      document.querySelectorAll(".plus").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          const s=primary[Number(btn.dataset.i)];
+          if(points<s.cost) return;
+          points-=s.cost; s.v+=1; showToast(`${s.k} +1`); renderStats();
+        });
+      });
+    }
+    function renderGrid(){
+      const items=bags[tab], cells=[];
+      for(let i=0;i<20;i++){
+        const it=items[i];
+        if(!it) cells.push(`<div class="cell empty"></div>`);
+        else cells.push(`<div class="cell" data-name="${it.name}" data-qty="${it.qty}">${it.ico}${it.qty>1?`<span class="qty">${it.qty}</span>`:""}</div>`);
+      }
+      const grid=document.getElementById("grid");
+      grid.innerHTML=cells.join("");
+      grid.querySelectorAll(".cell[data-name]").forEach(cell=>{
+        cell.addEventListener("mouseenter",()=>{ tip.style.display="block"; tip.innerHTML=`<b>${cell.dataset.name}</b><br/>x${cell.dataset.qty}`; });
+        cell.addEventListener("mousemove",(e)=>{
+          const r=document.getElementById("stage").getBoundingClientRect();
+          tip.style.left=(e.clientX-r.left+12)+"px"; tip.style.top=(e.clientY-r.top+12)+"px";
+        });
+        cell.addEventListener("mouseleave",()=>tip.style.display="none");
+        cell.addEventListener("dblclick",()=>showToast(`Use: ${cell.dataset.name}`));
+      });
+    }
+    document.querySelectorAll("#seg button").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        document.querySelectorAll("#seg button").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active"); tab=btn.dataset.tab; renderGrid();
+      });
+    });
+    document.querySelectorAll("[data-drag]").forEach(win=>{
+      const head=win.querySelector(".head");
+      let drag=false,ox=0,oy=0;
+      head.addEventListener("mousedown",(e)=>{
+        if(e.target.closest(".x")) return;
+        drag=true; ox=e.clientX-win.offsetLeft; oy=e.clientY-win.offsetTop;
+      });
+      window.addEventListener("mouseup",()=>drag=false);
+      window.addEventListener("mousemove",(e)=>{
+        if(!drag) return;
+        win.style.left=Math.max(8,e.clientX-ox)+"px";
+        win.style.top=Math.max(8,e.clientY-oy)+"px";
+        win.style.right="auto";
+      });
+    });
+    renderStats(); renderGrid();
+  </script>
+</body>
+</html>
