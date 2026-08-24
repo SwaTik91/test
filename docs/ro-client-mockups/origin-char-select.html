@@ -6,162 +6,77 @@
 <link rel="stylesheet" href="origin-flow.css">
 <style>
   .topbar {
-    position: absolute;
-    left: 28px;
-    right: 28px;
-    top: 18px;
-    height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    left: 28px; right: 28px; top: 18px; height: 42px;
+    display: flex; align-items: center; justify-content: space-between;
     padding: 0 16px;
   }
   .topbar .who { font-size: 12px; font-weight: 700; }
   .hero {
     position: absolute;
-    left: 210px;
-    bottom: 176px;
-    width: 280px;
-    height: 420px;
+    left: 180px;
+    bottom: 132px;
+    width: 340px;
+    height: 500px;
+    z-index: 2;
+    background: url("ludo-swordsman.png") center bottom / contain no-repeat;
+    filter: drop-shadow(0 18px 24px rgba(20, 10, 4, 0.45));
   }
-  .hero svg { width: 100%; height: 100%; }
   .nameplate {
-    position: absolute;
-    left: 196px;
-    bottom: 168px;
-    width: 300px;
-    padding: 10px 16px 12px;
-    text-align: center;
+    left: 196px; bottom: 148px; width: 300px;
+    padding: 10px 16px 12px; text-align: center;
   }
   .nameplate h2 { font-size: 22px; letter-spacing: 1px; }
   .nameplate .job { margin-top: 2px; font-size: 12px; color: #8a6a2a; }
-  .info {
-    right: 36px;
-    top: 82px;
-    width: 292px;
-    padding: 18px 18px 16px;
-  }
+  .info { right: 36px; top: 82px; width: 292px; padding: 18px 18px 16px; }
   .info .panel-title { margin-bottom: 12px; }
-  .statline {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    margin-bottom: 4px;
-  }
+  .statline { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
   .meters { margin: 10px 0 12px; }
   .meters .statline { margin-bottom: 2px; }
   .meters .bar { margin-bottom: 8px; }
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px 10px;
-    font-size: 12px;
-  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
   .grid b { color: #8a6a2a; font-weight: 700; }
   .zeny {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid #e0c98a;
-    font-size: 12px;
-    display: flex;
-    justify-content: space-between;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid #e0c98a;
+    font-size: 12px; display: flex; justify-content: space-between;
   }
   .slots {
-    position: absolute;
-    left: 50%;
-    bottom: 22px;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: flex-end;
-    gap: 14px;
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    display: flex; align-items: flex-end; gap: 14px; z-index: 2;
   }
   .slot {
-    width: 92px;
-    height: 108px;
-    background: #fff6df;
-    border: 3px solid #c9a24a;
-    box-shadow: 0 0 0 2px #8a6a2a;
-    position: relative;
+    width: 92px; height: 108px; background: #fff6df;
+    border: 3px solid #c9a24a; box-shadow: 0 0 0 2px #8a6a2a;
+    position: relative; overflow: hidden;
   }
-  .slot.selected {
-    height: 118px;
-    background: #fff1c4;
-    border-color: #f0d789;
-  }
+  .slot.selected { height: 118px; background: #fff1c4; border-color: #f0d789; }
   .slot.create {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #b59a6a;
-    font-size: 28px;
-    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    color: #b59a6a; font-size: 28px; font-weight: 700;
   }
-  .slot .mini { position: absolute; inset: 8px 8px 22px; }
+  .slot .mini {
+    position: absolute; left: -8px; right: -8px; top: 0; height: 86px;
+    background: url("ludo-swordsman.png") center top / cover no-repeat;
+  }
   .slot .cap {
-    position: absolute;
-    left: 0; right: 0; bottom: 4px;
-    text-align: center;
-    font-size: 10px;
-    font-weight: 700;
+    position: absolute; left: 0; right: 0; bottom: 4px;
+    text-align: center; font-size: 10px; font-weight: 700;
+    background: rgba(255, 246, 223, 0.82);
   }
   .actions {
-    position: absolute;
-    right: 36px;
-    bottom: 28px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    position: absolute; right: 36px; bottom: 28px;
+    display: flex; gap: 8px; align-items: center; z-index: 2;
   }
-  .enter {
-    width: 168px;
-    height: 44px;
-  }
+  .enter { width: 168px; height: 44px; }
 </style>
 </head>
 <body>
-<div class="screen">
-  <div class="sun"></div>
-  <div class="path"></div>
-  <div class="plaza">
-    <div class="house a"><div class="roof"></div></div>
-    <div class="tower"><div class="clock"></div></div>
-    <div class="house b"><div class="roof"></div></div>
-    <div class="house c"><div class="roof"></div></div>
-    <div class="house d"><div class="roof"></div></div>
-    <div class="tree l"><div class="canopy"><i class="bloom" style="left:18px;top:16px"></i></div><div class="trunk"></div></div>
-    <div class="tree r"><div class="canopy"><i class="bloom" style="left:28px;top:20px"></i></div><div class="trunk"></div></div>
-  </div>
-
+<div class="screen charsel">
   <div class="panel topbar">
     <div class="who">Local rAthena</div>
     <div class="who muted">testaccount</div>
   </div>
 
-  <div class="hero">
-    <svg viewBox="0 0 280 420" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="140" cy="396" rx="58" ry="12" fill="rgba(40,20,8,.22)"/>
-      <rect x="118" y="318" width="18" height="68" fill="#5a4633"/>
-      <rect x="148" y="318" width="18" height="68" fill="#5a4633"/>
-      <rect x="116" y="378" width="22" height="10" fill="#3d2f22"/>
-      <rect x="146" y="378" width="22" height="10" fill="#3d2f22"/>
-      <path d="M108 210 h68 v112 h-68z" fill="#7d8aa0"/>
-      <path d="M108 210 h68 v18 h-68z" fill="#a7b0c2"/>
-      <path d="M120 250 h44 v22 h-44z" fill="#5f6a7c"/>
-      <path d="M88 214 h20 v78 h-20z" fill="#8a94a8"/>
-      <path d="M176 214 h20 v78 h-20z" fill="#8a94a8"/>
-      <path d="M88 288 h20 v16 h-20z" fill="#e3bb92"/>
-      <path d="M176 288 h20 v16 h-20z" fill="#e3bb92"/>
-      <circle cx="142" cy="168" r="28" fill="#e3bb92"/>
-      <path d="M114 156 q28 -36 56 0 v18 q-28 8 -56 0z" fill="#7a4a2b"/>
-      <path d="M118 176 q10 16 24 6" fill="none" stroke="#7a4a2b" stroke-width="8"/>
-      <circle cx="132" cy="168" r="3" fill="#3b2f27"/>
-      <circle cx="152" cy="168" r="3" fill="#3b2f27"/>
-      <path d="M134 180 q8 8 16 0" fill="none" stroke="#b07a5a" stroke-width="2"/>
-      <path d="M196 150 v170" stroke="#c9ced8" stroke-width="6"/>
-      <path d="M186 318 h26 v10 h-26z" fill="#6a5334"/>
-      <path d="M188 128 h22 v24 h-22z" fill="#c9ced8"/>
-    </svg>
-  </div>
+  <div class="hero"></div>
 
   <div class="panel nameplate">
     <div class="ornament-bl"></div>
@@ -195,11 +110,7 @@
 
   <div class="slots">
     <div class="slot selected">
-      <svg class="mini" viewBox="0 0 76 78">
-        <circle cx="38" cy="22" r="12" fill="#e3bb92"/>
-        <path d="M26 18 q12 -14 24 0" fill="#7a4a2b"/>
-        <rect x="24" y="34" width="28" height="28" fill="#7d8aa0"/>
-      </svg>
+      <div class="mini"></div>
       <div class="cap">Sirius</div>
     </div>
     <div class="slot create">+</div>
