@@ -28,6 +28,17 @@ Origin-style card summons with **Seals** currency, ×1/×10 pulls, pity to SSR, 
 
 - [poring-card.png](./poring-card.png) — Poring Card illustration mock for client replacement (export/convert to RO card asset format as needed)
 
+## Origin-gloss Poring sprite (goro replacement sample)
+
+Full redraw of the field mob, not the card. Same jelly gloss as Origin. goro can load these as RGBA frames in `poring.spr` without engine changes.
+
+- Idle cutout: [origin-poring/origin-poring-idle.png](./origin-poring/origin-poring-idle.png)
+- Walk hop: [origin-poring/origin-poring-walk.png](./origin-poring/origin-poring-walk.png)
+- Turnaround: [origin-poring/origin-poring-turnaround.png](./origin-poring/origin-poring-turnaround.png)
+- In-field preview: [origin-poring/origin-poring-ingame.jpg](./origin-poring/origin-poring-ingame.jpg)
+
+Next: cut white, pack RGBA `.spr` + `.act` (8 dirs × idle/walk/hit/die).
+
 ## Dungeon Instance
 
 - Interactive: [dungeon-instance.html](./dungeon-instance.html)

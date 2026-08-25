@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Origin Poring — goro sprite sample</title>
+<style>
+  body { margin: 0; font-family: "DejaVu Sans", sans-serif; background: #1a1208; color: #fff8e8; }
+  .wrap { width: min(1100px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 40px; }
+  h1 { font-family: Palatino, "DejaVu Serif", serif; }
+  p { max-width: 62ch; line-height: 1.5; color: #f3e2b8; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  figure { margin: 0; background: #fff; border: 3px solid #c9a24a; }
+  figure.wide { grid-column: 1 / -1; background: #111; }
+  img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 8px 10px; background: #3a2612; color: #fff3c8; font-size: 13px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Origin-gloss Poring</h1>
+  <p>Replacement sample for goro: same jelly as the card, but this is the walking mob. Drop RGBA frames into <code>poring.spr</code> after cutting the white.</p>
+  <div class="grid">
+    <figure>
+      <img src="origin-poring-idle.png" alt="Idle">
+      <figcaption>Idle — front, white studio</figcaption>
+    </figure>
+    <figure>
+      <img src="origin-poring-walk.png" alt="Walk">
+      <figcaption>Walk hop</figcaption>
+    </figure>
+    <figure class="wide">
+      <img src="origin-poring-turnaround.png" alt="Turnaround">
+      <figcaption>Turnaround — front / 3⁄4 / side / back</figcaption>
+    </figure>
+    <figure class="wide">
+      <img src="origin-poring-ingame.jpg" alt="In field">
+      <figcaption>How it sits on a field (preview, not a goro screenshot)</figcaption>
+    </figure>
+  </div>
+</div>
+</body>
+</html>
