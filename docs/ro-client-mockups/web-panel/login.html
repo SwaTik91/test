@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Sign in</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+      <a href="register.html">Register</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="download.html">Download</a>
+      <a href="account.html">Account</a>
+      <a class="on btn ghost" href="login.html">Sign in</a>
+    </nav>
+  </header>
+
+  <h1 class="page-title">Sign in</h1>
+  <form class="panel narrow" action="account.html" method="get" style="margin-bottom:36px">
+    <div class="field">
+      <label for="userid">Account ID</label>
+      <input id="userid" name="userid" value="testaccount" required>
+    </div>
+    <div class="field">
+      <label for="pass">Password</label>
+      <input id="pass" name="pass" type="password" value="SuperSecret" required>
+    </div>
+    <button class="btn" type="submit" style="width:100%;margin-top:8px">ENTER</button>
+    <p class="hint">No account yet? <a href="register.html">Create one</a>. This login is only for the website; the game client has its own window.</p>
+  </form>
+  <footer class="footer">Web session and game session are separate. Changing the password here updates the same rAthena account.</footer>
+</div>
+</body>
+</html>

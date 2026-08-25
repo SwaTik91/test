@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Ranking</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+      <a href="register.html">Register</a>
+      <a class="on" href="ranking.html">Ranking</a>
+      <a href="download.html">Download</a>
+      <a href="account.html">Account</a>
+      <a class="btn ghost" href="login.html">Sign in</a>
+    </nav>
+  </header>
+
+  <h1 class="page-title">Daily MVP ranking</h1>
+  <article class="panel" style="margin-bottom:36px">
+    <p class="hint" style="margin-top:0">The window you asked for in the client can read the same table. This is the web side: kills in the last 24 hours.</p>
+    <table>
+      <tr><th>#</th><th>Name</th><th>Job</th><th>MVP kills</th><th>Last kill</th></tr>
+      <tr><td>1</td><td>Sirius</td><td>Swordman</td><td>14</td><td>Baphomet · 18m</td></tr>
+      <tr><td>2</td><td>Lina</td><td>High Wizard</td><td>11</td><td>Maya · 41m</td></tr>
+      <tr><td>3</td><td>Garm</td><td>Knight</td><td>9</td><td>Osiris · 1h</td></tr>
+      <tr><td>4</td><td>Nox</td><td>Assassin Cross</td><td>7</td><td>Pharaoh · 2h</td></tr>
+      <tr><td>5</td><td>Ivy</td><td>Priest</td><td>4</td><td>Eddga · 3h</td></tr>
+    </table>
+  </article>
+  <footer class="footer">Needs a server log or custom SQL table. The client window and this page should share one API.</footer>
+</div>
+</body>
+</html>

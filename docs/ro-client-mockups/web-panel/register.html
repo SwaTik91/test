@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Register</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+      <a class="on" href="register.html">Register</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="download.html">Download</a>
+      <a href="account.html">Account</a>
+      <a class="btn ghost" href="login.html">Sign in</a>
+    </nav>
+  </header>
+
+  <h1 class="page-title">Create account</h1>
+  <form class="panel narrow" action="account.html" method="get" style="margin-bottom:36px">
+    <p class="hint" style="margin-top:0;margin-bottom:14px">Same fields rAthena stores in <code>login</code>: userid, user_pass, email, sex. After this, the goro client can sign in with that account.</p>
+    <div class="field">
+      <label for="userid">Account ID</label>
+      <input id="userid" name="userid" value="testaccount" maxlength="23" required>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <label for="pass">Password</label>
+        <input id="pass" name="pass" type="password" value="SuperSecret" required>
+      </div>
+      <div class="field">
+        <label for="pass2">Confirm password</label>
+        <input id="pass2" name="pass2" type="password" value="SuperSecret" required>
+      </div>
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" value="player@midgard.local" required>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <label for="sex">Gender</label>
+        <select id="sex" name="sex">
+          <option value="M" selected>Male</option>
+          <option value="F">Female</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="birth">Birth date</label>
+        <input id="birth" name="birth" type="date" value="1999-08-24">
+      </div>
+    </div>
+    <button class="btn" type="submit" style="width:100%;margin-top:6px">CREATE ACCOUNT</button>
+    <p class="hint">Already have an account? <a href="login.html">Sign in</a></p>
+  </form>
+  <footer class="footer">The live server will hash the password the same way rAthena expects (or use `_M` / `_F` create if you keep that path).</footer>
+</div>
+</body>
+</html>

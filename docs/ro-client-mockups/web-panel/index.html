@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Server</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a class="on" href="index.html">Home</a>
+      <a href="register.html">Register</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="download.html">Download</a>
+      <a href="account.html">Account</a>
+      <a class="btn ghost" href="login.html">Sign in</a>
+      <a class="btn" href="register.html">Create account</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Enter Midgard</h1>
+      <p>Register an account here, then log in from the goro client. The panel writes to the same rAthena <code>login</code> table the game uses.</p>
+      <div class="stats">
+        <div class="stat"><b>1,284</b><span>ONLINE</span></div>
+        <div class="stat"><b>Pre-RE</b><span>2008</span></div>
+        <div class="stat"><b>99 / 70</b><span>MAX LV</span></div>
+      </div>
+      <a class="btn" href="register.html">CREATE ACCOUNT</a>
+    </div>
+    <article class="panel">
+      <h2 class="card-title">Server status</h2>
+      <table>
+        <tr><th>Service</th><th>State</th></tr>
+        <tr><td>Login</td><td class="ok">Online</td></tr>
+        <tr><td>Char</td><td class="ok">Online</td></tr>
+        <tr><td>Map</td><td class="ok">Online</td></tr>
+        <tr><td>Website</td><td class="ok">Online</td></tr>
+      </table>
+      <p class="hint">Address for the client: 127.0.0.1:6900 · packet date 20080910</p>
+    </article>
+  </section>
+
+  <section class="grid-2">
+    <article class="panel">
+      <h2 class="card-title">News</h2>
+      <div class="news-item"><small>24 Aug 2026</small>Open beta. Registration is open, rates 5x/5x/3x.</div>
+      <div class="news-item"><small>20 Aug 2026</small>MVP tracker and instance dungeons are in test.</div>
+      <div class="news-item"><small>12 Aug 2026</small>Client build: goro + Origin login mock.</div>
+    </article>
+    <article class="panel">
+      <h2 class="card-title">Download</h2>
+      <p class="hint" style="margin-top:0">Client is the goro build. Put this panel URL in your bookmark; the game itself still uses <code>clientinfo.xml</code>.</p>
+      <table>
+        <tr><td>Windows client</td><td>goro-win.zip</td></tr>
+        <tr><td>Data / GRF</td><td>midgard-data.7z</td></tr>
+        <tr><td>Patcher</td><td>coming next</td></tr>
+      </table>
+      <p class="hint"><a href="download.html">Connection notes and goro.ini →</a></p>
+    </article>
+  </section>
+
+  <footer class="footer">Midgard web panel · registration, rankings, account. Not FluxCP — a custom skin over rAthena.</footer>
+</div>
+</body>
+</html>
