@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ludo Poring — 8 dirs + idle</title>
+<style>
+  body { margin: 0; font: 15px/1.45 "DejaVu Sans", sans-serif; background: #120c08; color: #fff6e4; }
+  .wrap { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 40px; }
+  h1 { font-family: Palatino, serif; }
+  p { max-width: 68ch; color: #f0d9a8; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  figure { margin: 0; background: #000; border: 2px solid #c9a24a; }
+  img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 6px 8px; background: #3a2612; font-size: 12px; }
+  .wide { grid-column: 1 / -1; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ludo: rotateSprite + animateSprite</h1>
+  <p>Same Origin-gloss Poring, 8 camera angles at 30° elevation, then a 9-frame idle bounce. Walk pose grew arms — Ludo guessed a biped. Rotations stay a blob.</p>
+  <div class="grid">
+    <figure><img src="rot-front.png" alt="front"><figcaption>0° front</figcaption></figure>
+    <figure><img src="rot-front-right.png" alt="front-right"><figcaption>45° front-right</figcaption></figure>
+    <figure><img src="rot-right.png" alt="right"><figcaption>90° right</figcaption></figure>
+    <figure><img src="rot-back-right.png" alt="back-right"><figcaption>135° back-right</figcaption></figure>
+    <figure><img src="rot-back.png" alt="back"><figcaption>180° back</figcaption></figure>
+    <figure><img src="rot-back-left.png" alt="back-left"><figcaption>−135° back-left</figcaption></figure>
+    <figure><img src="rot-left.png" alt="left"><figcaption>−90° left</figcaption></figure>
+    <figure><img src="rot-front-left.png" alt="front-left"><figcaption>−45° front-left</figcaption></figure>
+    <figure class="wide"><img src="idle-sheet.png" alt="idle sheet"><figcaption>idle bounce — 9 frames</figcaption></figure>
+    <figure class="wide"><img src="idle.gif" alt="idle gif"><figcaption>idle.gif</figcaption></figure>
+    <figure><img src="pose-walk.png" alt="walk pose"><figcaption>generatePose Walk — invented legs</figcaption></figure>
+  </div>
+</div>
+</body>
+</html>

@@ -35,6 +35,7 @@ Full redraw of the field mob, not the card. Same jelly gloss as Origin. Packed a
 - Gallery: [origin-poring/index.html](./origin-poring/index.html)
 - Drop-in: [origin-poring/data/sprite/monster/poring.spr](./origin-poring/data/sprite/monster/poring.spr) and [poring.act](./origin-poring/data/sprite/monster/poring.act)
 - Rebuild: `cd tools/rosprite && go test && go run . ../../docs/ro-client-mockups/origin-poring/frames ../../docs/ro-client-mockups/origin-poring`
+- Ludo batch trial (8 dirs + idle sheet): [origin-poring/ludo/index.html](./origin-poring/ludo/index.html)
 
 Copy those two files over the stock Poring in the goro data tree (or pack them into a GRF).
 
