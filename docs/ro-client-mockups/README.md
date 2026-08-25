@@ -31,10 +31,9 @@ What this changes relative to the current goro screens:
 - `ENTER WORLD` is the primary gold action; Create stays disabled on an
   occupied slot, same rule as the current `Make` button.
 
-Plaza backgrounds and the swordsman were generated through Ludo (`fixed_background`
-and `portrait`, then `removeBackground` on the hero) and composited under the
-same parchment UI. In the client the hero slot would be the job sprite or a
-later 32-bit replacement.
+These four images are full Ludo `screenshot` generations, not HTML chrome
+composited over a background. Lettering on the character panel can drift
+between runs — that is the generator, not the client.
 
 ## Auto Battle
 

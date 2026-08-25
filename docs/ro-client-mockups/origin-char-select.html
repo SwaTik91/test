@@ -2,126 +2,13 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Origin character select</title>
-<link rel="stylesheet" href="origin-flow.css">
+<title>Ludo — character select</title>
 <style>
-  .topbar {
-    left: 28px; right: 28px; top: 18px; height: 42px;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 16px;
-  }
-  .topbar .who { font-size: 12px; font-weight: 700; }
-  .hero {
-    position: absolute;
-    left: 180px;
-    bottom: 132px;
-    width: 340px;
-    height: 500px;
-    z-index: 2;
-    background: url("ludo-swordsman.png") center bottom / contain no-repeat;
-    filter: drop-shadow(0 18px 24px rgba(20, 10, 4, 0.45));
-  }
-  .nameplate {
-    left: 196px; bottom: 148px; width: 300px;
-    padding: 10px 16px 12px; text-align: center;
-  }
-  .nameplate h2 { font-size: 22px; letter-spacing: 1px; }
-  .nameplate .job { margin-top: 2px; font-size: 12px; color: #8a6a2a; }
-  .info { right: 36px; top: 82px; width: 292px; padding: 18px 18px 16px; }
-  .info .panel-title { margin-bottom: 12px; }
-  .statline { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-  .meters { margin: 10px 0 12px; }
-  .meters .statline { margin-bottom: 2px; }
-  .meters .bar { margin-bottom: 8px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
-  .grid b { color: #8a6a2a; font-weight: 700; }
-  .zeny {
-    margin-top: 12px; padding-top: 10px; border-top: 1px solid #e0c98a;
-    font-size: 12px; display: flex; justify-content: space-between;
-  }
-  .slots {
-    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
-    display: flex; align-items: flex-end; gap: 14px; z-index: 2;
-  }
-  .slot {
-    width: 92px; height: 108px; background: #fff6df;
-    border: 3px solid #c9a24a; box-shadow: 0 0 0 2px #8a6a2a;
-    position: relative; overflow: hidden;
-  }
-  .slot.selected { height: 118px; background: #fff1c4; border-color: #f0d789; }
-  .slot.create {
-    display: flex; align-items: center; justify-content: center;
-    color: #b59a6a; font-size: 28px; font-weight: 700;
-  }
-  .slot .mini {
-    position: absolute; left: -8px; right: -8px; top: 0; height: 86px;
-    background: url("ludo-swordsman.png") center top / cover no-repeat;
-  }
-  .slot .cap {
-    position: absolute; left: 0; right: 0; bottom: 4px;
-    text-align: center; font-size: 10px; font-weight: 700;
-    background: rgba(255, 246, 223, 0.82);
-  }
-  .actions {
-    position: absolute; right: 36px; bottom: 28px;
-    display: flex; gap: 8px; align-items: center; z-index: 2;
-  }
-  .enter { width: 168px; height: 44px; }
+  html, body { margin: 0; width: 1344px; height: 768px; overflow: hidden; background: #000; }
+  img { display: block; width: 1344px; height: 768px; }
 </style>
 </head>
 <body>
-<div class="screen charsel">
-  <div class="panel topbar">
-    <div class="who">Local rAthena</div>
-    <div class="who muted">testaccount</div>
-  </div>
-
-  <div class="hero"></div>
-
-  <div class="panel nameplate">
-    <div class="ornament-bl"></div>
-    <div class="ornament-br"></div>
-    <h2>Sirius</h2>
-    <div class="job">Swordman · Lv. 42</div>
-  </div>
-
-  <div class="panel info">
-    <div class="ornament-bl"></div>
-    <div class="ornament-br"></div>
-    <div class="panel-title">Character</div>
-    <div class="statline"><span>Job</span><b>Swordman</b></div>
-    <div class="statline"><span>Base / Job</span><b>42 / 21</b></div>
-    <div class="meters">
-      <div class="statline"><span>HP</span><span>1240 / 1240</span></div>
-      <div class="bar hp"><span></span></div>
-      <div class="statline"><span>SP</span><span>180 / 180</span></div>
-      <div class="bar sp"><span></span></div>
-      <div class="statline"><span>EXP</span><span>62%</span></div>
-      <div class="bar exp"><span></span></div>
-    </div>
-    <div class="grid">
-      <div><b>STR</b> 45</div><div><b>AGI</b> 30</div>
-      <div><b>VIT</b> 38</div><div><b>INT</b> 12</div>
-      <div><b>DEX</b> 25</div><div><b>LUK</b> 18</div>
-    </div>
-    <div class="zeny"><span>Zeny</span><b>128,400</b></div>
-    <div class="zeny" style="margin-top:6px;padding-top:0;border:0"><span>Last map</span><b>prontera</b></div>
-  </div>
-
-  <div class="slots">
-    <div class="slot selected">
-      <div class="mini"></div>
-      <div class="cap">Sirius</div>
-    </div>
-    <div class="slot create">+</div>
-    <div class="slot create">+</div>
-  </div>
-
-  <div class="actions">
-    <div class="ghost-btn">Delete</div>
-    <div class="ghost-btn disabled">Create</div>
-    <div class="gold-btn enter">ENTER WORLD</div>
-  </div>
-</div>
+<img src="origin-char-select.png" alt="Ludo character select">
 </body>
 </html>
