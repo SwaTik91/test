@@ -3,40 +3,48 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Origin Poring — goro sprite sample</title>
+<title>Origin Poring — goro sprite pack</title>
 <style>
   body { margin: 0; font-family: "DejaVu Sans", sans-serif; background: #1a1208; color: #fff8e8; }
   .wrap { width: min(1100px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 40px; }
-  h1 { font-family: Palatino, "DejaVu Serif", serif; }
-  p { max-width: 62ch; line-height: 1.5; color: #f3e2b8; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  figure { margin: 0; background: #fff; border: 3px solid #c9a24a; }
+  h1, h2 { font-family: Palatino, "DejaVu Serif", serif; }
+  p, li { max-width: 68ch; line-height: 1.5; color: #f3e2b8; }
+  code { color: #ffe9a0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  figure { margin: 0; background:
+    linear-gradient(45deg, #2a2014 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2014 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2014 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2014 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    border: 3px solid #c9a24a;
+  }
   figure.wide { grid-column: 1 / -1; background: #111; }
-  img { display: block; width: 100%; height: auto; }
+  img { display: block; width: 100%; height: auto; image-rendering: auto; }
   figcaption { padding: 8px 10px; background: #3a2612; color: #fff3c8; font-size: 13px; }
-  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Origin-gloss Poring</h1>
-  <p>Replacement sample for goro: same jelly as the card, but this is the walking mob. Drop RGBA frames into <code>poring.spr</code> after cutting the white.</p>
+  <p>Drop-in for goro: copy <code>data/sprite/monster/poring.spr</code> and <code>poring.act</code> over the stock files (or into a GRF). RGBA frames, 40 actions (8 dirs × idle / walk / attack / hurt / death).</p>
+  <h2>Packed cutouts</h2>
   <div class="grid">
-    <figure>
-      <img src="origin-poring-idle.png" alt="Idle">
-      <figcaption>Idle — front, white studio</figcaption>
-    </figure>
-    <figure>
-      <img src="origin-poring-walk.png" alt="Walk">
-      <figcaption>Walk hop</figcaption>
-    </figure>
-    <figure class="wide">
-      <img src="origin-poring-turnaround.png" alt="Turnaround">
-      <figcaption>Turnaround — front / 3⁄4 / side / back</figcaption>
-    </figure>
+    <figure><img src="frames/cutout/00.png" alt="Idle front"><figcaption>0 idle front</figcaption></figure>
+    <figure><img src="frames/cutout/01.png" alt="Idle 3/4"><figcaption>1 idle ¾</figcaption></figure>
+    <figure><img src="frames/cutout/02.png" alt="Idle side"><figcaption>2 idle side</figcaption></figure>
+    <figure><img src="frames/cutout/03.png" alt="Idle back"><figcaption>3 idle back</figcaption></figure>
+    <figure><img src="frames/cutout/04.png" alt="Walk"><figcaption>4 walk hop</figcaption></figure>
+    <figure><img src="frames/cutout/05.png" alt="Hurt"><figcaption>5 hurt</figcaption></figure>
+    <figure><img src="frames/cutout/06.png" alt="Die"><figcaption>6 die puddle</figcaption></figure>
+  </div>
+  <h2>In-field preview</h2>
+  <div class="grid">
     <figure class="wide">
       <img src="origin-poring-ingame.jpg" alt="In field">
-      <figcaption>How it sits on a field (preview, not a goro screenshot)</figcaption>
+      <figcaption>How the gloss reads on grass (art preview, not a live goro shot)</figcaption>
     </figure>
   </div>
 </div>
