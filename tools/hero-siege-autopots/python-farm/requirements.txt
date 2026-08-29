@@ -1,0 +1,5 @@
+numpy>=1.24
+dxcam>=0.0.5; sys_platform == "win32"
+mss>=9.0.0
+opencv-python>=4.8.0
+yt-dlp>=2024.8.0
