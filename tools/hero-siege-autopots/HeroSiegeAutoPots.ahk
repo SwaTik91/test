@@ -31,9 +31,13 @@ DllCall("User32.dll\SetThreadDpiAwarenessContext", "ptr", -4)
 Cfg.Load()
 Overlay.Init()
 TrayMenu.Init()
-OnExit((*) => (DxgiGrab.Free(), Pix.PrintFree()))
-if !DxgiGrab.Init()
-    Overlay.ShowHint("DXGI не поднялся: " DxgiGrab.err "  (закрой OBS/Xbox Game Bar и перезапусти)")
+OnExit((*) => (DxgiGrab.Free(), MagGrab.Free(), Pix.PrintFree()))
+if DxgiGrab.Init()
+    Overlay.ShowHint("DXGI ок " DxgiGrab.width "x" DxgiGrab.height)
+else if MagGrab.Init()
+    Overlay.ShowHint("DXGI нет (" DxgiGrab.err "), читаю через Magnifier")
+else
+    Overlay.ShowHint("Нет захвата кадра: " DxgiGrab.err)
 SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
 TrayTip("Hero Siege AutoPots", "F8 — вкл/выкл   F6 — калибровка HP   F10 — настройки", "Iconi")
 
@@ -215,7 +219,17 @@ class Pix {
             case "screen": return this.Screen(cx, cy)
             default:
                 this.ToScreen(cx, cy, &sx, &sy)
-                return DxgiGrab.Color(sx, sy)
+                if DxgiGrab.ready {
+                    c := DxgiGrab.Color(sx, sy)
+                    if c && !Col.IsDeadGdi(c)
+                        return c
+                }
+                if MagGrab.ready {
+                    c := MagGrab.Color(sx, sy)
+                    if c && !Col.IsDeadGdi(c)
+                        return c
+                }
+                return this.Screen(cx, cy)
         }
     }
 
@@ -252,7 +266,14 @@ class Pix {
         sy := NumGet(pt, 4, "int")
         if DxgiGrab.ready || Cfg.pixelMethod = "dxgi" {
             c := DxgiGrab.Color(sx, sy)
-            if c || DxgiGrab.ready
+            if c
+                return c
+            if DxgiGrab.ready && !Col.IsDeadGdi(c)
+                return c
+        }
+        if MagGrab.ready {
+            c := MagGrab.Color(sx, sy)
+            if c && !Col.IsDeadGdi(c)
                 return c
         }
         hwnd := WinExist("A")
@@ -329,9 +350,10 @@ class Pix {
         window := this.AhkClient(cx, cy, "Slow")
         print := this.PrintGet(cx, cy)
         dxgi := DxgiGrab.Color(sx, sy)
+        mag := MagGrab.ready ? MagGrab.Color(sx, sy) : 0
         return Map(
             "sx", sx, "sy", sy, "cx", cx, "cy", cy,
-            "screen", screen, "alt", alt, "window", window, "print", print, "dxgi", dxgi
+            "screen", screen, "alt", alt, "window", window, "print", print, "dxgi", dxgi, "mag", mag
         )
     }
 }
@@ -369,28 +391,32 @@ class DxgiGrab {
     }
 
     static InitRaw() {
-        if !DllCall("GetModuleHandle", "str", "DXGI")
-            DllCall("LoadLibrary", "str", "DXGI")
-        if !DllCall("GetModuleHandle", "str", "D3D11")
-            DllCall("LoadLibrary", "str", "D3D11")
-        DllCall("ole32\CLSIDFromString", "wstr", "{7b7166ec-21c7-44ae-b21a-c9ae321ae369}", "ptr", riid := Buffer(16), "HRESULT")
-        try DllCall("DXGI\CreateDXGIFactory1", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
-        catch {
-            DllCall("DXGI\CreateDXGIFactory", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
-        }
+        DllCall("GetModuleHandle", "str", "DXGI") || DllCall("LoadLibrary", "str", "DXGI")
+        DllCall("GetModuleHandle", "str", "D3D11") || DllCall("LoadLibrary", "str", "D3D11")
+        ; IDXGIFactory1 — не путать с IDXGIFactory, иначе EnumAdapters часто ломается
+        DllCall("ole32\IIDFromString", "wstr", "{770AAE78-F26F-4DBA-A829-253C83D1B387}", "ptr", iid := Buffer(16), "hresult")
+        DllCall("dxgi\CreateDXGIFactory1", "ptr", iid, "ptr*", &factory := 0, "hresult")
         this.factory := factory
-        adapter := 0
-        output := 0
-        try ComCall(7, factory, "uint", 0, "ptr*", &adapter)
-        catch as e
-            throw Error("DXGI EnumAdapters: " e.Message)
-        this.adapter := adapter
-        try ComCall(7, adapter, "uint", 0, "ptr*", &output)
-        catch as e
-            throw Error("DXGI EnumOutputs: " e.Message)
-        this.output := output
-        this.ApplyMonitorOrigin()
-        try DllCall("D3D11\D3D11CreateDevice"
+        adapter := 0, output := 0, found := false
+        a := 0
+        while 0x887A0002 != ComCall(7, factory, "uint", a, "ptr*", &adapter, "uint") {
+            o := 0
+            while 0x887A0002 != ComCall(7, adapter, "uint", o, "ptr*", &output, "uint") {
+                desc := Buffer(88 + A_PtrSize, 0)
+                ComCall(7, output, "ptr", desc)
+                name := StrGet(desc, 32, "UTF-16")
+                this.adapter := adapter
+                this.output := output
+                this.BindMonitor(name)
+                found := true
+                break 2
+            }
+            ObjRelease(adapter)
+            a += 1
+        }
+        if !found
+            throw Error("DXGI: нет DISPLAY-выхода")
+        DllCall("D3D11\D3D11CreateDevice"
             , "ptr", adapter
             , "int", 0
             , "ptr", 0
@@ -401,27 +427,13 @@ class DxgiGrab {
             , "ptr*", &device := 0
             , "ptr*", 0
             , "ptr*", &ctx := 0
-            , "HRESULT")
-        catch {
-            DllCall("D3D11\D3D11CreateDevice"
-                , "ptr", 0
-                , "int", 1
-                , "ptr", 0
-                , "uint", 0
-                , "ptr", 0
-                , "uint", 0
-                , "uint", 7
-                , "ptr*", &device := 0
-                , "ptr*", 0
-                , "ptr*", &ctx := 0
-                , "HRESULT")
-        }
+            , "hresult")
         this.device := device
         this.ctx := ctx
-        this.output1 := ComObjQuery(output, "{00cddea8-939b-4b83-a340-a685226666cc}")
+        this.output1 := ComObjQuery(output, "{00CDDEA8-939B-4B83-A340-A685226666CC}")
         try ComCall(22, this.output1, "ptr", device, "ptr*", &dup := 0)
         catch as e
-            throw Error("DuplicateOutput: " e.Message " — закрой OBS/Xbox Game Bar и перезапусти")
+            throw Error("DuplicateOutput: " e.Message " — закрой OBS/Xbox Game Bar")
         this.dup := dup
         dupDesc := Buffer(36, 0)
         ComCall(7, dup, "ptr", dupDesc)
@@ -432,10 +444,8 @@ class DxgiGrab {
             this.width := dw
             this.height := dh
         }
-        if this.width < 64 || this.height < 64 {
-            this.width := DllCall("GetSystemMetrics", "int", 0, "int")
-            this.height := DllCall("GetSystemMetrics", "int", 1, "int")
-        }
+        if this.width < 64 || this.height < 64
+            this.ApplyMonitorOrigin()
         if this.width < 64
             throw Error("DXGI: нулевая ширина кадра")
         texDesc := Buffer(44, 0)
@@ -452,7 +462,23 @@ class DxgiGrab {
         NumPut("uint", 0, texDesc, 40)
         ComCall(5, device, "ptr", texDesc, "ptr", 0, "ptr*", &staging := 0)
         this.staging := staging
-        Sleep 40
+        Sleep 50
+    }
+
+    static BindMonitor(name) {
+        Loop MonitorGetCount() {
+            try {
+                if MonitorGetName(A_Index) = name {
+                    MonitorGet(A_Index, &l, &t, &r, &b)
+                    this.outputLeft := l
+                    this.outputTop := t
+                    this.width := r - l
+                    this.height := b - t
+                    return
+                }
+            }
+        }
+        this.ApplyMonitorOrigin()
     }
 
     static ApplyMonitorOrigin() {
@@ -592,6 +618,71 @@ class DxgiGrab {
         this.ready := false
         this.mapped := false
         this.frameRes := 0
+    }
+}
+
+; Magnifier host: DWM кладёт в него уже составленный кадр, GDI это видит.
+class MagGrab {
+    static ready := false
+    static host := 0
+    static hMag := 0
+
+    static Init() {
+        this.Free()
+        try {
+            DllCall("LoadLibrary", "str", "Magnification")
+            if !DllCall("magnification\MagInitialize")
+                return false
+            g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20 +E0x80000")
+            g.Show("x-64000 y-64000 w16 h16 NoActivate")
+            this.host := g
+            this.hMag := DllCall("CreateWindowEx"
+                , "uint", 0
+                , "str", "Magnifier"
+                , "str", ""
+                , "uint", 0x50000000
+                , "int", 0, "int", 0, "int", 16, "int", 16
+                , "ptr", g.Hwnd, "ptr", 0, "ptr", 0, "ptr", 0, "ptr")
+            if !this.hMag
+                return false
+            xf := Buffer(36, 0)
+            NumPut("float", 1, xf, 0)
+            NumPut("float", 1, xf, 16)
+            NumPut("float", 1, xf, 32)
+            DllCall("magnification\MagSetWindowTransform", "ptr", this.hMag, "ptr", xf)
+            this.ready := true
+            return true
+        } catch {
+            this.Free()
+            return false
+        }
+    }
+
+    static Color(sx, sy) {
+        if !this.ready
+            return 0
+        rc := Buffer(16, 0)
+        NumPut("int", sx, "int", sy, "int", sx + 1, "int", sy + 1, rc)
+        DllCall("magnification\MagSetWindowSource", "ptr", this.hMag, "ptr", rc)
+        DllCall("user32\InvalidateRect", "ptr", this.hMag, "ptr", 0, "int", 1)
+        DllCall("user32\UpdateWindow", "ptr", this.hMag)
+        hdc := DllCall("GetDC", "ptr", this.hMag, "ptr")
+        col := DllCall("GetPixel", "ptr", hdc, "int", 0, "int", 0, "uint")
+        DllCall("ReleaseDC", "ptr", this.hMag, "ptr", hdc)
+        return Pix.FromColorRef(col)
+    }
+
+    static Free() {
+        this.ready := false
+        if this.hMag {
+            try DllCall("user32\DestroyWindow", "ptr", this.hMag)
+            this.hMag := 0
+        }
+        if this.host {
+            try this.host.Destroy()
+            this.host := 0
+        }
+        try DllCall("magnification\MagUninitialize")
     }
 }
 
@@ -852,14 +943,14 @@ class Calib {
         keyName := wantHp ? "F6" : "F7"
         leftStep := (this.mode = "hp1" || this.mode = "mp1")
         edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
-        if !DxgiGrab.ready
-            ok := "DXGI не запущен: " DxgiGrab.err
-        else if !c
-            ok := "DXGI кадр пустой — подожди секунду, поводи курсором"
-        else if onBar
-            ok := "✓ DXGI видит полоску — жми " keyName
+        if onBar
+            ok := "✓ вижу полоску — жми " keyName
+        else if !c || Col.IsDeadGdi(c)
+            ok := DxgiGrab.ready
+                ? "кадр пустой/заливка, поводи курсором"
+                : ("захват: " (DxgiGrab.err != "" ? DxgiGrab.err : (MagGrab.ready ? "Magnifier" : "нет")))
         else
-            ok := "DXGI " Col.Hex(c) " — наведи НА " barName " полоску"
+            ok := Col.Hex(c) " — наведи НА " barName " полоску"
         msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
             . "Полоска в ВЕРХНЕМ ЛЕВОМ углу, под именем персонажа.`n"
             . "Это не банка 1 внизу экрана.`n`n"
@@ -878,18 +969,19 @@ class Probe {
         d := Pix.DumpAtCursor()
         cur := Pix.Get(d["cx"], d["cy"])
         msg := Format(
-            "метод {} → {}`ndxgi {}`nscreen {}`nalt {}`nwindow {}`nprint {}`nxy {},{}",
+            "метод {} → {}`ndxgi {}`nmag {}`nscreen {}`nxy {},{}",
             Cfg.pixelMethod, Col.Hex(cur),
-            Col.Hex(d["dxgi"]), Col.Hex(d["screen"]), Col.Hex(d["alt"]),
-            Col.Hex(d["window"]), Col.Hex(d["print"]),
+            Col.Hex(d["dxgi"]), Col.Hex(d["mag"]), Col.Hex(d["screen"]),
             d["sx"], d["sy"]
         )
-        if !DxgiGrab.ready
+        if DxgiGrab.ready
+            msg .= "`nDXGI " DxgiGrab.width "x" DxgiGrab.height
+        else
             msg .= "`nDXGI: " DxgiGrab.err
-        else if Col.IsRed(d["dxgi"])
-            msg .= "`nDXGI видит красный — калибруй F6"
-        else if Col.IsDeadGdi(d["dxgi"])
-            msg .= "`nзакрой OBS/Xbox overlay и перезапусти скрипт"
+        if MagGrab.ready
+            msg .= "`nMagnifier ок"
+        if Col.IsRed(cur)
+            msg .= "`nвижу красный — калибруй F6"
         MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
         ToolTip(msg, l + 24, b - 220)
         Overlay.ShowHint(msg)
