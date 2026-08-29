@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -41,27 +42,28 @@ def download_youtube(url: str, dest: Path) -> Path:
     return vids[0]
 
 
-def iter_frames(path: Path, every: int = 8):
+def iter_frames(path: Path, every: int = 8) -> Iterator[np.ndarray]:
     import cv2
 
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise RuntimeError("не открыть видео: " + str(path))
     i = 0
-    while True:
-        ok, bgr = cap.read()
-        if not ok:
-            break
-        if i % every == 0:
-            yield np.asarray(bgr[:, :, ::-1].copy())
-        i += 1
-    cap.release()
+    try:
+        while True:
+            ok, bgr = cap.read()
+            if not ok:
+                break
+            if i % every == 0:
+                yield np.asarray(bgr[:, :, ::-1].copy())
+            i += 1
+    finally:
+        cap.release()
 
 
 def collect_from_video(path: Path, every: int = 8) -> tuple[list[np.ndarray], list[str]]:
-    frames = list(iter_frames(path, every=every))
-    print(f"  кадров: {len(frames)} из {path.name}")
-    return pairs_to_dataset(frames)
+    print(f"  читаю {path.name}, каждый {every}-й кадр")
+    return pairs_to_dataset(iter_frames(path, every=every))
 
 
 def main() -> int:

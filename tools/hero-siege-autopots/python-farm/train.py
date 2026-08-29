@@ -50,13 +50,15 @@ def main() -> int:
         print("мало данных")
         return 1
     model = train_policy(images, labels, epochs=args.epochs)
-    model.save(args.out)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    model.save(out)
     ok = 0
     for im, k in zip(images, labels):
         pred, _ = model.predict(im)
         if pred == k:
             ok += 1
-    print("записал", args.out, "точность на train:", round(ok / len(labels), 3))
+    print("записал", out, "точность на train:", round(ok / len(labels), 3))
     return 0
 
 

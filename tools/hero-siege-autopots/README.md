@@ -51,7 +51,7 @@ python farm.py --debug
 
 Красная точка в окне отладки = герой. Если ходишь стрелками: `python farm.py --debug --keys arrows`.
 
-Ссылки на YouTube (миникарта видна): `python from_youtube.py URL` затем `python train.py recordings/yt_dataset.npz` и `python farm.py --debug --policy walk.npz`.
+Ссылки на YouTube / локальный mp4: `python from_youtube.py файл.mp4` затем `python train.py recordings/yt_dataset.npz`. Модель не заменяет A* (на 360p-ролике Season 6 она не выучила ходьбу). Основной фарм: `python farm.py --debug --keys arrows`.
 
 ## Клавиши
 

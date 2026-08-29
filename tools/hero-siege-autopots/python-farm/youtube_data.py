@@ -6,9 +6,20 @@ or the map sliding under a centered icon.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import numpy as np
 
-from nav import FLOOR, FOG, WALL, classify_rgb, find_player_cell, to_grid
+from nav import (
+    FLOOR,
+    FOG,
+    WALL,
+    _best_compact_blob,
+    classify_rgb,
+    find_player_cell,
+    luma_rgb,
+    to_grid,
+)
 
 KEYS = ("w", "a", "s", "d")
 
@@ -20,8 +31,47 @@ def _nn_resize(img: np.ndarray, new_h: int, new_w: int) -> np.ndarray:
     return img[yy[:, None], xx]
 
 
+def has_gameplay_hud(frame: np.ndarray) -> bool:
+    """True when the Hero Siege HP bar is visible in the top-left (not intro/webcam)."""
+    h, w = frame.shape[:2]
+    y1, x1 = 2, 2
+    y2, x2 = max(y1 + 1, int(h * 0.18)), max(x1 + 1, int(w * 0.32))
+    rgn = frame[y1:y2, x1:x2]
+    if rgn.size == 0:
+        return False
+    r = rgn[..., 0].astype(np.int16)
+    g = rgn[..., 1].astype(np.int16)
+    b = rgn[..., 2].astype(np.int16)
+    red = (r > 140) & (r > g + 40) & (r > b + 40)
+    if float(red.mean()) < 0.015:
+        return False
+    return float(red.mean(axis=1).max()) >= 0.16
+
+
+def hero_siege_minimap_box(h: int, w: int) -> tuple[int, int, int, int]:
+    """Hero Siege 2.0 radar: square, top-right, scaled from 640×360 HUD."""
+    side = max(16, int(round(w * 64 / 640)))
+    right_pad = max(2, int(round(w * 12 / 640)))
+    top_pad = max(2, int(round(h * 7 / 360)))
+    x2 = w - right_pad
+    y1 = top_pad
+    x1 = x2 - side
+    y2 = y1 + side
+    return max(0, x1), y1, x2, min(h, y2)
+
+
+def crop_looks_like_radar(crop: np.ndarray) -> bool:
+    """Radar is mostly dark with some brighter pixels; photos in that corner are brighter."""
+    lu = luma_rgb(crop)
+    dark = float((lu <= 40).mean())
+    structure = float((lu >= 70).mean())
+    return dark >= 0.20 and structure >= 0.002
+
+
 def find_minimap(frame: np.ndarray) -> tuple[int, int, int, int] | None:
     """Square HUD map, usually top-right. Returns x1,y1,x2,y2 in frame pixels."""
+    if has_gameplay_hud(frame):
+        return hero_siege_minimap_box(frame.shape[0], frame.shape[1])
     h, w = frame.shape[:2]
     scale = 1.0
     work = frame
@@ -75,9 +125,35 @@ def crop_box(frame: np.ndarray, box: tuple[int, int, int, int]) -> np.ndarray | 
     return frame[y1:y2, x1:x2]
 
 
+def _to_cell(pix: tuple[int, int] | None, grid: np.ndarray, cell: int) -> tuple[int, int] | None:
+    if pix is None or grid.size == 0:
+        return None
+    gy = min(grid.shape[0] - 1, max(0, pix[0] // cell))
+    gx = min(grid.shape[1] - 1, max(0, pix[1] // cell))
+    return gy, gx
+
+
+def _player_cell_video(rgb: np.ndarray, grid: np.ndarray, cell: int = 2) -> tuple[int, int] | None:
+    """360p / compressed radar: hero icon is a few mid-bright pixels, not gold."""
+    r = rgb[..., 0].astype(np.int16)
+    g = rgb[..., 1].astype(np.int16)
+    b = rgb[..., 2].astype(np.int16)
+    lu = luma_rgb(rgb)
+    yellow = (r >= 140) & (g >= 110) & (b <= 150) & ((g - b) >= 12)
+    pix = _best_compact_blob(yellow, min_n=1, max_n=40, max_aspect=4.0, max_side=10)
+    if pix is None:
+        chroma = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
+        bright = (lu >= 105) & (chroma <= 55)
+        pix = _best_compact_blob(bright, min_n=1, max_n=24, max_aspect=2.8, max_side=10)
+    return _to_cell(pix, grid, cell)
+
+
 def _player_cell(rgb: np.ndarray) -> tuple[int, int] | None:
     grid = to_grid(classify_rgb(rgb), cell=2)
-    return find_player_cell(rgb, grid, 2)
+    pix = find_player_cell(rgb, grid, 2)
+    if pix is not None:
+        return pix
+    return _player_cell_video(rgb, grid, 2)
 
 
 def _luma(rgb: np.ndarray) -> np.ndarray:
@@ -119,8 +195,12 @@ def label_from_motion(prev: np.ndarray, cur: np.ndarray) -> str | None:
                 return "d" if dx > 0 else "a"
             if abs(dy) > abs(dx):
                 return "s" if dy > 0 else "w"
+            return None
+    la, lb = _luma(prev), _luma(cur)
+    s0 = _sad_shift(la, lb, 0, 0)
     dy, dx = _scroll_shift(prev, cur)
-    if abs(dx) + abs(dy) < 2:
+    s1 = _sad_shift(la, lb, dy, dx)
+    if abs(dx) + abs(dy) < 2 or s1 >= s0 * 0.75:
         return None
     # Shift that aligns prev onto cur: content moved that way, player walked opposite.
     if abs(dx) > abs(dy):
@@ -129,21 +209,22 @@ def label_from_motion(prev: np.ndarray, cur: np.ndarray) -> str | None:
 
 
 def pairs_to_dataset(
-    frames: list[np.ndarray],
+    frames: Iterable[np.ndarray],
     box: tuple[int, int, int, int] | None = None,
 ) -> tuple[list[np.ndarray], list[str]]:
     crops: list[np.ndarray] = []
     labels: list[str] = []
     prev = None
-    for i, frame in enumerate(frames):
-        if box is None or i % 25 == 0:
-            found = find_minimap(frame)
-            if found is not None:
-                box = found
-        if box is None:
+    locked = box
+    for frame in frames:
+        if not has_gameplay_hud(frame):
+            prev = None
             continue
-        crop = crop_box(frame, box)
-        if crop is None:
+        if locked is None:
+            locked = hero_siege_minimap_box(frame.shape[0], frame.shape[1])
+        crop = crop_box(frame, locked)
+        if crop is None or not crop_looks_like_radar(crop):
+            prev = None
             continue
         if prev is not None:
             lab = label_from_motion(prev, crop)

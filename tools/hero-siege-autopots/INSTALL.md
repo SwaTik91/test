@@ -91,7 +91,7 @@ python farm.py --debug
 
 Если в игре ходишь стрелками: `python farm.py --debug --keys arrows`.
 
-Модель с YouTube (когда будут ссылки): `python from_youtube.py URL` → `python train.py recordings/yt_dataset.npz` → `python farm.py --debug --policy walk.npz`.
+Модель с видео (необязательно): `python from_youtube.py файл.mp4` → `python train.py recordings/yt_dataset.npz` → `python farm.py --debug --keys arrows --policy walk.npz`. На 360p-ролике Season 6 модель слабая — основной фарм это A*.
 
 1. Наведи мышь на **левый верхний** угол самой миникарты (внутри рамки) → **F3**.
 2. Наведи на **правый нижний** → **F3**.

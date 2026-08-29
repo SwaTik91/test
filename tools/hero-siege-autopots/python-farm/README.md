@@ -30,20 +30,20 @@ python farm.py --debug --keys arrows
 
 `dxcam` — тот же DXGI, что в AHK. Если не ставится, останется `mss` (на DirectX часто слепой).
 
-## Маленькая модель с YouTube
+## Маленькая модель с видео
 
-Клавиш в ролике нет: скрипт режет кадры, ищет миникарту справа сверху и ставит метку WASD по движению иконки / сдвигу карты.
+Клавиш в ролике нет: берутся только кадры с HP-полоской (не интро и не вебкамера), миникарта справа сверху, метка WASD по движению иконки.
 
-Нужны ролики, где **миникарта видна** (не закрыта вебкамерой), лучше данж, не хаб.
+Можно локальный mp4 (YouTube.com с облака часто закрыт). Видео в git не кладём.
+
+Ролик Season 6 (360p, ~15 мин) уже разобран: ~125 меток. На такой крошечной карте 16×16 MLP не обошёл случай — ходьба по-прежнему A*. `--policy` — запасной ход, если A* молчит, не замена.
 
 ```text
 pip install -r requirements.txt
-python from_youtube.py "https://www.youtube.com/watch?v=XXXX" "https://youtu.be/YYYY"
+python from_youtube.py путь\к\hero.mp4
 python train.py recordings/yt_dataset.npz
-python farm.py --debug --policy walk.npz
+python farm.py --debug --keys arrows --policy walk.npz
 ```
-
-Видео в git не кладём.
 
 ## Тесты (любая ОС)
 

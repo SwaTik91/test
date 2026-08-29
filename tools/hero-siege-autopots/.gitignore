@@ -2,6 +2,7 @@ autopots.ini
 farm.json
 python-farm/farm.json
 python-farm/walk.npz
+python-farm/pretrained/
 python-farm/recordings/
 __pycache__/
 python-farm/__pycache__/

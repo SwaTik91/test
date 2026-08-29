@@ -223,7 +223,7 @@ def main() -> int:
         default="wasd",
         help="клавиши ходьбы (в Hero Siege 2.0 по умолчанию стрелки)",
     )
-    parser.add_argument("--policy", default="", help="walk.npz — маленькая модель (поверх A*)")
+    parser.add_argument("--policy", default="", help="walk.npz — только если A* не нашёл ход")
     args = parser.parse_args()
     if args.keys == "arrows":
         VK.update({"w": 0x26, "a": 0x25, "s": 0x28, "d": 0x27})
@@ -305,10 +305,10 @@ def main() -> int:
                 time.sleep(0.05)
                 continue
             grid, path, key = plan(rgb, cell=2, last_key=last_key)
-            if pol is not None:
+            if pol is not None and key is None:
                 pred, conf = pol.predict(rgb)
                 start = path[0] if path else (grid.shape[0] // 2, grid.shape[1] // 2)
-                if pred and conf >= 0.4 and not dir_blocked(grid, start, pred):
+                if pred and conf >= 0.45 and not dir_blocked(grid, start, pred):
                     key = pred
             now = time.monotonic()
             if path:
