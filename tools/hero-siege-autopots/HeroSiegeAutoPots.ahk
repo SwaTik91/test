@@ -351,11 +351,11 @@ class DxgiGrab {
             this.InitRaw()
             this.ready := true
             this.err := ""
-            Loop 12 {
-                if this.Grab(80)
+            Loop 20 {
+                if this.Grab(100)
                     break
             }
-            return this.bits != 0
+            return true
         } catch as e {
             this.err := e.Message
             this.Free()
@@ -369,46 +369,24 @@ class DxgiGrab {
         if !DllCall("GetModuleHandle", "str", "D3D11")
             DllCall("LoadLibrary", "str", "D3D11")
         DllCall("ole32\CLSIDFromString", "wstr", "{7b7166ec-21c7-44ae-b21a-c9ae321ae369}", "ptr", riid := Buffer(16), "HRESULT")
-        DllCall("DXGI\CreateDXGIFactory1", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
-        this.factory := factory
-        found := false
-        Loop 10 {
-            try ComCall(7, factory, "uint", A_Index - 1, "ptr*", &adapter := 0)
-            catch
-                break
-            Loop 8 {
-                try ComCall(7, adapter, "uint", A_Index - 1, "ptr*", &output := 0)
-                catch OSError as e {
-                    if (e.number & 0xFFFFFFFF) = 0x887A0002
-                        break
-                    throw
-                }
-                desc := Buffer(96, 0)
-                ComCall(7, output, "ptr", desc)
-                left := NumGet(desc, 72, "int")
-                top := NumGet(desc, 76, "int")
-                right := NumGet(desc, 80, "int")
-                bottom := NumGet(desc, 84, "int")
-                attached := NumGet(desc, 68, "int")
-                w := right - left, h := bottom - top
-                if attached && w > 64 && h > 64 {
-                    this.adapter := adapter
-                    this.output := output
-                    this.outputLeft := left
-                    this.outputTop := top
-                    this.width := w
-                    this.height := h
-                    found := true
-                    break 2
-                }
-                ObjRelease(output)
-            }
-            ObjRelease(adapter)
+        try DllCall("DXGI\CreateDXGIFactory1", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
+        catch {
+            DllCall("DXGI\CreateDXGIFactory", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
         }
-        if !found
-            throw Error("DXGI: нет монитора")
-        DllCall("D3D11\D3D11CreateDevice"
-            , "ptr", this.adapter
+        this.factory := factory
+        adapter := 0
+        output := 0
+        try ComCall(7, factory, "uint", 0, "ptr*", &adapter)
+        catch as e
+            throw Error("DXGI EnumAdapters: " e.Message)
+        this.adapter := adapter
+        try ComCall(7, adapter, "uint", 0, "ptr*", &output)
+        catch as e
+            throw Error("DXGI EnumOutputs: " e.Message)
+        this.output := output
+        this.ApplyMonitorOrigin()
+        try DllCall("D3D11\D3D11CreateDevice"
+            , "ptr", adapter
             , "int", 0
             , "ptr", 0
             , "uint", 0
@@ -419,14 +397,42 @@ class DxgiGrab {
             , "ptr*", 0
             , "ptr*", &ctx := 0
             , "HRESULT")
+        catch {
+            DllCall("D3D11\D3D11CreateDevice"
+                , "ptr", 0
+                , "int", 1
+                , "ptr", 0
+                , "uint", 0
+                , "ptr", 0
+                , "uint", 0
+                , "uint", 7
+                , "ptr*", &device := 0
+                , "ptr*", 0
+                , "ptr*", &ctx := 0
+                , "HRESULT")
+        }
         this.device := device
         this.ctx := ctx
-        this.output1 := ComObjQuery(this.output, "{00cddea8-939b-4b83-a340-a685226666cc}")
-        ComCall(22, this.output1, "ptr", device, "ptr*", &dup := 0)
+        this.output1 := ComObjQuery(output, "{00cddea8-939b-4b83-a340-a685226666cc}")
+        try ComCall(22, this.output1, "ptr", device, "ptr*", &dup := 0)
+        catch as e
+            throw Error("DuplicateOutput: " e.Message " — закрой OBS/Xbox Game Bar и перезапусти")
         this.dup := dup
         dupDesc := Buffer(36, 0)
         ComCall(7, dup, "ptr", dupDesc)
         this.inSysMem := NumGet(dupDesc, 32, "uint")
+        dw := NumGet(dupDesc, 0, "uint")
+        dh := NumGet(dupDesc, 4, "uint")
+        if dw > 64 && dh > 64 {
+            this.width := dw
+            this.height := dh
+        }
+        if this.width < 64 || this.height < 64 {
+            this.width := DllCall("GetSystemMetrics", "int", 0, "int")
+            this.height := DllCall("GetSystemMetrics", "int", 1, "int")
+        }
+        if this.width < 64
+            throw Error("DXGI: нулевая ширина кадра")
         texDesc := Buffer(44, 0)
         NumPut("uint", this.width, texDesc, 0)
         NumPut("uint", this.height, texDesc, 4)
@@ -442,6 +448,24 @@ class DxgiGrab {
         ComCall(5, device, "ptr", texDesc, "ptr", 0, "ptr*", &staging := 0)
         this.staging := staging
         Sleep 40
+    }
+
+    static ApplyMonitorOrigin() {
+        hwnd := WinExist("A")
+        hMon := DllCall("MonitorFromWindow", "ptr", hwnd, "uint", 2, "ptr")
+        mi := Buffer(40, 0)
+        NumPut("uint", 40, mi)
+        if hMon && DllCall("GetMonitorInfoW", "ptr", hMon, "ptr", mi) {
+            this.outputLeft := NumGet(mi, 4, "int")
+            this.outputTop := NumGet(mi, 8, "int")
+            this.width := NumGet(mi, 12, "int") - this.outputLeft
+            this.height := NumGet(mi, 16, "int") - this.outputTop
+            return
+        }
+        this.outputLeft := DllCall("GetSystemMetrics", "int", 76, "int")
+        this.outputTop := DllCall("GetSystemMetrics", "int", 77, "int")
+        this.width := DllCall("GetSystemMetrics", "int", 78, "int")
+        this.height := DllCall("GetSystemMetrics", "int", 79, "int")
     }
 
     static Grab(timeout := 0) {
