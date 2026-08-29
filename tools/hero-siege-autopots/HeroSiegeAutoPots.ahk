@@ -76,7 +76,7 @@ class Cfg {
     static calibratedMap := false
     static mapX1 := 0.78, mapY1 := 0.04, mapX2 := 0.98, mapY2 := 0.28
     static mapFogLuma := 38
-    static mapClickDist := 240
+    static mapClickDist := 160
     static mapIso := 0.58
     static mapCharY := 0.06
     static mapMoveMs := 280
@@ -128,6 +128,8 @@ class Cfg {
         this.mapClickDist := Clamp(this.mapClickDist, 80, 520)
         this.mapIso := Clamp(this.mapIso, 0.35, 1.0)
         this.mapStopHp := Clamp(this.mapStopHp, 5, 80)
+        if this.mapClickDist >= 230 && this.mapClickDist <= 250
+            this.mapClickDist := 160
         if this.tickMs < 30
             this.tickMs := 30
         if this.cdMs < 200
@@ -908,6 +910,8 @@ class Farm {
     static lastHash := -1
     static hashSince := 0
     static status := ""
+    static lastStopT := 0.45
+    static lastKind := ""
 
     static Toggle() {
         if this.enabled {
@@ -945,7 +949,7 @@ class Farm {
         ang := this.Heading()
         this.ClickWorld(ang)
         this.lastMove := A_TickCount
-        this.status := this.lastDir
+        this.status := this.lastDir " " this.lastKind
     }
 
     static Rect(&x1, &y1, &x2, &y2) {
@@ -982,34 +986,20 @@ class Farm {
         halfH := (y2 - y1) / 2
         if halfW < 8 || halfH < 8
             return this.lastAngle
-        sectors := 16
-        best := -999999
-        bestA := this.lastAngle
+        ; Луч больше не считает туман ЗА стенкой: тонкая тьма = стена, длинная = туман.
+        sectors := 24
+        bestFog := -999999
+        bestOpen := -999999
+        fogA := this.lastAngle
+        openA := this.lastAngle
+        fogT := 0.4
+        openT := 0.4
         tau := 6.283185307179586
         i := 0
         while i < sectors {
             ang := i * tau / sectors
-            fog := 0, floor := 0, nearFog := 0
-            r := 0
-            while r < 8 {
-                t := 0.20 + r * 0.09
-                lu := this.SampleLuma(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
-                if lu < 0 {
-                    r += 1
-                    continue
-                }
-                if lu <= Cfg.mapFogLuma {
-                    fog += 1
-                    if r < 3
-                        nearFog += 1
-                } else
-                    floor += 1
-                r += 1
-            }
-            score := fog * 4
-            if fog >= 1 && floor >= 1
-                score += 14
-            score -= nearFog * 3
+            kind := "", floorSteps := 0, stopT := 0.3
+            this.Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT)
             da := ang - this.lastAngle
             if da > 3.1416
                 da -= tau
@@ -1017,20 +1007,38 @@ class Farm {
                 da += tau
             if da < 0
                 da := -da
-            if da < 0.9
-                score += 4
-            if score > best {
-                best := score
-                bestA := ang
+            stick := (da < 0.7) ? 6 : 0
+            if kind = "fog" {
+                score := 80 + floorSteps * 10 + stopT * 20 + stick
+                if score > bestFog {
+                    bestFog := score, fogA := ang, fogT := stopT
+                }
+            } else if kind = "open" {
+                score := floorSteps * 8 + stopT * 15 + stick
+                if score > bestOpen {
+                    bestOpen := score, openA := ang, openT := stopT
+                }
+            } else if kind = "wall" && floorSteps >= 3 {
+                score := floorSteps * 3 + stick - 12
+                if score > bestOpen {
+                    bestOpen := score, openA := ang, openT := Max(0.22, stopT * 0.7)
+                }
             }
             i += 1
+        }
+        if bestFog > -999999 {
+            bestA := fogA, this.lastStopT := fogT, this.lastKind := "туман"
+        } else {
+            bestA := openA, this.lastStopT := openT, this.lastKind := "пол"
         }
         h := this.CenterHash(cx, cy)
         if h = this.lastHash {
             if this.hashSince = 0
                 this.hashSince := A_TickCount
-            if A_TickCount - this.hashSince > 1700 {
-                bestA := this.lastAngle + 1.15
+            if A_TickCount - this.hashSince > 900 {
+                bestA := this.lastAngle + 1.57
+                this.lastStopT := 0.32
+                this.lastKind := "обход"
                 this.hashSince := A_TickCount
             }
         } else {
@@ -1039,7 +1047,74 @@ class Farm {
         }
         this.lastAngle := bestA
         this.lastDir := this.Arrow(bestA)
+        this.lastStopT := Clamp(this.lastStopT, 0.22, 0.92)
         return bestA
+    }
+
+    ; kind: fog = открытый коридор к туману, wall = упёрлись в линию, open = пол без тумана.
+    static Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT) {
+        kind := "open"
+        floorSteps := 0
+        stopT := 0.28
+        lastFloorT := 0.18
+        sawFloor := false
+        darkRun := 0
+        prev := -1
+        samples := 14
+        i := 0
+        while i < samples {
+            t := 0.10 + i * 0.055
+            lu := this.SampleLuma(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
+            if lu < 0 {
+                i += 1
+                continue
+            }
+            isDark := (lu <= Cfg.mapFogLuma)
+            isBright := (lu >= 158)
+            i += 1
+            if i <= 2 {
+                prev := lu
+                continue
+            }
+            if isBright && sawFloor {
+                kind := "wall"
+                stopT := lastFloorT
+                return
+            }
+            if isDark {
+                if !sawFloor {
+                    kind := "wall"
+                    stopT := 0.18
+                    return
+                }
+                darkRun += 1
+                if darkRun >= 4 {
+                    kind := "fog"
+                    stopT := lastFloorT
+                    return
+                }
+            } else {
+                if darkRun > 0 {
+                    kind := "wall"
+                    stopT := lastFloorT
+                    return
+                }
+                sawFloor := true
+                floorSteps += 1
+                lastFloorT := t
+                stopT := t
+                darkRun := 0
+            }
+            prev := lu
+        }
+        if darkRun >= 4 {
+            kind := "fog"
+            stopT := lastFloorT
+        } else if darkRun > 0 {
+            kind := "wall"
+            stopT := lastFloorT
+        } else
+            kind := "open"
     }
 
     static CenterHash(cx, cy) {
@@ -1061,7 +1136,8 @@ class Farm {
 
     static ClickWorld(ang) {
         Game.ClientSize(&w, &h)
-        dist := Cfg.mapClickDist
+        dist := Integer(Cfg.mapClickDist * this.lastStopT)
+        dist := Clamp(dist, 64, Cfg.mapClickDist)
         x := w * 0.5 + Cos(ang) * dist
         y := h * (0.5 + Cfg.mapCharY) + Sin(ang) * dist * Cfg.mapIso
         this.Rect(&mx1, &my1, &mx2, &my2)
