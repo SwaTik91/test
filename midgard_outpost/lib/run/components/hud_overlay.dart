@@ -13,6 +13,10 @@ class HudOverlay extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: game.hudRevision,
       builder: (context, _, __) {
+        if (!game.isRunReady) {
+          return const SizedBox.shrink();
+        }
+
         final rewards = game.currentRewards;
         final ultimateReady = game.ultimateCooldownRemaining <= 0;
 
@@ -24,13 +28,16 @@ class HudOverlay extends StatelessWidget {
                 Align(
                   alignment: Alignment.topLeft,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
+                    constraints: BoxConstraints(
+                      maxWidth: 360,
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+                    ),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Padding(
+                      child: SingleChildScrollView(
                         padding: const EdgeInsets.all(12),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -51,19 +58,24 @@ class HudOverlay extends StatelessWidget {
                             const SizedBox(height: 8),
                             Text(
                               'Авто: ${game.autoSkillName}',
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
                             ),
                             Text(
-                              'Базовый опыт: ${rewards.baseXp} / Проф. опыт: ${rewards.jobXp} / Золото: ${rewards.gold}',
-                              style: const TextStyle(color: Colors.white),
+                              'XP ${rewards.baseXp}/${rewards.jobXp} · Золото ${rewards.gold}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
                             ),
                             Text(
-                              'Дистанция: ${game.distance.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            Text(
-                              'Биом: ${game.biomeLabel}',
-                              style: const TextStyle(color: Colors.white),
+                              'Дистанция: ${game.distance.toStringAsFixed(0)} · ${game.biomeLabel}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -128,9 +140,10 @@ class _HpBar extends StatelessWidget {
           alignment: Alignment.centerLeft,
           children: [
             Image.asset(
-              '${ArtAtlas.assetRoot}${ArtAtlas.hpBarFrame}',
-              height: 24,
-              fit: BoxFit.fitWidth,
+              ArtAtlas.flutterAsset(ArtAtlas.hpBarFrame),
+              width: 220,
+              height: 22,
+              fit: BoxFit.fill,
               filterQuality: FilterQuality.none,
             ),
             Padding(
@@ -209,7 +222,7 @@ class _ImageTapButton extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           Image.asset(
-            '${ArtAtlas.assetRoot}$assetPath',
+            ArtAtlas.flutterAsset(assetPath),
             width: 64,
             height: 64,
             fit: BoxFit.contain,

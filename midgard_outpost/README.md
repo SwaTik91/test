@@ -196,6 +196,18 @@ Wave 2 добавляет покадровые PNG-анимации для за�
 
 План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md). Дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md).
 
+## Art Hub Canon (импорт канон-арта)
+
+Источники PNG: [docs/superpowers/art-canon/](../docs/superpowers/art-canon/). Скрипт ресайза и копирования в игровые ассеты:
+
+```bash
+cd midgard_outpost && python3 tool/import_art_canon.py
+```
+
+Опции: `--canon` (путь к канону), `--out` (целевая папка `assets/images/`). После импорта — `flutter test test/art/`.
+
+План: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-hub-canon.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-hub-canon.md).
+
 ## Витрина сторов (App Gallery / RuStore)
 
 Материалы для публикации: [store/](../store/) — иконки, скриншоты, RU-тексты и чеклисты.

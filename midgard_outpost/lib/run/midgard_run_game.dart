@@ -57,6 +57,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   late final AutoSkillSystem autoSkillSystem;
   late final String autoSkillName;
 
+  /// False until [onLoad] finishes creating [player] and systems.
+  /// HUD overlays must check this — they can mount before [onLoad] completes.
+  bool isRunReady = false;
+
+  /// Debug/test breadcrumb for where [onLoad] is / last failed.
+  String loadStage = 'constructed';
+  Object? loadError;
+
   final List<SpriteComponent> _groundTiles = [];
   final List<MonsterComponent> _monsters = [];
   final List<ChestComponent> _chests = [];
@@ -83,18 +91,20 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double _jumpShieldTimer = 0;
   bool _secondWindConsumed = false;
 
-  double get distance => player.position.x;
+  double get distance => isRunReady ? player.position.x : 0;
 
   Biome get biome => SpawnSystem.biomeAt(distance);
 
   String get biomeLabel => biome.label;
 
-  double get hpFraction => player.currentHp / player.maxHp;
+  double get hpFraction =>
+      isRunReady ? player.currentHp / player.maxHp : 1;
 
-  double get spFraction => player.currentSp / player.maxSp;
+  double get spFraction =>
+      isRunReady ? player.currentSp / player.maxSp : 1;
 
   double get ultimateCooldownRemaining =>
-      autoSkillSystem.ultimateCooldownRemaining;
+      isRunReady ? autoSkillSystem.ultimateCooldownRemaining : 0;
 
   RunRewards get currentRewards => rewards.toRewards();
 
@@ -107,48 +117,67 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   @override
   FutureOr<void> onLoad() async {
-    await super.onLoad();
+    try {
+      loadStage = 'super';
+      await super.onLoad();
 
-    autoSkillName = _autoSkillNameForHero();
+      loadStage = 'autoSkillName';
+      autoSkillName = _autoSkillNameForHero();
 
-    final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
-    _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
-    _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
-    _projectileSprite = await ArtAtlas.loadSprite(
-      ArtAtlas.projectilePath(hero.classId),
-    );
+      loadStage = 'sprites';
+      final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
+      _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
+      _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
+      _projectileSprite = await ArtAtlas.loadSprite(
+        ArtAtlas.projectilePath(hero.classId),
+      );
 
-    _biomeBackground = SpriteComponent(
-      sprite: _bgFieldsSprite,
-      anchor: Anchor.center,
-    );
-    camera.backdrop.add(_biomeBackground!);
-    _syncBiomeBackgroundLayout();
-    _displayedBiome = biome;
+      loadStage = 'backdrop';
+      _biomeBackground = SpriteComponent(
+        sprite: _bgFieldsSprite,
+        anchor: Anchor.center,
+      );
+      camera.backdrop.add(_biomeBackground!);
+      _syncBiomeBackgroundLayout();
+      // Do not read [biome]/[distance] before [player] exists.
+      _displayedBiome = SpawnSystem.biomeAt(0);
 
-    _addGroundTiles(groundSprite);
+      loadStage = 'ground';
+      _addGroundTiles(groundSprite);
 
-    player = await PlayerComponent.create(
-      classId: hero.classId,
-      maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
-      maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
-      moveSpeed: CombatMath.moveSpeed(
-        hero,
-        ownedUpgradeIds: ownedRunUpgradeIds,
-      ),
-      groundY: _groundY,
-    );
-    autoSkillSystem = AutoSkillSystem(
-      classId: hero.classId,
-      ranks: hero.skillRanks,
-      upgrades: ownedRunUpgradeIds,
-      maxSp: player.maxSp,
-    );
+      loadStage = 'player';
+      player = await PlayerComponent.create(
+        classId: hero.classId,
+        maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+        maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+        moveSpeed: CombatMath.moveSpeed(
+          hero,
+          ownedUpgradeIds: ownedRunUpgradeIds,
+        ),
+        groundY: _groundY,
+      );
+      autoSkillSystem = AutoSkillSystem(
+        classId: hero.classId,
+        ranks: hero.skillRanks,
+        upgrades: ownedRunUpgradeIds,
+        maxSp: player.maxSp,
+      );
 
-    world.add(player);
-    _spawnMonster();
-    _spawnMonster();
-    camera.follow(player, horizontalOnly: true, snap: true);
+      loadStage = 'world';
+      world.add(player);
+      _spawnMonster();
+      _spawnMonster();
+      camera.follow(player, horizontalOnly: true, snap: true);
+
+      loadStage = 'hud';
+      isRunReady = true;
+      overlays.add(hudOverlayKey);
+      loadStage = 'ready';
+    } catch (e, st) {
+      loadError = e;
+      loadStage = 'error:$loadStage';
+      Error.throwWithStackTrace(e, st);
+    }
   }
 
   @override
@@ -178,7 +207,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   @override
   void update(double dt) {
     super.update(dt);
-    if (_finished) {
+    if (_finished || !isRunReady) {
       return;
     }
 
@@ -352,6 +381,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       _nextSpawnX += 430;
     }
     MonsterComponent.create(
+      kind: spec.kind,
       isBoss: spec.isBoss,
       target: player,
       position: Vector2(x, _groundY - spec.height),

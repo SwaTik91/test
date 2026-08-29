@@ -2,8 +2,8 @@ import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../art/animation_atlas.dart';
 import '../../art/art_atlas.dart';
+import '../../content/monsters.dart';
 import '../../art/monster_anim_state.dart';
 import 'player_component.dart';
 
@@ -36,8 +36,10 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
 
   static const double _damageFlashDuration = 0.16;
   static const double _deathFlashDuration = 0.2;
+  static const double _staticHurtDuration = 0.16;
 
   static Future<MonsterComponent> create({
+    required MonsterKind kind,
     required bool isBoss,
     required PlayerComponent target,
     required Vector2 position,
@@ -51,84 +53,22 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
     double moveSpeed = 58,
     Vector2? size,
   }) async {
-    try {
-      final animations = await _loadAnimations(isBoss);
-      final hurtDuration = _hurtDurationFor(isBoss);
-      return MonsterComponent._(
-        target: target,
-        position: position,
-        maxHp: maxHp,
-        touchDamage: touchDamage,
-        baseXp: baseXp,
-        jobXp: jobXp,
-        gold: gold,
-        tempXp: tempXp,
-        upgradeDropChance: upgradeDropChance,
-        isBoss: isBoss,
-        moveSpeed: moveSpeed,
-        hurtDuration: hurtDuration,
-        animations: animations,
-        size: size,
-      );
-    } catch (_) {
-      final sprite = await ArtAtlas.loadSprite(
-        isBoss ? ArtAtlas.bossOgre : ArtAtlas.mobGoblin,
-      );
-      return MonsterComponent.forTest(
-        target: target,
-        position: position,
-        sprite: sprite,
-        maxHp: maxHp,
-        touchDamage: touchDamage,
-        baseXp: baseXp,
-        jobXp: jobXp,
-        gold: gold,
-        tempXp: tempXp,
-        upgradeDropChance: upgradeDropChance,
-        isBoss: isBoss,
-        moveSpeed: moveSpeed,
-        size: size,
-      );
-    }
-  }
-
-  static Future<Map<MonsterAnimName, SpriteAnimation>> _loadAnimations(
-    bool isBoss,
-  ) async {
-    final walkFrames = isBoss
-        ? AnimationAtlas.ogreWalkFrames
-        : AnimationAtlas.goblinWalkFrames;
-    final hurtFrames = isBoss
-        ? AnimationAtlas.ogreHurtFrames
-        : AnimationAtlas.goblinHurtFrames;
-    final walkStepTime = isBoss
-        ? AnimationAtlas.ogreWalkStepTime
-        : AnimationAtlas.goblinWalkStepTime;
-    final hurtStepTime = isBoss
-        ? AnimationAtlas.ogreHurtStepTime
-        : AnimationAtlas.goblinHurtStepTime;
-
-    return {
-      MonsterAnimName.walk: await AnimationAtlas.load(
-        walkFrames,
-        walkStepTime,
-      ),
-      MonsterAnimName.hurt: await AnimationAtlas.load(
-        hurtFrames,
-        hurtStepTime,
-        loop: false,
-      ),
-    };
-  }
-
-  static double _hurtDurationFor(bool isBoss) {
-    final frames = isBoss
-        ? AnimationAtlas.ogreHurtFrames
-        : AnimationAtlas.goblinHurtFrames;
-    final stepTime = isBoss
-        ? AnimationAtlas.ogreHurtStepTime
-        : AnimationAtlas.goblinHurtStepTime;
-    return frames.length * stepTime;
+    final sprite = await ArtAtlas.loadSprite(kind.spritePath);
+    return MonsterComponent.forTest(
+      target: target,
+      position: position,
+      sprite: sprite,
+      maxHp: maxHp,
+      touchDamage: touchDamage,
+      baseXp: baseXp,
+      jobXp: jobXp,
+      gold: gold,
+      tempXp: tempXp,
+      upgradeDropChance: upgradeDropChance,
+      isBoss: isBoss,
+      moveSpeed: moveSpeed,
+      size: size,
+    );
   }
 
   @visibleForTesting
@@ -168,7 +108,7 @@ class MonsterComponent extends SpriteAnimationGroupComponent<MonsterAnimName> {
       upgradeDropChance: upgradeDropChance,
       isBoss: isBoss,
       moveSpeed: moveSpeed,
-      hurtDuration: 0.16,
+      hurtDuration: _staticHurtDuration,
       animations: animations,
       size: size,
     );

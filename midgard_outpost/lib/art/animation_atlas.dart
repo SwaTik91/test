@@ -72,8 +72,9 @@ class AnimationAtlas {
     double stepTime, {
     bool loop = true,
   }) async {
+    // Flame Images already prefixes `assets/images/` — do not prepend [assetRoot].
     final sprites = await Future.wait(
-      frames.map((path) => Sprite.load('$assetRoot$path')),
+      frames.map(Sprite.load),
     );
     return SpriteAnimation.spriteList(
       sprites,
