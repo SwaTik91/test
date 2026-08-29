@@ -82,6 +82,10 @@ class Cfg {
     static mapMoveMs := 180
     static mapStopHp := 18
     static mapMove := "wasd"
+    static mapColors := false
+    static mapFogFill := 0x101010
+    static mapFloorFill := 0x7A6A58
+    static mapYaw := 0
 
     static Load() {
         f := this.file
@@ -128,6 +132,11 @@ class Cfg {
         this.mapMove := IniRead(f, "map", "move", this.mapMove)
         if this.mapMove != "click"
             this.mapMove := "wasd"
+        this.mapColors := IniRead(f, "map", "colors", "0") = "1"
+        this.mapFogFill := SafeInt(IniRead(f, "map", "fogFill", this.mapFogFill), this.mapFogFill)
+        this.mapFloorFill := SafeInt(IniRead(f, "map", "floorFill", this.mapFloorFill), this.mapFloorFill)
+        this.mapYaw := SafeInt(IniRead(f, "map", "yaw", this.mapYaw), this.mapYaw)
+        this.mapYaw := Clamp(this.mapYaw, -90, 90)
         this.mapFogLuma := Clamp(this.mapFogLuma, 16, 72)
         this.mapClickDist := Clamp(this.mapClickDist, 80, 520)
         this.mapIso := Clamp(this.mapIso, 0.35, 1.0)
@@ -176,6 +185,10 @@ class Cfg {
         IniWrite(this.mapMoveMs, f, "map", "moveMs")
         IniWrite(this.mapStopHp, f, "map", "stopHp")
         IniWrite(this.mapMove, f, "map", "move")
+        IniWrite(this.mapColors ? "1" : "0", f, "map", "colors")
+        IniWrite(Format("0x{:06X}", this.mapFogFill), f, "map", "fogFill")
+        IniWrite(Format("0x{:06X}", this.mapFloorFill), f, "map", "floorFill")
+        IniWrite(this.mapYaw, f, "map", "yaw")
     }
 }
 
@@ -920,6 +933,9 @@ class Farm {
     static lastK := 0
     static lastScore := 0
     static hw := false, ha := false, hs := false, hd := false
+    static havePath := false
+    static compass := ""
+    static blocked := 0
 
     static Toggle() {
         if this.enabled {
@@ -930,7 +946,7 @@ class Farm {
             return
         }
         if !Cfg.calibratedMap {
-            Overlay.ShowHint("Сначала F3: два угла миникарты (в данже, карта включена клавишей M)")
+            Overlay.ShowHint("Сначала F3: два угла миникарты (в данже, карта M)")
             SoundBeep(320, 180)
             return
         }
@@ -944,8 +960,10 @@ class Farm {
         this.lastHash := -1
         this.lastScore := 0
         this.lastK := -1
+        this.blocked := 0
+        this.compass := ""
         SoundBeep(880, 90)
-        Overlay.ShowHint("Ходьба WASD. F8 — банки, F4 — стоп")
+        Overlay.ShowHint("Ходьба WASD. Сверь стрелки на панели с миникартой. F4 — стоп")
     }
 
     static Tick() {
@@ -961,12 +979,18 @@ class Farm {
         if A_TickCount - this.lastMove < Cfg.mapMoveMs
             return
         ang := this.Heading()
+        if !this.havePath {
+            this.ReleaseKeys()
+            this.status := this.lastKind
+            this.lastMove := A_TickCount
+            return
+        }
         if Cfg.mapMove = "click"
             this.ClickWorld(ang)
         else
             this.HoldFromK(this.AngleToK(ang))
         this.lastMove := A_TickCount
-        this.status := this.lastDir " " this.lastKind
+        this.status := this.lastDir " " this.lastKind " " this.compass
     }
 
     static ReleaseKeys() {
@@ -1023,7 +1047,7 @@ class Farm {
         }
     }
 
-    static SampleLuma(cx, cy) {
+    static ColorAt(cx, cy) {
         if !DxgiGrab.ready || !DxgiGrab.bits
             return -1
         Pix.ToScreen(cx, cy, &sx, &sy)
@@ -1031,160 +1055,171 @@ class Farm {
         by := sy - DxgiGrab.outputTop
         if bx < 0 || by < 0 || bx >= DxgiGrab.width || by >= DxgiGrab.height
             return -1
-        return Col.Luma(DxgiGrab.BufColor(bx, by))
+        return DxgiGrab.BufColor(bx, by)
+    }
+
+    static SampleLuma(cx, cy) {
+        c := this.ColorAt(cx, cy)
+        if c < 0
+            return -1
+        return Col.Luma(c)
+    }
+
+    static CellKind(c) {
+        if c < 0
+            return "wall"
+        if this.IsWhiteWall(c)
+            return "wall"
+        if Cfg.mapColors {
+            df := Col.Dist(c, Cfg.mapFogFill)
+            dl := Col.Dist(c, Cfg.mapFloorFill)
+            if df + 12 < dl && df <= 70
+                return "fog"
+            if dl + 8 < df && dl <= 80
+                return "floor"
+            if dl <= 42
+                return "floor"
+            if df <= 28
+                return "fog"
+            return "wall"
+        }
+        lu := Col.Luma(c)
+        if lu <= 28
+            return "fog"
+        if lu >= 48
+            return "floor"
+        return "wall"
+    }
+
+    static IsWhiteWall(c) {
+        r := Col.R(c), g := Col.G(c), b := Col.B(c)
+        lu := Col.Luma(c)
+        if lu < 165
+            return false
+        return Abs(r - g) <= 40 && Abs(g - b) <= 40 && Abs(r - b) <= 40
     }
 
     static Heading() {
         this.Rect(&x1, &y1, &x2, &y2)
-        padX := (x2 - x1) * 0.10
-        padY := (y2 - y1) * 0.10
+        padX := (x2 - x1) * 0.16
+        padY := (y2 - y1) * 0.16
         x1 += padX, x2 -= padX, y1 += padY, y2 -= padY
         cx := (x1 + x2) / 2
         cy := (y1 + y2) / 2
         halfW := (x2 - x1) / 2
         halfH := (y2 - y1) / 2
-        if halfW < 8 || halfH < 8
+        this.havePath := false
+        if halfW < 8 || halfH < 8 {
+            this.lastKind := "нет карты"
             return this.lastAngle
-        this.FindPlayer(&cx, &cy, halfW, halfH)
-        ; 8 направлений: без кликов-зигзагов. Диагональ штрафуем — коридоры ровнее.
+        }
         tau := 6.283185307179586
+        yaw := Cfg.mapYaw * tau / 360
         bestFog := -999999
         bestOpen := -999999
-        fogK := (this.lastK >= 0) ? this.lastK : 0
-        openK := fogK
-        fogT := 0.4
-        openT := 0.4
+        fogK := 0
+        openK := 0
+        kinds := ["?", "?", "?", "?", "?", "?", "?", "?"]
         k := 0
         while k < 8 {
-            ang := k * tau / 8
+            if (this.blocked >> k) & 1 {
+                kinds[k + 1] := "x"
+                k += 1
+                continue
+            }
+            ang := k * tau / 8 + yaw
             kind := "", floorSteps := 0, stopT := 0.3
             this.Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT)
-            stick := (this.lastK >= 0 && k = this.lastK) ? 18 : 0
-            diag := Mod(k, 2) = 1 ? -12 : 0
-            if kind = "fog" {
-                score := 80 + floorSteps * 10 + stopT * 20 + stick + diag
+            kinds[k + 1] := (kind = "fog") ? "т" : (kind = "open") ? "п" : (kind = "wall") ? "с" : "?"
+            stick := (this.lastK >= 0 && k = this.lastK) ? 10 : 0
+            diag := Mod(k, 2) = 1 ? -14 : 0
+            if kind = "fog" && floorSteps >= 2 {
+                score := 100 + floorSteps * 8 + stick + diag
                 if score > bestFog {
-                    bestFog := score, fogK := k, fogT := stopT
+                    bestFog := score, fogK := k
                 }
-            } else if kind = "open" {
-                score := floorSteps * 8 + stopT * 15 + stick + diag
+            } else if kind = "open" && floorSteps >= 3 {
+                score := floorSteps * 6 + stick + diag
                 if score > bestOpen {
-                    bestOpen := score, openK := k, openT := stopT
-                }
-            } else if kind = "wall" && floorSteps >= 3 {
-                score := floorSteps * 3 + stick + diag - 16
-                if score > bestOpen {
-                    bestOpen := score, openK := k, openT := Max(0.22, stopT * 0.65)
+                    bestOpen := score, openK := k
                 }
             }
             k += 1
         }
+        this.compass := Format("↑{} →{} ↓{} ←{}", kinds[7], kinds[1], kinds[3], kinds[5])
         if bestFog > -999999 {
-            pickK := fogK, this.lastStopT := fogT, this.lastKind := "туман", pickScore := bestFog
+            pickK := fogK, this.lastKind := "туман", pickScore := bestFog
+        } else if bestOpen > -999999 {
+            pickK := openK, this.lastKind := "пол", pickScore := bestOpen
         } else {
-            pickK := openK, this.lastStopT := openT, this.lastKind := "пол", pickScore := bestOpen
-        }
-        if this.lastK >= 0 {
-            curKind := "", fs := 0, st := 0.3
-            this.Trace(cx, cy, this.lastK * tau / 8, halfW, halfH, &curKind, &fs, &st)
-            dk := Abs(pickK - this.lastK)
-            if dk > 4
-                dk := 8 - dk
-            if curKind != "wall" && dk != 0 && pickScore < this.lastScore + 24 {
-                pickK := this.lastK
-                pickScore := this.lastScore
-                this.lastKind := (curKind = "fog") ? "туман" : this.lastKind
-            }
+            this.blocked := 0
+            this.lastKind := "нет пути " this.compass
+            this.ReleaseKeys()
+            return this.lastAngle
         }
         h := this.CenterHash(cx, cy)
         if h = this.lastHash {
             if this.hashSince = 0
                 this.hashSince := A_TickCount
-            if A_TickCount - this.hashSince > 800 {
-                pickK := Mod(this.lastK + 2, 8)
-                this.lastStopT := 0.3
-                this.lastKind := "обход"
-                pickScore := 0
+            if A_TickCount - this.hashSince > 700 {
+                this.blocked := this.blocked | (1 << pickK)
                 this.hashSince := A_TickCount
                 this.lastHash := -1
+                this.lastK := -1
+                this.lastKind := "обход " this.compass
+                this.havePath := false
+                this.ReleaseKeys()
+                return this.lastAngle
             }
         } else {
             this.lastHash := h
             this.hashSince := A_TickCount
         }
+        this.havePath := true
         this.lastK := pickK
         this.lastScore := pickScore
         bestA := pickK * tau / 8
         this.lastAngle := bestA
         this.lastDir := this.Arrow(bestA)
-        this.lastStopT := Clamp(this.lastStopT, 0.22, 0.92)
+        this.lastStopT := 0.4
         return bestA
     }
 
-    static FindPlayer(&cx, &cy, halfW, halfH) {
-        best := 110, bx := cx, by := cy
-        y := cy - halfH * 0.20
-        while y <= cy + halfH * 0.20 {
-            x := cx - halfW * 0.20
-            while x <= cx + halfW * 0.20 {
-                lu := this.SampleLuma(x, y)
-                if lu > best {
-                    best := lu, bx := x, by := y
-                }
-                x += 5
-            }
-            y += 5
-        }
-        if best >= 130 {
-            cx := bx
-            cy := by
-        }
-    }
-
-    ; kind: fog = открытый коридор к туману, wall = упёрлись в линию, open = пол без тумана.
     static Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT) {
         kind := "open"
         floorSteps := 0
         stopT := 0.28
         lastFloorT := 0.18
         sawFloor := false
-        darkRun := 0
-        prev := -1
-        samples := 14
+        fogRun := 0
+        samples := 20
         i := 0
         while i < samples {
-            t := 0.10 + i * 0.055
-            lu := this.SampleLuma(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
-            if lu < 0 {
-                i += 1
-                continue
-            }
-            isDark := (lu <= Cfg.mapFogLuma)
-            isBright := (lu >= 158)
+            t := 0.08 + i * 0.042
+            c := this.ColorAt(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
+            cell := this.CellKind(c)
             i += 1
-            if i <= 2 {
-                prev := lu
+            if i <= 1
                 continue
-            }
-            if isBright && sawFloor {
+            if cell = "wall" {
                 kind := "wall"
-                stopT := lastFloorT
+                stopT := sawFloor ? lastFloorT : 0.16
                 return
             }
-            if isDark {
+            if cell = "fog" {
                 if !sawFloor {
                     kind := "wall"
-                    stopT := 0.18
+                    stopT := 0.16
                     return
                 }
-                darkRun += 1
-                if darkRun >= 4 {
+                fogRun += 1
+                if fogRun >= 3 {
                     kind := "fog"
                     stopT := lastFloorT
                     return
                 }
             } else {
-                if darkRun > 0 {
+                if fogRun > 0 {
                     kind := "wall"
                     stopT := lastFloorT
                     return
@@ -1193,17 +1228,14 @@ class Farm {
                 floorSteps += 1
                 lastFloorT := t
                 stopT := t
-                darkRun := 0
             }
-            prev := lu
         }
-        if darkRun >= 4 {
+        if fogRun >= 3 {
             kind := "fog"
             stopT := lastFloorT
-        } else if darkRun > 0 {
+        } else if fogRun > 0
             kind := "wall"
-            stopT := lastFloorT
-        } else
+        else
             kind := "open"
     }
 
@@ -1417,7 +1449,7 @@ class Calib {
     }
 
     static OnMap() {
-        if this.mode = "map1" || this.mode = "map2" {
+        if this.mode = "map1" || this.mode = "map2" || this.mode = "map3" || this.mode = "map4" {
             this.StepMap()
             return
         }
@@ -1455,13 +1487,10 @@ class Calib {
         this.mode := ""
         this.tipOn := false
         ToolTip()
-        if DxgiGrab.ready
-            DxgiGrab.Grab(80)
-        Farm.LearnFog()
         Cfg.calibratedMap := true
         Cfg.Save()
         Overlay.Place()
-        Overlay.ShowHint(Format("Миникарта сохранена, туман luma≤{}. F4 — ходьба", Cfg.mapFogLuma))
+        Overlay.ShowHint("Миникарта сохранена. Белые линии = стены. F4 — ходьба")
         SoundBeep(940, 110)
     }
 
@@ -1728,7 +1757,7 @@ class Overlay {
             : "MP: нет калибровки (F7, необязательно)"
         farmLine := !Cfg.calibratedMap
             ? "карта: нет калибровки (F3)"
-            : (Farm.enabled ? "карта ХОД " Farm.status : "карта выкл (F4)")
+            : (Farm.enabled ? "карта " Farm.status : "карта выкл (F4)")
         if this.hintMsg != "" && A_TickCount < this.hintUntil {
             this.txt.Value := this.hintMsg "`n" hpLine
             return
