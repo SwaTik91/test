@@ -91,6 +91,8 @@ python farm.py --debug
 
 Если в игре ходишь стрелками: `python farm.py --debug --keys arrows`.
 
+Модель с YouTube (когда будут ссылки): `python from_youtube.py URL` → `python train.py recordings/yt_dataset.npz` → `python farm.py --debug --policy walk.npz`.
+
 1. Наведи мышь на **левый верхний** угол самой миникарты (внутри рамки) → **F3**.
 2. Наведи на **правый нижний** → **F3**.
 3. **F4** — ходьба. Ещё раз F4 — стоп.

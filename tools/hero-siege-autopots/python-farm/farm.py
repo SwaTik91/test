@@ -11,11 +11,21 @@ from pathlib import Path
 import numpy as np
 
 from nav import FLOOR, FOG, WALL, plan
+from policy import Policy
 
 CONFIG_PATH = Path(__file__).with_name("farm.json")
 VK_F3, VK_F4, VK_SHIFT, VK_ESCAPE = 0x72, 0x73, 0x10, 0x1B
 VK = {"w": 0x57, "a": 0x41, "s": 0x53, "d": 0x44}
 TURN = {"w": "d", "d": "s", "s": "a", "a": "w"}
+DELTA = {"w": (-1, 0), "s": (1, 0), "a": (0, -1), "d": (0, 1)}
+
+
+def dir_blocked(grid: np.ndarray, start: tuple[int, int], key: str) -> bool:
+    if key not in DELTA:
+        return True
+    y, x = start[0] + DELTA[key][0], start[1] + DELTA[key][1]
+    h, w = grid.shape
+    return y < 0 or x < 0 or y >= h or x >= w or grid[y, x] == WALL
 
 
 def enable_dpi() -> None:
@@ -213,9 +223,14 @@ def main() -> int:
         default="wasd",
         help="клавиши ходьбы (в Hero Siege 2.0 по умолчанию стрелки)",
     )
+    parser.add_argument("--policy", default="", help="walk.npz — маленькая модель (поверх A*)")
     args = parser.parse_args()
     if args.keys == "arrows":
         VK.update({"w": 0x26, "a": 0x25, "s": 0x28, "d": 0x27})
+    pol = None
+    if args.policy:
+        pol = Policy.load(args.policy)
+        print("модель:", args.policy)
     io = WindowsIO()
     grabber = Grabber()
     print("Захват:", grabber.mode, "  клавиши:", args.keys)
@@ -290,6 +305,11 @@ def main() -> int:
                 time.sleep(0.05)
                 continue
             grid, path, key = plan(rgb, cell=2, last_key=last_key)
+            if pol is not None:
+                pred, conf = pol.predict(rgb)
+                start = path[0] if path else (grid.shape[0] // 2, grid.shape[1] // 2)
+                if pred and conf >= 0.4 and not dir_blocked(grid, start, pred):
+                    key = pred
             now = time.monotonic()
             if path:
                 sig = patch_bytes(grid, path[0])

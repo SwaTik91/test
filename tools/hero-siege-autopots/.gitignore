@@ -1,7 +1,12 @@
 autopots.ini
 farm.json
 python-farm/farm.json
+python-farm/walk.npz
+python-farm/recordings/
 __pycache__/
 python-farm/__pycache__/
 .venv/
 *.pyc
+*.mp4
+*.webm
+*.mkv
