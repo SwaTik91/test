@@ -30,6 +30,7 @@ CoordMode "ToolTip", "Screen"
 Cfg.Load()
 Overlay.Init()
 TrayMenu.Init()
+OnExit((*) => Pix.PrintFree())
 SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
 TrayTip("Hero Siege AutoPots", "F8 — вкл/выкл   F6 — калибровка HP   F10 — настройки", "Iconi")
 
@@ -55,6 +56,7 @@ class Cfg {
     static tickMs := 60
     static colorTol := 90
     static pixelMode := "Slow"
+    static pixelMethod := "screen"
     static overlayCorner := "br"
     static calibratedHp := false
     static calibratedMp := false
@@ -71,6 +73,7 @@ class Cfg {
         this.tickMs := SafeInt(IniRead(f, "general", "tickMs", this.tickMs), this.tickMs)
         this.colorTol := SafeInt(IniRead(f, "general", "colorTol", this.colorTol), this.colorTol)
         this.pixelMode := IniRead(f, "general", "pixelMode", this.pixelMode)
+        this.pixelMethod := IniRead(f, "general", "pixelMethod", "screen")
         this.overlayCorner := IniRead(f, "general", "overlayCorner", this.overlayCorner)
         this.calibratedHp := IniRead(f, "hp", "calibrated", "0") = "1"
         this.hpX1 := SafeFloat(IniRead(f, "hp", "x1", this.hpX1), this.hpX1)
@@ -100,6 +103,7 @@ class Cfg {
         IniWrite(this.tickMs, f, "general", "tickMs")
         IniWrite(this.colorTol, f, "general", "colorTol")
         IniWrite(this.pixelMode, f, "general", "pixelMode")
+        IniWrite(this.pixelMethod, f, "general", "pixelMethod")
         IniWrite(this.overlayCorner, f, "general", "overlayCorner")
         IniWrite(this.calibratedHp ? "1" : "0", f, "hp", "calibrated")
         IniWrite(Format("{:.5f}", this.hpX1), f, "hp", "x1")
@@ -170,6 +174,144 @@ class Col {
         r := this.R(c), g := this.G(c), b := this.B(c)
         return b >= 88 && b > r + 18 && b >= g - 12
     }
+
+    ; Типичная заливка GDI-окна Hero Siege, когда кадр с GPU не читается.
+    static IsDeadGdi(c) {
+        return Col.Dist(c, 0x3F3949) <= 14 || Col.Dist(c, 0x000000) <= 2
+    }
+}
+
+; -----------------------------------------------------------------------------
+;  Пиксель: DirectX не рисует в DC окна, поэтому GetPixel по клиенту часто
+;  возвращает одну и ту же заливку 0x3F3949. Читаем уже составленный рабочий стол.
+; -----------------------------------------------------------------------------
+
+class Pix {
+    static printHdc := 0
+    static printBmp := 0
+    static printOld := 0
+    static printTick := -1
+    static printHwnd := 0
+
+    static Get(cx, cy) {
+        switch Cfg.pixelMethod {
+            case "window": return this.AhkClient(cx, cy, "Slow")
+            case "alt":    return this.AhkScreen(cx, cy, "Alt")
+            case "slow":   return this.AhkScreen(cx, cy, "Slow")
+            case "print":  return this.PrintGet(cx, cy)
+            default:       return this.Screen(cx, cy)
+        }
+    }
+
+    static FromColorRef(col) {
+        if (col = 0xFFFFFFFF)
+            return 0
+        r := col & 0xFF
+        g := (col >> 8) & 0xFF
+        b := (col >> 16) & 0xFF
+        return (r << 16) | (g << 8) | b
+    }
+
+    static ToScreen(cx, cy, &sx, &sy) {
+        hwnd := WinExist("A")
+        pt := Buffer(8)
+        NumPut("int", Integer(cx), "int", Integer(cy), pt)
+        DllCall("ClientToScreen", "ptr", hwnd, "ptr", pt)
+        sx := NumGet(pt, 0, "int")
+        sy := NumGet(pt, 4, "int")
+    }
+
+    static Screen(cx, cy) {
+        this.ToScreen(cx, cy, &sx, &sy)
+        hdc := DllCall("GetDC", "ptr", 0, "ptr")
+        col := DllCall("GetPixel", "ptr", hdc, "int", sx, "int", sy, "uint")
+        DllCall("ReleaseDC", "ptr", 0, "ptr", hdc)
+        return this.FromColorRef(col)
+    }
+
+    static AtCursor() {
+        pt := Buffer(8)
+        DllCall("GetCursorPos", "ptr", pt)
+        sx := NumGet(pt, 0, "int")
+        sy := NumGet(pt, 4, "int")
+        hdc := DllCall("GetDC", "ptr", 0, "ptr")
+        col := DllCall("GetPixel", "ptr", hdc, "int", sx, "int", sy, "uint")
+        DllCall("ReleaseDC", "ptr", 0, "ptr", hdc)
+        return this.FromColorRef(col)
+    }
+
+    static AhkScreen(cx, cy, mode := "") {
+        this.ToScreen(cx, cy, &sx, &sy)
+        CoordMode("Pixel", "Screen")
+        c := (mode = "") ? PixelGetColor(sx, sy) : PixelGetColor(sx, sy, mode)
+        CoordMode("Pixel", "Client")
+        return c
+    }
+
+    static AhkClient(cx, cy, mode := "Slow") {
+        CoordMode("Pixel", "Client")
+        return PixelGetColor(Integer(cx), Integer(cy), mode)
+    }
+
+    static PrintGet(cx, cy) {
+        hwnd := WinExist("A")
+        if this.printTick != A_TickCount || hwnd != this.printHwnd
+            this.PrintGrab(hwnd)
+        if !this.printHdc
+            return 0
+        col := DllCall("GetPixel", "ptr", this.printHdc, "int", Integer(cx), "int", Integer(cy), "uint")
+        return this.FromColorRef(col)
+    }
+
+    static PrintGrab(hwnd) {
+        this.PrintFree()
+        this.printTick := A_TickCount
+        this.printHwnd := hwnd
+        WinGetClientPos(, , &w, &h, "ahk_id " hwnd)
+        if w < 2 || h < 2
+            return
+        hdcScr := DllCall("GetDC", "ptr", 0, "ptr")
+        this.printHdc := DllCall("CreateCompatibleDC", "ptr", hdcScr, "ptr")
+        this.printBmp := DllCall("CreateCompatibleBitmap", "ptr", hdcScr, "int", w, "int", h, "ptr")
+        this.printOld := DllCall("SelectObject", "ptr", this.printHdc, "ptr", this.printBmp, "ptr")
+        DllCall("ReleaseDC", "ptr", 0, "ptr", hdcScr)
+        ; 2 = PW_RENDERFULLCONTENT — иногда достаёт GPU-кадр
+        DllCall("PrintWindow", "ptr", hwnd, "ptr", this.printHdc, "uint", 2)
+    }
+
+    static PrintFree() {
+        if this.printHdc {
+            if this.printOld
+                DllCall("SelectObject", "ptr", this.printHdc, "ptr", this.printOld)
+            if this.printBmp
+                DllCall("DeleteObject", "ptr", this.printBmp)
+            DllCall("DeleteDC", "ptr", this.printHdc)
+        }
+        this.printHdc := 0
+        this.printBmp := 0
+        this.printOld := 0
+        this.printHwnd := 0
+    }
+
+    static DumpAtCursor() {
+        hwnd := WinExist("A")
+        pt := Buffer(8)
+        DllCall("GetCursorPos", "ptr", pt)
+        sx := NumGet(pt, 0, "int")
+        sy := NumGet(pt, 4, "int")
+        NumPut("int", sx, "int", sy, pt)
+        DllCall("ScreenToClient", "ptr", hwnd, "ptr", pt)
+        cx := NumGet(pt, 0, "int")
+        cy := NumGet(pt, 4, "int")
+        screen := this.Screen(cx, cy)
+        alt := this.AhkScreen(cx, cy, "Alt")
+        window := this.AhkClient(cx, cy, "Slow")
+        print := this.PrintGet(cx, cy)
+        return Map(
+            "sx", sx, "sy", sy, "cx", cx, "cy", cy,
+            "screen", screen, "alt", alt, "window", window, "print", print
+        )
+    }
 }
 
 ; -----------------------------------------------------------------------------
@@ -195,7 +337,7 @@ class Bar {
             t := (A_Index - 1) / (this.samples - 1)
             x := Round(x1 + (x2 - x1) * t)
             y := Round(y1 + (y2 - y1) * t)
-            c := PixelGetColor(x, y, Cfg.pixelMode)
+            c := Pix.Get(x, y)
             if this.IsFilled(c, fill, which)
                 filled++
             else
@@ -219,7 +361,7 @@ class Bar {
             x := Round((Cfg.mpX1 * 0.82 + Cfg.mpX2 * 0.18) * w)
             y := Round((Cfg.mpY1 * 0.82 + Cfg.mpY2 * 0.18) * h)
         }
-        return PixelGetColor(x, y, Cfg.pixelMode)
+        return Pix.Get(x, y)
     }
 }
 
@@ -371,10 +513,30 @@ class Calib {
         if which = "hp" {
             Cfg.hpX2 := relX, Cfg.hpY2 := relY
             Cfg.hpFill := Bar.SampleFill("hp")
+            if Col.IsDeadGdi(Cfg.hpFill) {
+                Cfg.calibratedHp := false
+                Cfg.Save()
+                this.mode := ""
+                ToolTip()
+                Overlay.Place()
+                Overlay.ShowHint("Всё ещё 3F3949 — кадр не читается. Поставь Windowed/Borderless и скачай новый скрипт")
+                SoundBeep(320, 180)
+                return
+            }
             Cfg.calibratedHp := true
         } else {
             Cfg.mpX2 := relX, Cfg.mpY2 := relY
             Cfg.mpFill := Bar.SampleFill("mp")
+            if Col.IsDeadGdi(Cfg.mpFill) {
+                Cfg.calibratedMp := false
+                Cfg.Save()
+                this.mode := ""
+                ToolTip()
+                Overlay.Place()
+                Overlay.ShowHint("MP тоже 3F3949. Нужен оконный/безрамочный режим, не exclusive fullscreen")
+                SoundBeep(320, 180)
+                return
+            }
             Cfg.calibratedMp := true
         }
         Cfg.Save()
@@ -402,14 +564,17 @@ class Calib {
         CoordMode("Mouse", "Client")
         MouseGetPos(&cx, &cy)
         c := 0
-        try c := PixelGetColor(cx, cy, Cfg.pixelMode)
+        try c := Pix.AtCursor()
         wantHp := InStr(this.mode, "hp")
         onBar := wantHp ? Col.IsRed(c) : Col.IsBlue(c)
         barName := wantHp ? "КРАСНОЙ HP" : "СИНЕЙ MP"
         keyName := wantHp ? "F6" : "F7"
         leftStep := (this.mode = "hp1" || this.mode = "mp1")
         edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
-        ok := onBar ? ("✓ ты на полоске — жми " keyName) : ("не тот цвет, наведи НА " barName " полоску")
+        if Col.IsDeadGdi(c)
+            ok := "кадр не читается (заливка окна). Нужен оконный/безрамочный режим"
+        else
+            ok := onBar ? ("✓ ты на полоске — жми " keyName) : ("не тот цвет, наведи НА " barName " полоску")
         msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
             . "Полоска в ВЕРХНЕМ ЛЕВОМ углу, под именем персонажа.`n"
             . "Это не банка 1 внизу экрана.`n`n"
@@ -425,17 +590,24 @@ class Calib {
 
 class Probe {
     static Show() {
-        MouseGetPos(&x, &y)
-        c := PixelGetColor(x, y, Cfg.pixelMode)
-        extra := ""
-        if Game.IsActive() {
-            Game.ClientSize(&w, &h)
-            extra := Format("  rel={:.3f},{:.3f}", x / w, y / h)
+        d := Pix.DumpAtCursor()
+        if Col.IsDeadGdi(d["window"]) && !Col.IsDeadGdi(d["screen"]) {
+            Cfg.pixelMethod := "screen"
+            Cfg.Save()
         }
-        msg := Format("xy={},{}{}  {}  R={} G={} B={}", x, y, extra, Col.Hex(c), Col.R(c), Col.G(c), Col.B(c))
+        cur := Pix.Get(d["cx"], d["cy"])
+        msg := Format(
+            "метод {} → {}`nscreen {}`nalt {}`nwindow {}  (часто 3F3949 = DirectX)`nprint {}`nscreen-xy {},{}  client {},{}",
+            Cfg.pixelMethod, Col.Hex(cur),
+            Col.Hex(d["screen"]), Col.Hex(d["alt"]),
+            Col.Hex(d["window"]), Col.Hex(d["print"]),
+            d["sx"], d["sy"], d["cx"], d["cy"]
+        )
+        if Col.IsDeadGdi(cur)
+            msg .= "`nкадр не читается: поставь оконный/безрамочный режим, не exclusive fullscreen"
         ToolTip(msg)
         Overlay.ShowHint(msg)
-        SetTimer(() => ToolTip(), -2500)
+        SetTimer(() => ToolTip(), -5000)
     }
 }
 
@@ -568,16 +740,19 @@ class SettingsUi {
         edTick := g.Add("Edit", "x+8 yp w80", Cfg.tickMs)
         g.Add("Text", "xm y+10", "Допуск цвета (30–150):")
         edTol := g.Add("Edit", "x+8 yp w80", Cfg.colorTol)
-        g.Add("Text", "xm y+14 c666666 w360", "Если банки не жмутся в полноэкранной игре — запусти скрипт от администратора. PixelMode=Slow в ini, если цвет всегда 0x000000.")
+        g.Add("Text", "xm y+10", "Чтение пикселя:")
+        edMethod := g.Add("DropDownList", "x+8 yp w140", ["screen", "alt", "slow", "window", "print"])
+        edMethod.Text := Cfg.pixelMethod
+        g.Add("Text", "xm y+12 c666666 w360", "Цвет 3F3949 везде — это не защита, а DirectX: окно не отдаёт кадр. Метод screen читает рабочий стол. Игра должна быть в оконном или безрамочном режиме, не exclusive fullscreen. F9 показывает все методы.")
         btn := g.Add("Button", "xm y+16 w140 Default", "Сохранить")
-        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol))
+        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod))
         g.OnEvent("Close", (*) => SettingsUi.Closed())
         g.OnEvent("Escape", (*) => SettingsUi.Closed())
         this.g := g
         g.Show()
     }
 
-    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol) {
+    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod) {
         Cfg.hpKeys := Trim(edHpKeys.Value)
         Cfg.mpKeys := Trim(edMpKeys.Value)
         Cfg.hpPct := Clamp(SafeInt(edHpPct.Value, Cfg.hpPct), 5, 95)
@@ -585,6 +760,8 @@ class SettingsUi {
         Cfg.cdMs := Clamp(SafeInt(edCd.Value, Cfg.cdMs), 200, 5000)
         Cfg.tickMs := Clamp(SafeInt(edTick.Value, Cfg.tickMs), 30, 500)
         Cfg.colorTol := Clamp(SafeInt(edTol.Value, Cfg.colorTol), 30, 180)
+        if edMethod.Text != ""
+            Cfg.pixelMethod := edMethod.Text
         Cfg.Save()
         SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
         Overlay.ShowHint("Настройки сохранены")
