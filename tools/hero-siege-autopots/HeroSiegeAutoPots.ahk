@@ -15,8 +15,8 @@ CoordMode "ToolTip", "Screen"
 ;  Hero Siege. Координаты задаются калибровкой и хранятся как доли окна, поэтому
 ;  перенос на другое разрешение обычно не ломает работу.
 ;
-;  F6        калибровка HP (навести курсор, НЕ кликать)
-;  F7        калибровка MP (так же)
+;  F6        автокалибровка HP (ищет красную полоску сама)
+;  F7        автокалибровка MP
 ;  F8        вкл / выкл автопотов
 ;  F9        цвет и координаты под курсором
 ;  F10       настройки
@@ -181,7 +181,7 @@ class Col {
 
     static IsRed(c) {
         r := this.R(c), g := this.G(c), b := this.B(c)
-        return r >= 88 && r > g + 22 && r > b + 22
+        return r >= 110 && r > g + 28 && r > b + 28
     }
 
     static IsBlue(c) {
@@ -619,6 +619,83 @@ class DxgiGrab {
         this.mapped := false
         this.frameRes := 0
     }
+
+    static BufColor(bx, by) {
+        if !this.bits || !this.pitch || bx < 0 || by < 0 || bx >= this.width || by >= this.height
+            return 0
+        bgra := NumGet(this.bits + (by * this.pitch) + (bx * 4), "uint")
+        r := (bgra >> 16) & 0xFF
+        g := (bgra >> 8) & 0xFF
+        b := bgra & 0xFF
+        return (r << 16) | (g << 8) | b
+    }
+
+    ; Ищет самую длинную красную/синюю горизонталь в HUD (верхний левый угол).
+    static ScanBar(kind, &sx1, &sy1, &sx2, &sy2) {
+        ToolTip()
+        Loop 10 {
+            this.Grab(80)
+            if this.bits
+                break
+        }
+        if !this.bits || !this.pitch
+            return false
+        WinGetClientPos(&cl, &ct, &cw, &ch, "A")
+        bx0 := Max(0, cl - this.outputLeft)
+        by0 := Max(0, ct - this.outputTop)
+        bx1 := Min(this.width - 1, cl + cw - this.outputLeft)
+        by1 := Min(this.height - 1, ct + ch - this.outputTop)
+        xMin := bx0
+        xLim := bx0 + Integer((bx1 - bx0) * 0.52)
+        if kind = "hp" {
+            yMin := by0
+            yLim := by0 + Integer((by1 - by0) * 0.30)
+        } else if Cfg.calibratedHp {
+            hpY := ct + Integer(Cfg.hpY1 * ch) - this.outputTop
+            yMin := hpY + 4
+            yLim := hpY + 40
+        } else {
+            yMin := by0 + Integer((by1 - by0) * 0.05)
+            yLim := by0 + Integer((by1 - by0) * 0.32)
+        }
+        if xLim <= xMin || yLim <= yMin
+            return false
+        best := 0, bestX1 := 0, bestX2 := 0, bestY := 0
+        y := yMin
+        while y <= yLim {
+            run := 0, rs := 0
+            x := xMin
+            while x <= xLim {
+                hit := (kind = "hp") ? Col.IsRed(this.BufColor(x, y)) : Col.IsBlue(this.BufColor(x, y))
+                if hit {
+                    if run = 0
+                        rs := x
+                    run += 1
+                } else {
+                    if run > best {
+                        best := run, bestX1 := rs, bestX2 := x - 1, bestY := y
+                    }
+                    run := 0
+                }
+                x += 1
+            }
+            if run > best {
+                best := run, bestX1 := rs, bestX2 := xLim, bestY := y
+            }
+            y += 1
+        }
+        if best < 28
+            return false
+        if bestX2 - bestX1 > 14 {
+            bestX1 += 4
+            bestX2 -= 4
+        }
+        sx1 := this.outputLeft + bestX1
+        sy1 := this.outputTop + bestY
+        sx2 := this.outputLeft + bestX2
+        sy2 := this.outputTop + bestY
+        return true
+    }
 }
 
 ; Magnifier host: DWM кладёт в него уже составленный кадр, GDI это видит.
@@ -841,11 +918,83 @@ class Calib {
     static tipOn := false
 
     static OnHp() {
-        this.Step("hp")
+        if this.mode != "" {
+            this.Step("hp")
+            return
+        }
+        if !Game.IsActive() {
+            Overlay.ShowHint("Кликни по окну Hero Siege, потом F6")
+            return
+        }
+        ToolTip()
+        Overlay.Place()
+        Overlay.ShowHint("Ищу красную полоску HP...")
+        if this.AutoDetect("hp")
+            return
+        this.mode := "hp1"
+        Overlay.ShowHint("Автопоиск не нашёл. Наведи на КРАСНУЮ ЗАЛИВКУ (не рамку и не цифры) слева, F6")
+        SoundBeep(620, 70)
     }
 
     static OnMp() {
-        this.Step("mp")
+        if this.mode != "" {
+            this.Step("mp")
+            return
+        }
+        if !Game.IsActive() {
+            Overlay.ShowHint("Кликни по окну Hero Siege, потом F7")
+            return
+        }
+        ToolTip()
+        Overlay.Place()
+        Overlay.ShowHint("Ищу синюю полоску MP...")
+        if this.AutoDetect("mp")
+            return
+        this.mode := "mp1"
+        Overlay.ShowHint("Автопоиск не нашёл. Наведи на СИНЮЮ заливку слева, F7")
+        SoundBeep(620, 70)
+    }
+
+    static AutoDetect(which) {
+        if !DxgiGrab.ready
+            return false
+        if !DxgiGrab.ScanBar(which, &sx1, &sy1, &sx2, &sy2)
+            return false
+        this.ToFrac(sx1, sy1, &fx1, &fy1)
+        this.ToFrac(sx2, sy2, &fx2, &fy2)
+        if which = "hp" {
+            Cfg.hpX1 := fx1, Cfg.hpY1 := fy1, Cfg.hpX2 := fx2, Cfg.hpY2 := fy2
+            Cfg.hpFill := Bar.SampleFill("hp")
+            if Col.IsDeadGdi(Cfg.hpFill)
+                return false
+            Cfg.calibratedHp := true
+            fill := Cfg.hpFill
+        } else {
+            Cfg.mpX1 := fx1, Cfg.mpY1 := fy1, Cfg.mpX2 := fx2, Cfg.mpY2 := fy2
+            Cfg.mpFill := Bar.SampleFill("mp")
+            if Col.IsDeadGdi(Cfg.mpFill)
+                return false
+            Cfg.calibratedMp := true
+            fill := Cfg.mpFill
+        }
+        Cfg.Save()
+        this.mode := ""
+        this.tipOn := false
+        ToolTip()
+        Overlay.Place()
+        Overlay.ShowHint((which = "hp" ? "HP" : "MP") " найден, цвет " Col.Hex(fill) ". F8 — вкл автопоты")
+        SoundBeep(940, 110)
+        return true
+    }
+
+    static ToFrac(sx, sy, &fx, &fy) {
+        hwnd := WinExist("A")
+        pt := Buffer(8)
+        NumPut("int", sx, "int", sy, pt)
+        DllCall("ScreenToClient", "ptr", hwnd, "ptr", pt)
+        Game.ClientSize(&w, &h)
+        fx := NumGet(pt, 0, "int") / Max(w, 1)
+        fy := NumGet(pt, 4, "int") / Max(h, 1)
     }
 
     static Step(which) {
@@ -860,7 +1009,8 @@ class Calib {
                 return
             }
             this.mode := start
-            Overlay.Hide()
+            Overlay.Place()
+            Overlay.ShowHint(label ": наведи на ЗАЛИВКУ полоски (не рамку, не белые цифры), " keyName)
             SoundBeep(620, 70)
             return
         }
@@ -931,10 +1081,6 @@ class Calib {
             return
         }
         this.tipOn := true
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&sx, &sy)
-        CoordMode("Mouse", "Client")
-        MouseGetPos(&cx, &cy)
         c := 0
         try c := Pix.AtCursor()
         wantHp := InStr(this.mode, "hp")
@@ -942,21 +1088,12 @@ class Calib {
         barName := wantHp ? "КРАСНОЙ HP" : "СИНЕЙ MP"
         keyName := wantHp ? "F6" : "F7"
         leftStep := (this.mode = "hp1" || this.mode = "mp1")
-        edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
+        edge := leftStep ? "левая" : "правая"
         if onBar
-            ok := "✓ вижу полоску — жми " keyName
-        else if !c || Col.IsDeadGdi(c)
-            ok := DxgiGrab.ready
-                ? "кадр пустой/заливка, поводи курсором"
-                : ("захват: " (DxgiGrab.err != "" ? DxgiGrab.err : (MagGrab.ready ? "Magnifier" : "нет")))
+            ok := "✓ заливка видна — жми " keyName
         else
-            ok := Col.Hex(c) " — наведи НА " barName " полоску"
-        msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
-            . "Полоска в ВЕРХНЕМ ЛЕВОМ углу, под именем персонажа.`n"
-            . "Это не банка 1 внизу экрана.`n`n"
-            . edge " край " barName "`n"
-            . ok "`n" Col.Hex(c)
-        ToolTip(msg, sx + 28, sy + 28)
+            ok := Col.Hex(c) " — целься в цветную ЗАЛИВКУ, не в рамку и не в цифры"
+        Overlay.ShowHint("НЕ КЛИКАЙ. " edge " часть " barName "`n" ok)
     }
 }
 
@@ -1059,10 +1196,6 @@ class Overlay {
     static Refresh() {
         if !this.txt
             return
-        if Calib.mode != "" {
-            this.Hide()
-            return
-        }
         if this.hidden
             this.Place()
         if this.hintMsg != "" && A_TickCount < this.hintUntil {
