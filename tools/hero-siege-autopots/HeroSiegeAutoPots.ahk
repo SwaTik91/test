@@ -15,6 +15,8 @@ CoordMode "ToolTip", "Screen"
 ;  Hero Siege. Координаты задаются калибровкой и хранятся как доли окна, поэтому
 ;  перенос на другое разрешение обычно не ломает работу.
 ;
+;  F3        калибровка миникарты (два угла)
+;  F4        ходьба по миникарте вкл / выкл
 ;  F6        автокалибровка HP (ищет красную полоску сама)
 ;  F7        автокалибровка MP
 ;  F8        вкл / выкл автопотов
@@ -39,8 +41,10 @@ else if MagGrab.Init()
 else
     Overlay.ShowHint("Нет захвата кадра: " DxgiGrab.err)
 SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
-TrayTip("Hero Siege AutoPots", "F8 — вкл/выкл   F6 — калибровка HP   F10 — настройки", "Iconi")
+TrayTip("Hero Siege AutoPots", "F8 поты  F4 ходьба  F3 миникарта  F6 HP", "Iconi")
 
+F3:: Calib.OnMap()
+F4:: Farm.Toggle()
 F6:: Calib.OnHp()
 F7:: Calib.OnMp()
 F8:: AutoPots.Toggle()
@@ -69,6 +73,14 @@ class Cfg {
     static calibratedMp := false
     static hpX1 := 0.08, hpY1 := 0.055, hpX2 := 0.22, hpY2 := 0.055, hpFill := 0xC42B2B
     static mpX1 := 0.08, mpY1 := 0.078, mpX2 := 0.22, mpY2 := 0.078, mpFill := 0x2B6EC4
+    static calibratedMap := false
+    static mapX1 := 0.78, mapY1 := 0.04, mapX2 := 0.98, mapY2 := 0.28
+    static mapFogLuma := 38
+    static mapClickDist := 240
+    static mapIso := 0.58
+    static mapCharY := 0.06
+    static mapMoveMs := 280
+    static mapStopHp := 18
 
     static Load() {
         f := this.file
@@ -101,6 +113,21 @@ class Cfg {
         this.mpX2 := SafeFloat(IniRead(f, "mp", "x2", this.mpX2), this.mpX2)
         this.mpY2 := SafeFloat(IniRead(f, "mp", "y2", this.mpY2), this.mpY2)
         this.mpFill := SafeInt(IniRead(f, "mp", "fill", this.mpFill), this.mpFill)
+        this.calibratedMap := IniRead(f, "map", "calibrated", "0") = "1"
+        this.mapX1 := SafeFloat(IniRead(f, "map", "x1", this.mapX1), this.mapX1)
+        this.mapY1 := SafeFloat(IniRead(f, "map", "y1", this.mapY1), this.mapY1)
+        this.mapX2 := SafeFloat(IniRead(f, "map", "x2", this.mapX2), this.mapX2)
+        this.mapY2 := SafeFloat(IniRead(f, "map", "y2", this.mapY2), this.mapY2)
+        this.mapFogLuma := SafeInt(IniRead(f, "map", "fogLuma", this.mapFogLuma), this.mapFogLuma)
+        this.mapClickDist := SafeInt(IniRead(f, "map", "clickDist", this.mapClickDist), this.mapClickDist)
+        this.mapIso := SafeFloat(IniRead(f, "map", "iso", this.mapIso), this.mapIso)
+        this.mapCharY := SafeFloat(IniRead(f, "map", "charY", this.mapCharY), this.mapCharY)
+        this.mapMoveMs := SafeInt(IniRead(f, "map", "moveMs", this.mapMoveMs), this.mapMoveMs)
+        this.mapStopHp := SafeInt(IniRead(f, "map", "stopHp", this.mapStopHp), this.mapStopHp)
+        this.mapFogLuma := Clamp(this.mapFogLuma, 16, 72)
+        this.mapClickDist := Clamp(this.mapClickDist, 80, 520)
+        this.mapIso := Clamp(this.mapIso, 0.35, 1.0)
+        this.mapStopHp := Clamp(this.mapStopHp, 5, 80)
         if this.tickMs < 30
             this.tickMs := 30
         if this.cdMs < 200
@@ -131,6 +158,17 @@ class Cfg {
         IniWrite(Format("{:.5f}", this.mpX2), f, "mp", "x2")
         IniWrite(Format("{:.5f}", this.mpY2), f, "mp", "y2")
         IniWrite(Format("0x{:06X}", this.mpFill), f, "mp", "fill")
+        IniWrite(this.calibratedMap ? "1" : "0", f, "map", "calibrated")
+        IniWrite(Format("{:.5f}", this.mapX1), f, "map", "x1")
+        IniWrite(Format("{:.5f}", this.mapY1), f, "map", "y1")
+        IniWrite(Format("{:.5f}", this.mapX2), f, "map", "x2")
+        IniWrite(Format("{:.5f}", this.mapY2), f, "map", "y2")
+        IniWrite(this.mapFogLuma, f, "map", "fogLuma")
+        IniWrite(this.mapClickDist, f, "map", "clickDist")
+        IniWrite(Format("{:.3f}", this.mapIso), f, "map", "iso")
+        IniWrite(Format("{:.3f}", this.mapCharY), f, "map", "charY")
+        IniWrite(this.mapMoveMs, f, "map", "moveMs")
+        IniWrite(this.mapStopHp, f, "map", "stopHp")
     }
 }
 
@@ -171,6 +209,7 @@ class Col {
     static G(c) => (c >> 8) & 0xFF
     static B(c) => c & 0xFF
     static Hex(c) => Format("0x{:06X}", c)
+    static Luma(c) => (this.R(c) * 2 + this.G(c) * 3 + this.B(c)) // 6
 
     static Dist(a, b) {
         dr := this.R(a) - this.R(b)
@@ -857,6 +896,211 @@ class Bar {
 }
 
 ; -----------------------------------------------------------------------------
+;  Ходьба по миникарте: герой в центре карты, идём к туману войны.
+;  Чёрный пиксель = 0, Pix.Get его отбрасывает как «нет цвета» — читаем DXGI напрямую.
+; -----------------------------------------------------------------------------
+
+class Farm {
+    static enabled := false
+    static lastMove := 0
+    static lastAngle := 0.0
+    static lastDir := "?"
+    static lastHash := -1
+    static hashSince := 0
+    static status := ""
+
+    static Toggle() {
+        if this.enabled {
+            this.enabled := false
+            SoundBeep(420, 90)
+            Overlay.ShowHint("Ходьба по карте ВЫКЛ")
+            return
+        }
+        if !Cfg.calibratedMap {
+            Overlay.ShowHint("Сначала F3: два угла миникарты (в данже, карта включена клавишей M)")
+            SoundBeep(320, 180)
+            return
+        }
+        if !Game.IsActive() {
+            Overlay.ShowHint("Кликни по окну Hero Siege, потом F4")
+            return
+        }
+        this.enabled := true
+        this.lastMove := 0
+        this.hashSince := 0
+        this.lastHash := -1
+        SoundBeep(880, 90)
+        Overlay.ShowHint("Ходьба ВКЛ. F8 — банки. F4 — стоп. Не открывай инвентарь")
+    }
+
+    static Tick() {
+        if !this.enabled || !Cfg.calibratedMap
+            return
+        if Cfg.calibratedHp && AutoPots.hpPct > 1.5 && AutoPots.hpPct < Cfg.mapStopHp {
+            this.status := "стою, мало HP"
+            return
+        }
+        if A_TickCount - this.lastMove < Cfg.mapMoveMs
+            return
+        ang := this.Heading()
+        this.ClickWorld(ang)
+        this.lastMove := A_TickCount
+        this.status := this.lastDir
+    }
+
+    static Rect(&x1, &y1, &x2, &y2) {
+        Game.ClientSize(&w, &h)
+        x1 := Cfg.mapX1 * w, y1 := Cfg.mapY1 * h
+        x2 := Cfg.mapX2 * w, y2 := Cfg.mapY2 * h
+        if x2 < x1 {
+            t := x1, x1 := x2, x2 := t
+        }
+        if y2 < y1 {
+            t := y1, y1 := y2, y2 := t
+        }
+    }
+
+    static SampleLuma(cx, cy) {
+        if !DxgiGrab.ready || !DxgiGrab.bits
+            return -1
+        Pix.ToScreen(cx, cy, &sx, &sy)
+        bx := sx - DxgiGrab.outputLeft
+        by := sy - DxgiGrab.outputTop
+        if bx < 0 || by < 0 || bx >= DxgiGrab.width || by >= DxgiGrab.height
+            return -1
+        return Col.Luma(DxgiGrab.BufColor(bx, by))
+    }
+
+    static Heading() {
+        this.Rect(&x1, &y1, &x2, &y2)
+        padX := (x2 - x1) * 0.10
+        padY := (y2 - y1) * 0.10
+        x1 += padX, x2 -= padX, y1 += padY, y2 -= padY
+        cx := (x1 + x2) / 2
+        cy := (y1 + y2) / 2
+        halfW := (x2 - x1) / 2
+        halfH := (y2 - y1) / 2
+        if halfW < 8 || halfH < 8
+            return this.lastAngle
+        sectors := 16
+        best := -999999
+        bestA := this.lastAngle
+        tau := 6.283185307179586
+        i := 0
+        while i < sectors {
+            ang := i * tau / sectors
+            fog := 0, floor := 0, nearFog := 0
+            r := 0
+            while r < 8 {
+                t := 0.20 + r * 0.09
+                lu := this.SampleLuma(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
+                if lu < 0 {
+                    r += 1
+                    continue
+                }
+                if lu <= Cfg.mapFogLuma {
+                    fog += 1
+                    if r < 3
+                        nearFog += 1
+                } else
+                    floor += 1
+                r += 1
+            }
+            score := fog * 4
+            if fog >= 1 && floor >= 1
+                score += 14
+            score -= nearFog * 3
+            da := ang - this.lastAngle
+            if da > 3.1416
+                da -= tau
+            if da < -3.1416
+                da += tau
+            if da < 0
+                da := -da
+            if da < 0.9
+                score += 4
+            if score > best {
+                best := score
+                bestA := ang
+            }
+            i += 1
+        }
+        h := this.CenterHash(cx, cy)
+        if h = this.lastHash {
+            if this.hashSince = 0
+                this.hashSince := A_TickCount
+            if A_TickCount - this.hashSince > 1700 {
+                bestA := this.lastAngle + 1.15
+                this.hashSince := A_TickCount
+            }
+        } else {
+            this.lastHash := h
+            this.hashSince := A_TickCount
+        }
+        this.lastAngle := bestA
+        this.lastDir := this.Arrow(bestA)
+        return bestA
+    }
+
+    static CenterHash(cx, cy) {
+        s := 0
+        s += this.SampleLuma(cx, cy)
+        s += this.SampleLuma(cx + 6, cy) * 3
+        s += this.SampleLuma(cx - 6, cy) * 5
+        s += this.SampleLuma(cx, cy + 6) * 7
+        s += this.SampleLuma(cx, cy - 6) * 11
+        return s
+    }
+
+    static Arrow(ang) {
+        k := Integer(Round(ang / 6.283185307179586 * 8))
+        k := Mod(k + 32, 8)
+        arr := ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"]
+        return arr[k + 1]
+    }
+
+    static ClickWorld(ang) {
+        Game.ClientSize(&w, &h)
+        dist := Cfg.mapClickDist
+        x := w * 0.5 + Cos(ang) * dist
+        y := h * (0.5 + Cfg.mapCharY) + Sin(ang) * dist * Cfg.mapIso
+        this.Rect(&mx1, &my1, &mx2, &my2)
+        if x >= mx1 && x <= mx2 && y >= my1 && y <= my2 {
+            x := w * 0.5
+            y := h * (0.5 + Cfg.mapCharY)
+        }
+        x := Clamp(Round(x), 12, w - 12)
+        y := Clamp(Round(y), 12, h - 12)
+        Click(Integer(x) " " Integer(y))
+    }
+
+    static LearnFog() {
+        this.Rect(&x1, &y1, &x2, &y2)
+        padX := (x2 - x1) * 0.12
+        padY := (y2 - y1) * 0.12
+        x1 += padX, x2 -= padX, y1 += padY, y2 -= padY
+        n := 0, sum := 0
+        iy := 0
+        while iy < 10 {
+            ix := 0
+            while ix < 10 {
+                px := x1 + (x2 - x1) * (ix + 0.5) / 10
+                py := y1 + (y2 - y1) * (iy + 0.5) / 10
+                lu := this.SampleLuma(px, py)
+                if lu >= 0 && lu < 72 {
+                    n += 1
+                    sum += lu
+                }
+                ix += 1
+            }
+            iy += 1
+        }
+        if n >= 6
+            Cfg.mapFogLuma := Clamp(Integer(sum / n + 8), 16, 72)
+    }
+}
+
+; -----------------------------------------------------------------------------
 ;  Автопоты
 ; -----------------------------------------------------------------------------
 
@@ -921,6 +1165,7 @@ class AutoPots {
                     }
                 }
             }
+            Farm.Tick()
         }
         Calib.FollowCursor()
         Overlay.Refresh()
@@ -962,10 +1207,12 @@ class Calib {
     static tipOn := false
 
     static OnHp() {
-        if this.mode != "" {
+        if InStr(this.mode, "hp") {
             this.Step("hp")
             return
         }
+        if this.mode != ""
+            return
         if !Game.IsActive() {
             Overlay.ShowHint("Кликни по окну Hero Siege, потом F6")
             return
@@ -981,10 +1228,12 @@ class Calib {
     }
 
     static OnMp() {
-        if this.mode != "" {
+        if InStr(this.mode, "mp") && !InStr(this.mode, "map") {
             this.Step("mp")
             return
         }
+        if this.mode != ""
+            return
         if !Game.IsActive() {
             Overlay.ShowHint("Кликни по окну Hero Siege, потом F7")
             return
@@ -997,6 +1246,55 @@ class Calib {
         this.mode := "mp1"
         Overlay.ShowHint("Автопоиск не нашёл. Наведи на СИНЮЮ заливку слева, F7")
         SoundBeep(620, 70)
+    }
+
+    static OnMap() {
+        if this.mode = "map1" || this.mode = "map2" {
+            this.StepMap()
+            return
+        }
+        if this.mode != "" {
+            Overlay.ShowHint("Сначала закончи текущую калибровку")
+            return
+        }
+        if !Game.IsActive() {
+            Overlay.ShowHint("Кликни по окну Hero Siege, потом F3")
+            return
+        }
+        this.mode := "map1"
+        Overlay.Place()
+        Overlay.ShowHint("Миникарта: наведи на ЛЕВЫЙ ВЕРХНИЙ угол самой карты (внутри рамки), F3")
+        SoundBeep(620, 70)
+    }
+
+    static StepMap() {
+        if !Game.IsActive() {
+            Overlay.ShowHint("Окно Hero Siege должно быть активным")
+            return
+        }
+        MouseGetPos(&x, &y)
+        Game.ClientSize(&w, &h)
+        if this.mode = "map1" {
+            Cfg.mapX1 := x / w
+            Cfg.mapY1 := y / h
+            this.mode := "map2"
+            Overlay.ShowHint("Теперь ПРАВЫЙ НИЖНИЙ угол миникарты, F3")
+            SoundBeep(720, 70)
+            return
+        }
+        Cfg.mapX2 := x / w
+        Cfg.mapY2 := y / h
+        this.mode := ""
+        this.tipOn := false
+        ToolTip()
+        if DxgiGrab.ready
+            DxgiGrab.Grab(80)
+        Farm.LearnFog()
+        Cfg.calibratedMap := true
+        Cfg.Save()
+        Overlay.Place()
+        Overlay.ShowHint(Format("Миникарта сохранена, туман luma≤{}. F4 — ходьба", Cfg.mapFogLuma))
+        SoundBeep(940, 110)
     }
 
     static AutoDetect(which) {
@@ -1131,6 +1429,10 @@ class Calib {
             }
             return
         }
+        if InStr(this.mode, "map") {
+            this.tipOn := false
+            return
+        }
         this.tipOn := true
         c := 0
         try c := Pix.AtCursor()
@@ -1194,7 +1496,7 @@ class Overlay {
         g.MarginX := 10
         g.MarginY := 8
         g.SetFont("s10 c00E676", "Segoe UI")
-        this.txt := g.Add("Text", "w300 h88", "Hero Siege AutoPots`nвыкл  |  F11 двигает панель")
+        this.txt := g.Add("Text", "w300 h102", "Hero Siege AutoPots`nвыкл  |  F11 двигает панель")
         this.g := g
         this.Place()
         WinSetTransparent(190, g.Hwnd)
@@ -1204,7 +1506,7 @@ class Overlay {
         if !this.g
             return
         MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
-        w := 320, h := 118, pad := 18
+        w := 320, h := 136, pad := 18
         switch Cfg.overlayCorner {
             case "tl": x := l + pad, y := t + pad
             case "tr": x := r - w - pad, y := t + pad
@@ -1256,6 +1558,9 @@ class Overlay {
         mpLine := Cfg.calibratedMp
             ? Format("MP ~ {}%  (порог {}%)", AutoPots.mpPct < 0 ? "?" : AutoPots.mpPct, Cfg.mpPct)
             : "MP: нет калибровки (F7, необязательно)"
+        farmLine := !Cfg.calibratedMap
+            ? "карта: нет калибровки (F3)"
+            : (Farm.enabled ? "карта ХОД " Farm.status : "карта выкл (F4)")
         if this.hintMsg != "" && A_TickCount < this.hintUntil {
             this.txt.Value := this.hintMsg "`n" hpLine
             return
@@ -1269,7 +1574,7 @@ class Overlay {
             this.txt.Value := "Hero Siege AutoPots  " state "`nокно не в фокусе — поты не жмутся"
             return
         }
-        this.txt.Value := "Автопоты  " state "`n" hpLine "`n" mpLine
+        this.txt.Value := "Автопоты  " state "`n" hpLine "`n" mpLine "`n" farmLine
     }
 }
 
@@ -1305,16 +1610,22 @@ class SettingsUi {
         g.Add("Text", "xm y+10", "Чтение пикселя:")
         edMethod := g.Add("DropDownList", "x+8 yp w140", ["dxgi", "screen", "alt", "slow", "window", "print"])
         edMethod.Text := Cfg.pixelMethod
+        g.Add("Text", "xm y+10", "Клик ходьбы, пикс:")
+        edMapDist := g.Add("Edit", "x+8 yp w80", Cfg.mapClickDist)
+        g.Add("Text", "xm y+10", "Туман миникарты (luma 16–72):")
+        edFog := g.Add("Edit", "x+8 yp w80", Cfg.mapFogLuma)
+        g.Add("Text", "xm y+10", "Стоп ходьбы если HP < %:")
+        edMapStop := g.Add("Edit", "x+8 yp w60", Cfg.mapStopHp)
         g.Add("Text", "xm y+12 c666666 w360", "3F3949 на screen/window — нормально для DirectX. Нужен метод dxgi (захват кадра как OBS). Если dxgi тоже врёт — закрой OBS/Xbox Game Bar и перезапусти скрипт. F9 показывает строку dxgi внизу экрана, не на HP.")
         btn := g.Add("Button", "xm y+16 w140 Default", "Сохранить")
-        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod))
+        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop))
         g.OnEvent("Close", (*) => SettingsUi.Closed())
         g.OnEvent("Escape", (*) => SettingsUi.Closed())
         this.g := g
         g.Show()
     }
 
-    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod) {
+    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop) {
         Cfg.hpKeys := Trim(edHpKeys.Value)
         Cfg.mpKeys := Trim(edMpKeys.Value)
         Cfg.hpPct := Clamp(SafeInt(edHpPct.Value, Cfg.hpPct), 5, 95)
@@ -1324,6 +1635,9 @@ class SettingsUi {
         Cfg.colorTol := Clamp(SafeInt(edTol.Value, Cfg.colorTol), 30, 180)
         if edMethod.Text != ""
             Cfg.pixelMethod := edMethod.Text
+        Cfg.mapClickDist := Clamp(SafeInt(edMapDist.Value, Cfg.mapClickDist), 80, 520)
+        Cfg.mapFogLuma := Clamp(SafeInt(edFog.Value, Cfg.mapFogLuma), 16, 72)
+        Cfg.mapStopHp := Clamp(SafeInt(edMapStop.Value, Cfg.mapStopHp), 5, 80)
         Cfg.Save()
         SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
         Overlay.ShowHint("Настройки сохранены")
@@ -1347,6 +1661,8 @@ class TrayMenu {
         A_IconTip := "Hero Siege AutoPots"
         A_TrayMenu.Delete()
         A_TrayMenu.Add("Автопоты вкл/выкл (F8)", (*) => AutoPots.Toggle())
+        A_TrayMenu.Add("Ходьба по миникарте (F4)", (*) => Farm.Toggle())
+        A_TrayMenu.Add("Калибровка миникарты (F3)", (*) => Calib.OnMap())
         A_TrayMenu.Add("Калибровка HP (F6)", (*) => Calib.OnHp())
         A_TrayMenu.Add("Калибровка MP (F7)", (*) => Calib.OnMp())
         A_TrayMenu.Add("Настройки (F10)", (*) => SettingsUi.Show())
