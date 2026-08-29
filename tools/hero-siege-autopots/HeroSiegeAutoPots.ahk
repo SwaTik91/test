@@ -33,7 +33,7 @@ DllCall("User32.dll\SetThreadDpiAwarenessContext", "ptr", -4)
 Cfg.Load()
 Overlay.Init()
 TrayMenu.Init()
-OnExit((*) => (DxgiGrab.Free(), MagGrab.Free(), Pix.PrintFree()))
+OnExit((*) => (Farm.ReleaseKeys(), DxgiGrab.Free(), MagGrab.Free(), Pix.PrintFree()))
 if DxgiGrab.Init()
     Overlay.ShowHint("DXGI ок " DxgiGrab.width "x" DxgiGrab.height)
 else if MagGrab.Init()
@@ -79,8 +79,9 @@ class Cfg {
     static mapClickDist := 160
     static mapIso := 0.58
     static mapCharY := 0.06
-    static mapMoveMs := 280
+    static mapMoveMs := 180
     static mapStopHp := 18
+    static mapMove := "wasd"
 
     static Load() {
         f := this.file
@@ -124,6 +125,9 @@ class Cfg {
         this.mapCharY := SafeFloat(IniRead(f, "map", "charY", this.mapCharY), this.mapCharY)
         this.mapMoveMs := SafeInt(IniRead(f, "map", "moveMs", this.mapMoveMs), this.mapMoveMs)
         this.mapStopHp := SafeInt(IniRead(f, "map", "stopHp", this.mapStopHp), this.mapStopHp)
+        this.mapMove := IniRead(f, "map", "move", this.mapMove)
+        if this.mapMove != "click"
+            this.mapMove := "wasd"
         this.mapFogLuma := Clamp(this.mapFogLuma, 16, 72)
         this.mapClickDist := Clamp(this.mapClickDist, 80, 520)
         this.mapIso := Clamp(this.mapIso, 0.35, 1.0)
@@ -171,6 +175,7 @@ class Cfg {
         IniWrite(Format("{:.3f}", this.mapCharY), f, "map", "charY")
         IniWrite(this.mapMoveMs, f, "map", "moveMs")
         IniWrite(this.mapStopHp, f, "map", "stopHp")
+        IniWrite(this.mapMove, f, "map", "move")
     }
 }
 
@@ -898,7 +903,7 @@ class Bar {
 }
 
 ; -----------------------------------------------------------------------------
-;  Ходьба по миникарте: герой в центре карты, идём к туману войны.
+;  Ходьба по миникарте: WASD по 8 направлениям к туману, без кликов по земле.
 ;  Чёрный пиксель = 0, Pix.Get его отбрасывает как «нет цвета» — читаем DXGI напрямую.
 ; -----------------------------------------------------------------------------
 
@@ -912,10 +917,14 @@ class Farm {
     static status := ""
     static lastStopT := 0.45
     static lastKind := ""
+    static lastK := 0
+    static lastScore := 0
+    static hw := false, ha := false, hs := false, hd := false
 
     static Toggle() {
         if this.enabled {
             this.enabled := false
+            this.ReleaseKeys()
             SoundBeep(420, 90)
             Overlay.ShowHint("Ходьба по карте ВЫКЛ")
             return
@@ -933,23 +942,73 @@ class Farm {
         this.lastMove := 0
         this.hashSince := 0
         this.lastHash := -1
+        this.lastScore := 0
+        this.lastK := -1
         SoundBeep(880, 90)
-        Overlay.ShowHint("Ходьба ВКЛ. F8 — банки. F4 — стоп. Не открывай инвентарь")
+        Overlay.ShowHint("Ходьба WASD. F8 — банки, F4 — стоп")
     }
 
     static Tick() {
-        if !this.enabled || !Cfg.calibratedMap
+        if !this.enabled || !Cfg.calibratedMap {
+            this.ReleaseKeys()
             return
+        }
         if Cfg.calibratedHp && AutoPots.hpPct > 1.5 && AutoPots.hpPct < Cfg.mapStopHp {
+            this.ReleaseKeys()
             this.status := "стою, мало HP"
             return
         }
         if A_TickCount - this.lastMove < Cfg.mapMoveMs
             return
         ang := this.Heading()
-        this.ClickWorld(ang)
+        if Cfg.mapMove = "click"
+            this.ClickWorld(ang)
+        else
+            this.HoldFromK(this.AngleToK(ang))
         this.lastMove := A_TickCount
         this.status := this.lastDir " " this.lastKind
+    }
+
+    static ReleaseKeys() {
+        this.SetKey("w", false)
+        this.SetKey("a", false)
+        this.SetKey("s", false)
+        this.SetKey("d", false)
+    }
+
+    static KeysFor(k) {
+        k := Mod(k + 8, 8)
+        arr := ["d", "sd", "s", "as", "a", "aw", "w", "wd"]
+        return arr[k + 1]
+    }
+
+    static HoldFromK(k) {
+        spec := this.KeysFor(k)
+        this.SetKey("w", InStr(spec, "w"))
+        this.SetKey("a", InStr(spec, "a"))
+        this.SetKey("s", InStr(spec, "s"))
+        this.SetKey("d", InStr(spec, "d"))
+    }
+
+    static SetKey(ch, on) {
+        held := (ch = "w") ? this.hw : (ch = "a") ? this.ha : (ch = "s") ? this.hs : this.hd
+        on := on ? true : false
+        if held = on
+            return
+        SendEvent("{" ch " " (on ? "down" : "up") "}")
+        if ch = "w"
+            this.hw := on
+        else if ch = "a"
+            this.ha := on
+        else if ch = "s"
+            this.hs := on
+        else
+            this.hd := on
+    }
+
+    static AngleToK(ang) {
+        k := Integer(Round(ang / 6.283185307179586 * 8))
+        return Mod(k + 32, 8)
     }
 
     static Rect(&x1, &y1, &x2, &y2) {
@@ -986,69 +1045,100 @@ class Farm {
         halfH := (y2 - y1) / 2
         if halfW < 8 || halfH < 8
             return this.lastAngle
-        ; Луч больше не считает туман ЗА стенкой: тонкая тьма = стена, длинная = туман.
-        sectors := 24
+        this.FindPlayer(&cx, &cy, halfW, halfH)
+        ; 8 направлений: без кликов-зигзагов. Диагональ штрафуем — коридоры ровнее.
+        tau := 6.283185307179586
         bestFog := -999999
         bestOpen := -999999
-        fogA := this.lastAngle
-        openA := this.lastAngle
+        fogK := (this.lastK >= 0) ? this.lastK : 0
+        openK := fogK
         fogT := 0.4
         openT := 0.4
-        tau := 6.283185307179586
-        i := 0
-        while i < sectors {
-            ang := i * tau / sectors
+        k := 0
+        while k < 8 {
+            ang := k * tau / 8
             kind := "", floorSteps := 0, stopT := 0.3
             this.Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT)
-            da := ang - this.lastAngle
-            if da > 3.1416
-                da -= tau
-            if da < -3.1416
-                da += tau
-            if da < 0
-                da := -da
-            stick := (da < 0.7) ? 6 : 0
+            stick := (this.lastK >= 0 && k = this.lastK) ? 18 : 0
+            diag := Mod(k, 2) = 1 ? -12 : 0
             if kind = "fog" {
-                score := 80 + floorSteps * 10 + stopT * 20 + stick
+                score := 80 + floorSteps * 10 + stopT * 20 + stick + diag
                 if score > bestFog {
-                    bestFog := score, fogA := ang, fogT := stopT
+                    bestFog := score, fogK := k, fogT := stopT
                 }
             } else if kind = "open" {
-                score := floorSteps * 8 + stopT * 15 + stick
+                score := floorSteps * 8 + stopT * 15 + stick + diag
                 if score > bestOpen {
-                    bestOpen := score, openA := ang, openT := stopT
+                    bestOpen := score, openK := k, openT := stopT
                 }
             } else if kind = "wall" && floorSteps >= 3 {
-                score := floorSteps * 3 + stick - 12
+                score := floorSteps * 3 + stick + diag - 16
                 if score > bestOpen {
-                    bestOpen := score, openA := ang, openT := Max(0.22, stopT * 0.7)
+                    bestOpen := score, openK := k, openT := Max(0.22, stopT * 0.65)
                 }
             }
-            i += 1
+            k += 1
         }
         if bestFog > -999999 {
-            bestA := fogA, this.lastStopT := fogT, this.lastKind := "туман"
+            pickK := fogK, this.lastStopT := fogT, this.lastKind := "туман", pickScore := bestFog
         } else {
-            bestA := openA, this.lastStopT := openT, this.lastKind := "пол"
+            pickK := openK, this.lastStopT := openT, this.lastKind := "пол", pickScore := bestOpen
+        }
+        if this.lastK >= 0 {
+            curKind := "", fs := 0, st := 0.3
+            this.Trace(cx, cy, this.lastK * tau / 8, halfW, halfH, &curKind, &fs, &st)
+            dk := Abs(pickK - this.lastK)
+            if dk > 4
+                dk := 8 - dk
+            if curKind != "wall" && dk != 0 && pickScore < this.lastScore + 24 {
+                pickK := this.lastK
+                pickScore := this.lastScore
+                this.lastKind := (curKind = "fog") ? "туман" : this.lastKind
+            }
         }
         h := this.CenterHash(cx, cy)
         if h = this.lastHash {
             if this.hashSince = 0
                 this.hashSince := A_TickCount
-            if A_TickCount - this.hashSince > 900 {
-                bestA := this.lastAngle + 1.57
-                this.lastStopT := 0.32
+            if A_TickCount - this.hashSince > 800 {
+                pickK := Mod(this.lastK + 2, 8)
+                this.lastStopT := 0.3
                 this.lastKind := "обход"
+                pickScore := 0
                 this.hashSince := A_TickCount
+                this.lastHash := -1
             }
         } else {
             this.lastHash := h
             this.hashSince := A_TickCount
         }
+        this.lastK := pickK
+        this.lastScore := pickScore
+        bestA := pickK * tau / 8
         this.lastAngle := bestA
         this.lastDir := this.Arrow(bestA)
         this.lastStopT := Clamp(this.lastStopT, 0.22, 0.92)
         return bestA
+    }
+
+    static FindPlayer(&cx, &cy, halfW, halfH) {
+        best := 110, bx := cx, by := cy
+        y := cy - halfH * 0.20
+        while y <= cy + halfH * 0.20 {
+            x := cx - halfW * 0.20
+            while x <= cx + halfW * 0.20 {
+                lu := this.SampleLuma(x, y)
+                if lu > best {
+                    best := lu, bx := x, by := y
+                }
+                x += 5
+            }
+            y += 5
+        }
+        if best >= 130 {
+            cx := bx
+            cy := by
+        }
     }
 
     ; kind: fog = открытый коридор к туману, wall = упёрлись в линию, open = пол без тумана.
@@ -1243,6 +1333,8 @@ class AutoPots {
             }
             Farm.Tick()
         }
+        if Calib.mode != "" || !Game.IsActive()
+            Farm.ReleaseKeys()
         Calib.FollowCursor()
         Overlay.Refresh()
     }
@@ -1686,7 +1778,10 @@ class SettingsUi {
         g.Add("Text", "xm y+10", "Чтение пикселя:")
         edMethod := g.Add("DropDownList", "x+8 yp w140", ["dxgi", "screen", "alt", "slow", "window", "print"])
         edMethod.Text := Cfg.pixelMethod
-        g.Add("Text", "xm y+10", "Клик ходьбы, пикс:")
+        g.Add("Text", "xm y+10", "Ходьба:")
+        edMove := g.Add("DropDownList", "x+8 yp w140", ["wasd", "click"])
+        edMove.Text := Cfg.mapMove
+        g.Add("Text", "xm y+10", "Клик ходьбы, пикс (если click):")
         edMapDist := g.Add("Edit", "x+8 yp w80", Cfg.mapClickDist)
         g.Add("Text", "xm y+10", "Туман миникарты (luma 16–72):")
         edFog := g.Add("Edit", "x+8 yp w80", Cfg.mapFogLuma)
@@ -1694,14 +1789,14 @@ class SettingsUi {
         edMapStop := g.Add("Edit", "x+8 yp w60", Cfg.mapStopHp)
         g.Add("Text", "xm y+12 c666666 w360", "3F3949 на screen/window — нормально для DirectX. Нужен метод dxgi (захват кадра как OBS). Если dxgi тоже врёт — закрой OBS/Xbox Game Bar и перезапусти скрипт. F9 показывает строку dxgi внизу экрана, не на HP.")
         btn := g.Add("Button", "xm y+16 w140 Default", "Сохранить")
-        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop))
+        btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop, edMove))
         g.OnEvent("Close", (*) => SettingsUi.Closed())
         g.OnEvent("Escape", (*) => SettingsUi.Closed())
         this.g := g
         g.Show()
     }
 
-    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop) {
+    static Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod, edMapDist, edFog, edMapStop, edMove) {
         Cfg.hpKeys := Trim(edHpKeys.Value)
         Cfg.mpKeys := Trim(edMpKeys.Value)
         Cfg.hpPct := Clamp(SafeInt(edHpPct.Value, Cfg.hpPct), 5, 95)
@@ -1714,6 +1809,8 @@ class SettingsUi {
         Cfg.mapClickDist := Clamp(SafeInt(edMapDist.Value, Cfg.mapClickDist), 80, 520)
         Cfg.mapFogLuma := Clamp(SafeInt(edFog.Value, Cfg.mapFogLuma), 16, 72)
         Cfg.mapStopHp := Clamp(SafeInt(edMapStop.Value, Cfg.mapStopHp), 5, 80)
+        if edMove.Text != ""
+            Cfg.mapMove := edMove.Text
         Cfg.Save()
         SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
         Overlay.ShowHint("Настройки сохранены")
