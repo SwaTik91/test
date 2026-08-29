@@ -79,7 +79,7 @@ class Cfg {
     static mapClickDist := 160
     static mapIso := 0.58
     static mapCharY := 0.06
-    static mapMoveMs := 180
+    static mapMoveMs := 320
     static mapStopHp := 18
     static mapMove := "wasd"
     static mapColors := false
@@ -143,6 +143,8 @@ class Cfg {
         this.mapStopHp := Clamp(this.mapStopHp, 5, 80)
         if this.mapClickDist >= 230 && this.mapClickDist <= 250
             this.mapClickDist := 160
+        if this.mapMoveMs > 0 && this.mapMoveMs < 250
+            this.mapMoveMs := 320
         if this.tickMs < 30
             this.tickMs := 30
         if this.cdMs < 200
@@ -1002,7 +1004,7 @@ class Farm {
 
     static KeysFor(k) {
         k := Mod(k + 8, 8)
-        arr := ["d", "sd", "s", "as", "a", "aw", "w", "wd"]
+        arr := ["d", "d", "s", "s", "a", "a", "w", "w"]
         return arr[k + 1]
     }
 
@@ -1115,74 +1117,89 @@ class Farm {
         }
         tau := 6.283185307179586
         yaw := Cfg.mapYaw * tau / 360
-        bestFog := -999999
-        bestOpen := -999999
-        fogK := 0
-        openK := 0
         kinds := ["?", "?", "?", "?", "?", "?", "?", "?"]
+        bestFog := -999999, bestOpen := -999999, fogK := 0, openK := 0
         k := 0
         while k < 8 {
-            if (this.blocked >> k) & 1 {
-                kinds[k + 1] := "x"
-                k += 1
-                continue
-            }
             ang := k * tau / 8 + yaw
             kind := "", floorSteps := 0, stopT := 0.3
             this.Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT)
             kinds[k + 1] := (kind = "fog") ? "т" : (kind = "open") ? "п" : (kind = "wall") ? "с" : "?"
-            stick := (this.lastK >= 0 && k = this.lastK) ? 10 : 0
-            diag := Mod(k, 2) = 1 ? -14 : 0
-            if kind = "fog" && floorSteps >= 2 {
-                score := 100 + floorSteps * 8 + stick + diag
-                if score > bestFog {
-                    bestFog := score, fogK := k
-                }
-            } else if kind = "open" && floorSteps >= 3 {
-                score := floorSteps * 6 + stick + diag
-                if score > bestOpen {
-                    bestOpen := score, openK := k
+            if Mod(k, 2) = 0 {
+                if kind = "fog" && floorSteps >= 2 {
+                    score := 100 + floorSteps * 10
+                    if score > bestFog {
+                        bestFog := score, fogK := k
+                    }
+                } else if kind = "open" && floorSteps >= 4 {
+                    score := floorSteps * 5
+                    if score > bestOpen {
+                        bestOpen := score, openK := k
+                    }
                 }
             }
             k += 1
         }
         this.compass := Format("↑{} →{} ↓{} ←{}", kinds[7], kinds[1], kinds[3], kinds[5])
+        curKind := "wall", fs := 0, st := 0.3
+        if this.lastK >= 0
+            this.Trace(cx, cy, this.lastK * tau / 8 + yaw, halfW, halfH, &curKind, &fs, &st)
+        ; Держим курс, пока впереди пол или туман. Центр карты — иконка героя, по ней «застрял» врал.
+        if this.lastK >= 0 && (curKind = "fog" || curKind = "open") {
+            ah := this.AheadHash(cx, cy, this.lastK * tau / 8 + yaw, halfW, halfH)
+            if ah != this.lastHash {
+                this.lastHash := ah
+                this.hashSince := A_TickCount
+            } else if this.hashSince != 0 && A_TickCount - this.hashSince > 1400 {
+                this.lastK := this.TurnCardinal(this.lastK, fogK, openK, bestFog, bestOpen)
+                this.lastHash := -1
+                this.hashSince := A_TickCount
+                this.lastKind := "поворот " this.compass
+            } else
+                this.lastKind := (curKind = "fog") ? "туман" : "пол"
+            this.havePath := true
+            this.lastDir := this.Arrow(this.lastK * tau / 8)
+            this.lastAngle := this.lastK * tau / 8
+            return this.lastAngle
+        }
         if bestFog > -999999 {
-            pickK := fogK, this.lastKind := "туман", pickScore := bestFog
+            pickK := fogK, this.lastKind := "туман"
         } else if bestOpen > -999999 {
-            pickK := openK, this.lastKind := "пол", pickScore := bestOpen
+            pickK := openK, this.lastKind := "пол"
         } else {
-            this.blocked := 0
             this.lastKind := "нет пути " this.compass
             this.ReleaseKeys()
             return this.lastAngle
         }
-        h := this.CenterHash(cx, cy)
-        if h = this.lastHash {
-            if this.hashSince = 0
-                this.hashSince := A_TickCount
-            if A_TickCount - this.hashSince > 700 {
-                this.blocked := this.blocked | (1 << pickK)
-                this.hashSince := A_TickCount
-                this.lastHash := -1
-                this.lastK := -1
-                this.lastKind := "обход " this.compass
-                this.havePath := false
-                this.ReleaseKeys()
-                return this.lastAngle
-            }
-        } else {
-            this.lastHash := h
-            this.hashSince := A_TickCount
-        }
         this.havePath := true
         this.lastK := pickK
-        this.lastScore := pickScore
-        bestA := pickK * tau / 8
-        this.lastAngle := bestA
-        this.lastDir := this.Arrow(bestA)
+        this.lastHash := this.AheadHash(cx, cy, pickK * tau / 8 + yaw, halfW, halfH)
+        this.hashSince := A_TickCount
+        this.lastAngle := pickK * tau / 8
+        this.lastDir := this.Arrow(this.lastAngle)
         this.lastStopT := 0.4
-        return bestA
+        return this.lastAngle
+    }
+
+    static TurnCardinal(cur, fogK, openK, bestFog, bestOpen) {
+        tryK := Mod(cur + 2, 8)
+        if bestFog > -999999 && fogK != cur
+            return fogK
+        if bestOpen > -999999 && openK != cur
+            return openK
+        return tryK
+    }
+
+    static AheadHash(cx, cy, ang, halfW, halfH) {
+        s := 0
+        t := 0.28
+        while t <= 0.75 {
+            lu := this.SampleLuma(cx + Cos(ang) * t * halfW, cy + Sin(ang) * t * halfH)
+            if lu >= 0
+                s := s * 33 + lu + 1
+            t += 0.12
+        }
+        return s
     }
 
     static Trace(cx, cy, ang, halfW, halfH, &kind, &floorSteps, &stopT) {
