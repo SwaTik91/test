@@ -15,11 +15,12 @@ CoordMode "ToolTip", "Screen"
 ;  Hero Siege. Координаты задаются калибровкой и хранятся как доли окна, поэтому
 ;  перенос на другое разрешение обычно не ломает работу.
 ;
-;  F6        калибровка HP (3 нажатия: старт → левый край → правый край)
+;  F6        калибровка HP (навести курсор, НЕ кликать)
 ;  F7        калибровка MP (так же)
 ;  F8        вкл / выкл автопотов
 ;  F9        цвет и координаты под курсором
 ;  F10       настройки
+;  F11       оверлей в другой угол (не перекрывает HP)
 ;  Shift+Esc выход
 ;
 ;  Калибруй на ПОЛНОМ HP (и MP). Банки в игре повесь на те же клавиши, что в
@@ -37,6 +38,7 @@ F7:: Calib.OnMp()
 F8:: AutoPots.Toggle()
 F9:: Probe.Show()
 F10:: SettingsUi.Show()
+F11:: Overlay.CycleCorner()
 +Esc:: ExitApp()
 
 ; -----------------------------------------------------------------------------
@@ -53,10 +55,11 @@ class Cfg {
     static tickMs := 60
     static colorTol := 90
     static pixelMode := "Slow"
+    static overlayCorner := "br"
     static calibratedHp := false
     static calibratedMp := false
-    static hpX1 := 0.36, hpY1 := 0.93, hpX2 := 0.49, hpY2 := 0.93, hpFill := 0xC42B2B
-    static mpX1 := 0.51, mpY1 := 0.93, mpX2 := 0.64, mpY2 := 0.93, mpFill := 0x2B6EC4
+    static hpX1 := 0.08, hpY1 := 0.055, hpX2 := 0.22, hpY2 := 0.055, hpFill := 0xC42B2B
+    static mpX1 := 0.08, mpY1 := 0.078, mpX2 := 0.22, mpY2 := 0.078, mpFill := 0x2B6EC4
 
     static Load() {
         f := this.file
@@ -68,6 +71,7 @@ class Cfg {
         this.tickMs := SafeInt(IniRead(f, "general", "tickMs", this.tickMs), this.tickMs)
         this.colorTol := SafeInt(IniRead(f, "general", "colorTol", this.colorTol), this.colorTol)
         this.pixelMode := IniRead(f, "general", "pixelMode", this.pixelMode)
+        this.overlayCorner := IniRead(f, "general", "overlayCorner", this.overlayCorner)
         this.calibratedHp := IniRead(f, "hp", "calibrated", "0") = "1"
         this.hpX1 := SafeFloat(IniRead(f, "hp", "x1", this.hpX1), this.hpX1)
         this.hpY1 := SafeFloat(IniRead(f, "hp", "y1", this.hpY1), this.hpY1)
@@ -96,6 +100,7 @@ class Cfg {
         IniWrite(this.tickMs, f, "general", "tickMs")
         IniWrite(this.colorTol, f, "general", "colorTol")
         IniWrite(this.pixelMode, f, "general", "pixelMode")
+        IniWrite(this.overlayCorner, f, "general", "overlayCorner")
         IniWrite(this.calibratedHp ? "1" : "0", f, "hp", "calibrated")
         IniWrite(Format("{:.5f}", this.hpX1), f, "hp", "x1")
         IniWrite(Format("{:.5f}", this.hpY1), f, "hp", "y1")
@@ -282,6 +287,7 @@ class AutoPots {
                 }
             }
         }
+        Calib.FollowCursor()
         Overlay.Refresh()
     }
 
@@ -318,6 +324,7 @@ class AutoPots {
 
 class Calib {
     static mode := ""
+    static tipOn := false
 
     static OnHp() {
         this.Step("hp")
@@ -331,14 +338,15 @@ class Calib {
         label := (which = "hp") ? "HP" : "MP"
         start := (which = "hp") ? "hp1" : "mp1"
         mid := (which = "hp") ? "hp2" : "mp2"
+        keyName := (which = "hp") ? "F6" : "F7"
 
         if this.mode = "" || (this.mode != start && this.mode != mid) {
             if !Game.IsActive() {
-                Overlay.ShowHint("Сначала кликни по окну Hero Siege, потом жми " (which = "hp" ? "F6" : "F7"))
+                Overlay.ShowHint("Кликни по окну Hero Siege, потом " keyName)
                 return
             }
             this.mode := start
-            Overlay.ShowHint(label ": наведи на ЛЕВЫЙ край полоски и нажми ту же клавишу")
+            Overlay.Hide()
             SoundBeep(620, 70)
             return
         }
@@ -357,7 +365,6 @@ class Calib {
                 Cfg.mpX1 := relX, Cfg.mpY1 := relY
             }
             this.mode := mid
-            Overlay.ShowHint(label ": наведи на ПРАВЫЙ край полоски и нажми ту же клавишу")
             SoundBeep(720, 70)
             return
         }
@@ -372,9 +379,43 @@ class Calib {
         }
         Cfg.Save()
         this.mode := ""
+        ToolTip()
+        this.tipOn := false
         fill := (which = "hp") ? Cfg.hpFill : Cfg.mpFill
-        Overlay.ShowHint(label " сохранён, цвет " Col.Hex(fill) "  (калибруй на полном " label ")")
+        Overlay.Place()
+        Overlay.ShowHint(label " сохранён (" Col.Hex(fill) "). Дальше F8 — вкл автопоты")
         SoundBeep(940, 110)
+    }
+
+    ; Подсказка едет за курсором, оверлей в это время спрятан — HP в углу видно.
+    static FollowCursor() {
+        if this.mode = "" {
+            if this.tipOn {
+                ToolTip()
+                this.tipOn := false
+            }
+            return
+        }
+        this.tipOn := true
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(&sx, &sy)
+        CoordMode("Mouse", "Client")
+        MouseGetPos(&cx, &cy)
+        c := 0
+        try c := PixelGetColor(cx, cy, Cfg.pixelMode)
+        wantHp := InStr(this.mode, "hp")
+        onBar := wantHp ? Col.IsRed(c) : Col.IsBlue(c)
+        barName := wantHp ? "КРАСНОЙ HP" : "СИНЕЙ MP"
+        keyName := wantHp ? "F6" : "F7"
+        leftStep := (this.mode = "hp1" || this.mode = "mp1")
+        edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
+        ok := onBar ? ("✓ ты на полоске — жми " keyName) : ("не тот цвет, наведи НА " barName " полоску")
+        msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
+            . "Полоска в ВЕРХНЕМ ЛЕВОМ углу, под именем персонажа.`n"
+            . "Это не банка 1 внизу экрана.`n`n"
+            . edge " край " barName "`n"
+            . ok "`n" Col.Hex(c)
+        ToolTip(msg, sx + 28, sy + 28)
     }
 }
 
@@ -407,6 +448,7 @@ class Overlay {
     static txt := 0
     static hintMsg := ""
     static hintUntil := 0
+    static hidden := false
 
     static Init() {
         g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x20")
@@ -414,23 +456,65 @@ class Overlay {
         g.MarginX := 10
         g.MarginY := 8
         g.SetFont("s10 c00E676", "Segoe UI")
-        this.txt := g.Add("Text", "w300 h70", "Hero Siege AutoPots`nвыкл")
-        g.Show("x16 y16 NoActivate")
-        WinSetTransparent(200, g.Hwnd)
+        this.txt := g.Add("Text", "w300 h70", "Hero Siege AutoPots`nвыкл  |  F11 двигает панель")
         this.g := g
+        this.Place()
+        WinSetTransparent(190, g.Hwnd)
+    }
+
+    static Place() {
+        if !this.g
+            return
+        MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
+        w := 320, h := 96, pad := 18
+        switch Cfg.overlayCorner {
+            case "tl": x := l + pad, y := t + pad
+            case "tr": x := r - w - pad, y := t + pad
+            case "bl": x := l + pad, y := b - h - pad
+            default:   x := r - w - pad, y := b - h - pad
+        }
+        this.g.Show("x" x " y" y " NoActivate")
+        this.hidden := false
+    }
+
+    static Hide() {
+        if this.g {
+            this.g.Hide()
+            this.hidden := true
+        }
+    }
+
+    static CycleCorner() {
+        order := ["br", "bl", "tr", "tl"]
+        i := 1
+        for idx, c in order {
+            if c = Cfg.overlayCorner
+                i := idx
+        }
+        Cfg.overlayCorner := order[i = order.Length ? 1 : i + 1]
+        Cfg.Save()
+        this.Place()
+        names := Map("br", "низ-право", "bl", "низ-лево", "tr", "верх-право", "tl", "верх-лево")
+        this.ShowHint("Панель: " names[Cfg.overlayCorner] "  (F11 — ещё раз)")
     }
 
     ; Имя ShowHint, не Hint: в AHK v2 регистр не различается,
     ; поэтому свойство hint и метод Hint() конфликтовали (Property is read-only).
     static ShowHint(msg) {
         this.hintMsg := msg
-        this.hintUntil := A_TickCount + 3500
+        this.hintUntil := A_TickCount + 4000
         this.Refresh()
     }
 
     static Refresh() {
         if !this.txt
             return
+        if Calib.mode != "" {
+            this.Hide()
+            return
+        }
+        if this.hidden
+            this.Place()
         if this.hintMsg != "" && A_TickCount < this.hintUntil {
             this.txt.Value := this.hintMsg
             return
@@ -527,6 +611,7 @@ class TrayMenu {
         A_TrayMenu.Add("Калибровка HP (F6)", (*) => Calib.OnHp())
         A_TrayMenu.Add("Калибровка MP (F7)", (*) => Calib.OnMp())
         A_TrayMenu.Add("Настройки (F10)", (*) => SettingsUi.Show())
+        A_TrayMenu.Add("Оверлей в другой угол (F11)", (*) => Overlay.CycleCorner())
         A_TrayMenu.Add()
         A_TrayMenu.Add("Выход (Shift+Esc)", (*) => ExitApp())
         A_TrayMenu.Default := "Автопоты вкл/выкл (F8)"
