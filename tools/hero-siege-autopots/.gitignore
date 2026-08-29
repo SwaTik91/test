@@ -1,1 +1,7 @@
 autopots.ini
+farm.json
+python-farm/farm.json
+__pycache__/
+python-farm/__pycache__/
+.venv/
+*.pyc
