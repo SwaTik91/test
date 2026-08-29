@@ -1,5 +1,7 @@
 # Hero Siege — автопоты (AHK) + фарм по миникарте (Python)
 
+С другого компьютера: пошаговая установка — **[INSTALL.md](INSTALL.md)**.
+
 Рабочая версия **пот**: AutoHotkey смотрит HP/MP (DXGI) и жмёт банки, только пока активно окно Hero Siege.
 
 **Фарм случайных карт** — отдельный Python: снимок миникарты, белые стены, A* к туману, WASD. См. [`python-farm/README.md`](python-farm/README.md). В AHK ходьбу (F4) не включай, пока запущен python.
