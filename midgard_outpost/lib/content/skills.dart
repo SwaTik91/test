@@ -42,11 +42,12 @@ class SkillsCatalog {
       description: 'Дальняя стрела с небольшим отбрасыванием.',
     ),
     SkillDef(
-      id: 'trap',
+      id: 'concentrate',
       classId: HeroClassId.archer,
       kind: SkillKind.auto,
-      name: 'Ловушка',
-      description: 'Ставится под врагом, замедляет цель.',
+      name: 'Сосредоточиться',
+      description:
+          'На 20 с: +2/+3/+4… ко всем статам по рангу умения (ранг+1).',
     ),
     SkillDef(
       id: 'eagle_eye',

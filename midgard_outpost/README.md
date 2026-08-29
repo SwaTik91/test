@@ -4,6 +4,12 @@
 
 Полная дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-design.md)
 
+## UI Redesign Final (Living Stage + Side Dock)
+
+Hub: тёмный **Living Stage + Side Dock** — полноэкранный town bg, герой на сцене, панель справа (без оверлея на сцену), акцент `#E69526`. Забег: одна полоса земли на 72% высоты, читаемый масштаб акторов (герой ~30% H, мобы ~18–24%, боссы ~40–48%).
+
+Спека: [docs/superpowers/specs/2026-08-08-midgard-ui-art-direction-design.md](../docs/superpowers/specs/2026-08-08-midgard-ui-art-direction-design.md). План: [docs/superpowers/plans/2026-08-08-midgard-ui-redesign-final.md](../docs/superpowers/plans/2026-08-08-midgard-ui-redesign-final.md).
+
 ## Как запустить
 
 ```bash
@@ -195,6 +201,18 @@ Wave 2 добавляет покадровые PNG-анимации для за�
 5. Визуально: `flutter run -d linux` или превью `/opt/cursor/artifacts/art-wave2-collage.png` (strips: archer run, goblin walk, chest open, VFX slash).
 
 План и таски: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-wave2.md). Дизайн-спека: [docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md](../docs/superpowers/specs/2026-08-07-midgard-outpost-art-wave2-design.md).
+
+## Art Hub Canon (импорт канон-арта)
+
+Источники PNG: [docs/superpowers/art-canon/](../docs/superpowers/art-canon/). Скрипт ресайза и копирования в игровые ассеты:
+
+```bash
+cd midgard_outpost && python3 tool/import_art_canon.py
+```
+
+Опции: `--canon` (путь к канону), `--out` (целевая папка `assets/images/`). После импорта — `flutter test test/art/`.
+
+План: [docs/superpowers/plans/2026-08-07-midgard-outpost-art-hub-canon.md](../docs/superpowers/plans/2026-08-07-midgard-outpost-art-hub-canon.md).
 
 ## Витрина сторов (App Gallery / RuStore)
 

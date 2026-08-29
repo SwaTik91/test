@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -16,16 +16,21 @@ import '../core/ids.dart';
 import '../progress/hero_progress.dart';
 import 'combat_math.dart';
 import 'components/chest_component.dart';
+import 'components/damage_number_component.dart';
 import 'components/monster_component.dart';
+import 'components/obstacle_component.dart';
+import 'components/pit_component.dart';
 import 'components/player_component.dart';
 import 'components/projectile_component.dart';
 import 'components/vfx_component.dart';
+import 'run_layout.dart';
 import 'run_rewards.dart';
 import 'run_state.dart';
 import 'run_upgrade_effects.dart';
 import 'upgrade_offer_service.dart';
 import 'systems/auto_skill_system.dart';
 import 'systems/spawn_system.dart' hide Biome;
+import 'systems/terrain_system.dart';
 
 class MidgardRunGame extends FlameGame with KeyboardEvents {
   MidgardRunGame({
@@ -33,15 +38,13 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     required this.onDeath,
     required RunState initialRunState,
     this.onRunStateChanged,
-    Random? rng,
+    math.Random? rng,
   }) : _runState = initialRunState,
        ownedRunUpgradeIds = {...initialRunState.ownedUpgradeIds},
-       _rng = rng ?? Random();
+       _rng = rng ?? math.Random();
 
   static const String hudOverlayKey = 'hud';
   static const String upgradePickerOverlayKey = 'upgradePicker';
-  static const double _groundY = 330;
-  static const double _tileWidth = 360;
   static const double _attackInterval = 0.75;
   static const double _collisionInterval = 0.65;
 
@@ -51,21 +54,134 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   final Set<String> ownedRunUpgradeIds;
   final RunRewardsAccumulator rewards = RunRewardsAccumulator();
   final ValueNotifier<int> hudRevision = ValueNotifier<int>(0);
-  final Random _rng;
+  final math.Random _rng;
 
   late final PlayerComponent player;
   late final AutoSkillSystem autoSkillSystem;
   late final String autoSkillName;
 
+  /// False until [onLoad] finishes creating [player] and systems.
+  /// HUD overlays must check this — they can mount before [onLoad] completes.
+  bool isRunReady = false;
+
+  /// Debug/test breadcrumb for where [onLoad] is / last failed.
+  String loadStage = 'constructed';
+  Object? loadError;
+
   final List<SpriteComponent> _groundTiles = [];
+  Sprite? _groundSprite;
+  final TerrainSystem terrain = TerrainSystem();
+  final Set<double> _spawnedHazardXs = {};
+  final List<PitComponent> _pits = [];
+  final List<ObstacleComponent> _obstacles = [];
+  double _lastSolidX = PlayerComponent.startX;
+  double _pitIFrames = 0;
+
+  @visibleForTesting
+  List<SpriteComponent> get groundTilesForTest => _groundTiles;
+
+  @visibleForTesting
+  bool groundCoversVisibleSpan({double? viewportWidth}) {
+    if (_groundTiles.isEmpty) {
+      return false;
+    }
+    final width = viewportWidth ?? _viewportWidth;
+    final visible = _visibleWorldHorizontalSpan(width);
+    final minX = _groundTiles
+        .map((tile) => tile.position.x)
+        .reduce(math.min);
+    final maxX = _groundTiles
+        .map((tile) => tile.position.x + tile.size.x)
+        .reduce(math.max);
+    return minX <= visible.left && maxX >= visible.right;
+  }
+
+  @visibleForTesting
+  bool groundCoversViewportBottom({double? viewportHeight}) {
+    if (_groundTiles.isEmpty) {
+      return false;
+    }
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    if (height <= 0) {
+      return false;
+    }
+    final maxBottom = _groundTiles
+        .map((tile) => tile.position.y + tile.size.y)
+        .reduce(math.max);
+    final viewportBottomY = camera.viewfinder.globalToLocal(
+      Vector2(_groundCameraCenterX, maxBottom),
+    ).y;
+    return viewportBottomY >= height - 0.5;
+  }
+
+  @visibleForTesting
+  bool backdropCoversViewport({double? viewportWidth, double? viewportHeight}) {
+    final background = _biomeBackground;
+    if (background == null) {
+      return false;
+    }
+    final width = viewportWidth ?? _viewportWidth;
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    if (width <= 0 || height <= 0) {
+      return false;
+    }
+    final bounds = _layout.backdropViewportBounds(
+      size: background.size,
+      viewportWidth: width,
+      viewportHeight: height,
+    );
+    return bounds.left <= 0 &&
+        bounds.top <= 0 &&
+        bounds.right >= width &&
+        bounds.bottom >= height;
+  }
+
+  @visibleForTesting
+  bool leftEdgeCoveredAtStart({double? viewportWidth, double? viewportHeight}) {
+    final width = viewportWidth ?? _viewportWidth;
+    final height = viewportHeight ?? camera.viewport.virtualSize.y;
+    return groundCoversVisibleSpan(viewportWidth: width) &&
+        backdropCoversViewport(viewportWidth: width, viewportHeight: height);
+  }
+
+  @visibleForTesting
+  bool groundTilesAreContiguous() {
+    if (_groundTiles.length < 2) {
+      return true;
+    }
+    final tiles = List<SpriteComponent>.from(_groundTiles)
+      ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    for (var i = 0; i < tiles.length - 1; i++) {
+      final gap = tiles[i + 1].position.x - (tiles[i].position.x + tiles[i].size.x);
+      if (gap.abs() > 0.5) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @visibleForTesting
+  SpriteComponent? get biomeBackgroundForTest => _biomeBackground;
+
+  @visibleForTesting
+  void registerMonsterForTest(MonsterComponent monster) {
+    _monsters.add(monster);
+  }
   final List<MonsterComponent> _monsters = [];
   final List<ChestComponent> _chests = [];
 
   late final Sprite _projectileSprite;
-  late final Sprite _bgFieldsSprite;
-  late final Sprite _bgForestSprite;
+  late final Sprite _doubleStrafeSprite;
+  late final Sprite _windArrowSprite;
+  late final Sprite _arrowShowerSprite;
+  PositionComponent? _concentrateAura;
+  late final Sprite _bgFieldsSkySprite;
+  late final Sprite _bgForestSkySprite;
   SpriteComponent? _biomeBackground;
   Biome _displayedBiome = Biome.fields;
+  RunLayout _layout = RunLayout(RunLayout.referenceHeight);
+  double _concentrateTimer = 0;
+  int _concentrateBonus = 0;
 
   RunState _runState;
   List<RunUpgradeDef> _pendingUpgradeOffers = const [];
@@ -83,18 +199,20 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   double _jumpShieldTimer = 0;
   bool _secondWindConsumed = false;
 
-  double get distance => player.position.x;
+  double get distance => isRunReady ? player.position.x : 0;
 
   Biome get biome => SpawnSystem.biomeAt(distance);
 
   String get biomeLabel => biome.label;
 
-  double get hpFraction => player.currentHp / player.maxHp;
+  double get hpFraction =>
+      isRunReady ? player.currentHp / player.maxHp : 1;
 
-  double get spFraction => player.currentSp / player.maxSp;
+  double get spFraction =>
+      isRunReady ? player.currentSp / player.maxSp : 1;
 
   double get ultimateCooldownRemaining =>
-      autoSkillSystem.ultimateCooldownRemaining;
+      isRunReady ? autoSkillSystem.ultimateCooldownRemaining : 0;
 
   RunRewards get currentRewards => rewards.toRewards();
 
@@ -107,54 +225,170 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   @override
   FutureOr<void> onLoad() async {
-    await super.onLoad();
+    try {
+      loadStage = 'super';
+      await super.onLoad();
 
-    autoSkillName = _autoSkillNameForHero();
+      loadStage = 'autoSkillName';
+      autoSkillName = _autoSkillNameForHero();
 
-    final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
-    _bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
-    _bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
-    _projectileSprite = await ArtAtlas.loadSprite(
-      ArtAtlas.projectilePath(hero.classId),
-    );
+      loadStage = 'sprites';
+      final groundSprite = await ArtAtlas.loadSprite(ArtAtlas.groundTile);
+      final bgFieldsSprite = await ArtAtlas.loadSprite(ArtAtlas.bgFields);
+      final bgForestSprite = await ArtAtlas.loadSprite(ArtAtlas.bgForest);
+      _bgFieldsSkySprite = _skyBackdropCrop(bgFieldsSprite);
+      _bgForestSkySprite = _skyBackdropCrop(bgForestSprite);
+      _projectileSprite = await ArtAtlas.loadSprite(
+        ArtAtlas.projectilePath(hero.classId),
+      );
+      _doubleStrafeSprite = await ArtAtlas.loadSprite(ArtAtlas.doubleStrafeArrow);
+      _windArrowSprite = await ArtAtlas.loadSprite(ArtAtlas.windArrow);
+      _arrowShowerSprite = await ArtAtlas.loadSprite(ArtAtlas.arrowShowerArrow);
 
-    _biomeBackground = SpriteComponent(
-      sprite: _bgFieldsSprite,
-      anchor: Anchor.center,
-    );
-    camera.backdrop.add(_biomeBackground!);
-    _syncBiomeBackgroundLayout();
-    _displayedBiome = biome;
+      loadStage = 'layout';
+      _layout = _currentLayout();
 
-    _addGroundTiles(groundSprite);
+      loadStage = 'backdrop';
+      _biomeBackground = SpriteComponent(
+        sprite: _bgFieldsSkySprite,
+        anchor: Anchor.bottomLeft,
+      );
+      ArtAtlas.applyNearestNeighbor(_biomeBackground!);
+      camera.backdrop.add(_biomeBackground!);
+      _syncBiomeBackgroundLayout();
+      // Do not read [biome]/[distance] before [player] exists.
+      _displayedBiome = SpawnSystem.biomeAt(0);
 
-    player = await PlayerComponent.create(
-      classId: hero.classId,
-      maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
-      maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
-      moveSpeed: CombatMath.moveSpeed(
-        hero,
-        ownedUpgradeIds: ownedRunUpgradeIds,
-      ),
-      groundY: _groundY,
-    );
-    autoSkillSystem = AutoSkillSystem(
-      classId: hero.classId,
-      ranks: hero.skillRanks,
-      upgrades: ownedRunUpgradeIds,
-      maxSp: player.maxSp,
-    );
+      loadStage = 'ground';
+      _addGroundTiles(groundSprite);
 
-    world.add(player);
-    _spawnMonster();
-    _spawnMonster();
-    camera.follow(player, horizontalOnly: true, snap: true);
+      loadStage = 'player';
+      player = await PlayerComponent.create(
+        classId: hero.classId,
+        maxHp: CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+        maxSp: CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+        moveSpeed: CombatMath.moveSpeed(
+          hero,
+          ownedUpgradeIds: ownedRunUpgradeIds,
+        ),
+        groundY: _layout.groundY,
+        size: _layout.playerSize,
+      );
+      autoSkillSystem = AutoSkillSystem(
+        classId: hero.classId,
+        ranks: hero.skillRanks,
+        upgrades: ownedRunUpgradeIds,
+        maxSp: player.maxSp,
+      );
+
+      player.floorYAt = (x, y) => terrain.floorY(
+            x: x,
+            y: y,
+            groundY: _layout.groundY,
+          );
+
+      loadStage = 'world';
+      world.add(player);
+      _spawnHazardsAhead();
+      _spawnMonster();
+      _spawnMonster();
+      _configureCameraFollow();
+
+      loadStage = 'hud';
+      isRunReady = true;
+      _applyLayout();
+      overlays.add(hudOverlayKey);
+      loadStage = 'ready';
+    } catch (e, st) {
+      loadError = e;
+      loadStage = 'error:$loadStage';
+      Error.throwWithStackTrace(e, st);
+    }
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    _applyLayout();
+  }
+
+  RunLayout _currentLayout() {
+    final height = camera.viewport.virtualSize.y;
+    return RunLayout(
+      height > 0 ? height : RunLayout.referenceHeight,
+    );
+  }
+
+  double get _viewportWidth {
+    final width = camera.viewport.virtualSize.x;
+    return width > 0 ? width : 1280;
+  }
+
+  double get _groundCameraCenterX =>
+      isRunReady ? player.position.x : PlayerComponent.startX;
+
+  ({double left, double right}) _visibleWorldHorizontalSpan(double viewportWidth) {
+    if (isRunReady && camera.parent != null) {
+      final rect = camera.visibleWorldRect;
+      return (left: rect.left, right: rect.right);
+    }
+    final centerX = _groundCameraCenterX;
+    return (
+      left: centerX - viewportWidth / 2,
+      right: centerX + viewportWidth / 2,
+    );
+  }
+
+  ({double left, double right}) _groundSpanForLayout() {
+    if (isRunReady && camera.parent != null) {
+      return _layout.groundWorldSpanFromVisibleRect(
+        visibleWorldRect: camera.visibleWorldRect,
+      );
+    }
+    return _layout.groundWorldSpan(
+      cameraCenterX: _groundCameraCenterX,
+      viewportWidth: _viewportWidth,
+      extraLeftMarginTiles: 1,
+    );
+  }
+
+  Sprite _skyBackdropCrop(Sprite full) {
+    final skyHeight = full.srcSize.y * RunLayout.backdropSkyFraction;
+    return Sprite(
+      full.image,
+      srcPosition: Vector2.zero(),
+      srcSize: Vector2(full.srcSize.x, skyHeight),
+    );
+  }
+
+  void _applyLayout() {
+    _layout = _currentLayout();
     _syncBiomeBackgroundLayout();
+    _syncGroundTilesLayout();
+    _syncCameraLayout();
+    if (isRunReady) {
+      player
+        ..setGroundY(_layout.groundY)
+        ..setSize(_layout.playerSize);
+      _syncHazardLayout();
+    }
+  }
+
+  void _configureCameraFollow() {
+    camera.viewfinder.anchor = Anchor(0.5, RunLayout.groundTopFraction);
+    camera.follow(player, horizontalOnly: true, snap: true);
+    _syncCameraLayout();
+  }
+
+  void _syncCameraLayout() {
+    if (!isRunReady) {
+      return;
+    }
+    camera.viewfinder.anchor = Anchor(0.5, RunLayout.groundTopFraction);
+    camera.viewfinder.position = Vector2(
+      player.position.x,
+      _layout.groundY,
+    );
   }
 
   void _syncBiomeBackgroundLayout() {
@@ -166,19 +400,69 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (viewportSize.x <= 0 || viewportSize.y <= 0) {
       return;
     }
-    const bgBottomCrop = 32.0;
+    final coverSize = _layout.backdropCoverSize(
+      regionWidth: viewportSize.x,
+      regionHeight: viewportSize.y,
+      srcSize: background.sprite!.srcSize,
+    );
     background
-      ..size = Vector2(viewportSize.x, viewportSize.y + bgBottomCrop)
-      ..position = Vector2(
-        viewportSize.x / 2,
-        viewportSize.y / 2 - bgBottomCrop / 2,
+      ..size = coverSize
+      ..position = Vector2(-RunLayout.backdropBleedPx, viewportSize.y);
+  }
+
+  void _syncGroundTilesLayout() {
+    _layoutGroundTilePositions();
+  }
+
+  void _layoutGroundTilePositions() {
+    final groundY = _layout.groundY;
+    final tileWidth = _layout.groundTileWidth;
+    var tileHeight = _layout.groundTileHeight;
+    if (isRunReady && camera.parent != null) {
+      final visibleBottom = camera.visibleWorldRect.bottom;
+      tileHeight = math.max(
+        tileHeight,
+        visibleBottom - groundY + RunLayout.groundBottomBleedPx,
       );
+    }
+    final span = _groundSpanForLayout();
+    final needed = _layout.groundTileCountForSpan(
+      worldLeft: span.left,
+      worldRight: span.right,
+    );
+    _ensureGroundTileCount(needed);
+
+    final startX = _layout.groundTileStartX(span.left);
+    final tiles = List<SpriteComponent>.from(_groundTiles)
+      ..sort((a, b) => a.position.x.compareTo(b.position.x));
+    for (var i = 0; i < tiles.length; i++) {
+      tiles[i]
+        ..position = Vector2(startX + i * tileWidth, groundY)
+        ..size = Vector2(tileWidth, tileHeight);
+    }
+  }
+
+  void _ensureGroundTileCount(int needed) {
+    final sprite = _groundSprite;
+    if (sprite == null || _groundTiles.length >= needed) {
+      return;
+    }
+    while (_groundTiles.length < needed) {
+      final tile = SpriteComponent(
+        sprite: sprite,
+        anchor: Anchor.topLeft,
+        priority: -2,
+      );
+      tile.paint.filterQuality = FilterQuality.medium;
+      _groundTiles.add(tile);
+      world.add(tile);
+    }
   }
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (_finished) {
+    if (_finished || !isRunReady) {
       return;
     }
 
@@ -186,8 +470,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _collisionTimer += dt;
     _hudTimer += dt;
 
-    _recycleGroundTiles();
+    _syncGroundTilesLayout();
     _syncBiomeIfNeeded();
+    _spawnHazardsAhead();
+    _resolveTerrain(dt);
     _spawnAheadIfNeeded();
     _spawnMilestonesIfNeeded();
     _handleAutoSkills(dt);
@@ -196,6 +482,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _handleMonsterContact();
     _collectReadyKills();
     _tickPlayerUpgradeTimers(dt);
+    _tickConcentrate(dt);
     _applyPlayerRegen(dt);
     _publishHudIfNeeded();
   }
@@ -249,9 +536,20 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void tryCastUltimate() {
+    final skill = SkillsCatalog.forClass(
+      hero.classId,
+    ).firstWhere((skill) => skill.kind == SkillKind.ultimate);
+    tryCastSkill(skill.id);
+  }
+
+  void tryCastSkill(String skillId) {
+    if (!isRunReady || _finished) {
+      return;
+    }
     autoSkillSystem.sp = player.currentSp;
     final enemyDistances = _targetDistances();
-    final event = autoSkillSystem.tryCastUltimate(
+    final event = autoSkillSystem.tryCastSkill(
+      skillId,
       enemiesInRange: enemyDistances.length,
       enemyDistances: enemyDistances,
     );
@@ -262,14 +560,21 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     _publishHud();
   }
 
+  double skillCooldownRemaining(String skillId) =>
+      autoSkillSystem.cooldownRemaining(skillId);
+
+  List<SkillDef> get castableSkills => autoSkillSystem.castableSkills;
+
+  int skillRank(String skillId) => hero.skillRanks[skillId] ?? 0;
+
   String _autoSkillNameForHero() {
-    final autoSkills = SkillsCatalog.forClass(
+    final castable = SkillsCatalog.forClass(
       hero.classId,
-    ).where((skill) => skill.kind == SkillKind.auto);
-    return autoSkills
+    ).where((skill) => skill.kind != SkillKind.passive);
+    return castable
         .firstWhere(
           (skill) => (hero.skillRanks[skill.id] ?? 0) > 0,
-          orElse: () => autoSkills.first,
+          orElse: () => castable.first,
         )
         .name;
   }
@@ -280,15 +585,27 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
   }
 
   void _addGroundTiles(Sprite groundSprite) {
-    for (var i = 0; i < 8; i += 1) {
+    _groundSprite = groundSprite;
+    final span = _layout.groundWorldSpan(
+      cameraCenterX: PlayerComponent.startX,
+      viewportWidth: _viewportWidth,
+      extraLeftMarginTiles: 1,
+    );
+    final needed = _layout.groundTileCountForSpan(
+      worldLeft: span.left,
+      worldRight: span.right,
+    );
+    for (var i = 0; i < needed; i++) {
       final tile = SpriteComponent(
         sprite: groundSprite,
-        position: Vector2(i * _tileWidth, _groundY),
-        size: Vector2(_tileWidth, 72),
+        anchor: Anchor.topLeft,
+        priority: -2,
       );
+      tile.paint.filterQuality = FilterQuality.medium;
       _groundTiles.add(tile);
       world.add(tile);
     }
+    _layoutGroundTilePositions();
   }
 
   void _syncBiomeIfNeeded() {
@@ -298,17 +615,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
     _displayedBiome = currentBiome;
     _biomeBackground?.sprite = switch (currentBiome) {
-      Biome.fields => _bgFieldsSprite,
-      Biome.forest => _bgForestSprite,
+      Biome.fields => _bgFieldsSkySprite,
+      Biome.forest => _bgForestSkySprite,
     };
-  }
-
-  void _recycleGroundTiles() {
-    for (final tile in _groundTiles) {
-      if (tile.position.x + tile.size.x < player.position.x - 900) {
-        tile.position.x += _groundTiles.length * _tileWidth;
-      }
-    }
+    _syncBiomeBackgroundLayout();
   }
 
   void _spawnAheadIfNeeded() {
@@ -333,15 +643,99 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     }
   }
 
+  void _spawnHazardsAhead() {
+    terrain.ensureUntil(player.position.x + 920);
+    for (final feature in terrain.features) {
+      if (!_spawnedHazardXs.add(feature.startX)) {
+        continue;
+      }
+      if (feature.isPit) {
+        final pit = PitComponent(
+          startX: feature.startX,
+          groundY: _layout.groundY,
+          width: feature.width,
+          depth: math.max(TerrainSystem.pitDepth, _layout.groundTileHeight),
+        );
+        _pits.add(pit);
+        world.add(pit);
+      } else {
+        final obstacle = ObstacleComponent(
+          kind: feature.kind,
+          groundY: _layout.groundY,
+          feature: feature,
+        );
+        _obstacles.add(obstacle);
+        world.add(obstacle);
+      }
+    }
+  }
+
+  void _syncHazardLayout() {
+    final groundY = _layout.groundY;
+    final pitDepth = math.max(TerrainSystem.pitDepth, _layout.groundTileHeight);
+    for (final pit in _pits) {
+      pit.position.y = groundY;
+      pit.size.y = pitDepth;
+    }
+    for (final obstacle in _obstacles) {
+      obstacle.position.y = groundY;
+    }
+  }
+
+  void _resolveTerrain(double dt) {
+    if (_pitIFrames > 0) {
+      _pitIFrames = (_pitIFrames - dt).clamp(0, double.infinity).toDouble();
+    }
+
+    final groundY = _layout.groundY;
+    if (player.isGrounded && terrain.pitAt(player.position.x) == null) {
+      _lastSolidX = player.position.x;
+    }
+
+    final bodyHalf = player.terrainBodyHalfWidth;
+    final block = terrain.blockingObstacle(
+      x: player.position.x,
+      y: player.position.y,
+      halfWidth: bodyHalf,
+      groundY: groundY,
+    );
+    if (block != null) {
+      if (player.position.x < block.centerX) {
+        player.position.x = block.startX - bodyHalf;
+      } else {
+        player.position.x = block.endX + bodyHalf;
+      }
+    }
+
+    if (player.position.y < groundY + TerrainSystem.fallRescueDepth) {
+      return;
+    }
+    if (_pitIFrames <= 0) {
+      _damagePlayer(TerrainSystem.pitDamage(player.maxHp));
+      _pitIFrames = 0.6;
+      _publishHud();
+    }
+    player.landAt(
+      _lastSolidX.clamp(0, player.position.x).toDouble(),
+      groundY,
+    );
+    if (player.isDead) {
+      _finishRun();
+    }
+  }
+
   void _spawnChest(double x) {
-    ChestComponent.create(position: Vector2(x, _groundY - 34)).then((chest) {
+    ChestComponent.create(
+      position: Vector2(terrain.solidXNear(x), _layout.groundY),
+      size: _layout.chestSize,
+    ).then((chest) {
       _chests.add(chest);
       world.add(chest);
     });
   }
 
   void _spawnMonster({double? spawnX, bool isBoss = false}) {
-    final x = spawnX ?? _nextSpawnX;
+    final x = terrain.solidXNear(spawnX ?? _nextSpawnX);
     final monsterBiome = SpawnSystem.biomeAt(x);
     final spec = MonstersCatalog.forDistance(
       distancePx: x,
@@ -349,12 +743,14 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       isBoss: isBoss,
     );
     if (!isBoss) {
-      _nextSpawnX += 430;
+      _nextSpawnX += _layout.mobSpawnSpacing;
     }
+    final mobSize = _layout.mobSize(isBoss: spec.isBoss);
     MonsterComponent.create(
+      kind: spec.kind,
       isBoss: spec.isBoss,
       target: player,
-      position: Vector2(x, _groundY - spec.height),
+      position: Vector2(x, _layout.groundY),
       maxHp: _monsterMaxHp(spec),
       touchDamage: _monsterTouchDamage(spec),
       baseXp: spec.baseXp,
@@ -363,7 +759,10 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       tempXp: spec.tempXp,
       upgradeDropChance: _upgradeDropChanceFor(spec),
       moveSpeed: spec.moveSpeed,
-      size: Vector2(spec.width, spec.height),
+      attackRange: spec.attackRange,
+      attackInterval: spec.attackInterval,
+      onRangedAttack: spec.attackRange > 0 ? _onMonsterRangedAttack : null,
+      size: mobSize,
     ).then((monster) {
       _monsters.add(monster);
       world.add(monster);
@@ -417,57 +816,210 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       return;
     }
 
-    _damageMonster(
-      target,
-      CombatMath.basicAttackDamage(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+    player.playCastAnimation();
+    final roll = CombatMath.rollBasicAttackDamage(
+      hero,
+      ownedUpgradeIds: ownedRunUpgradeIds,
+      temporaryAllStatsBonus: _concentrateBonus,
+      rng: _rng,
     );
+    _spawnBasicAttackVisual(target, roll);
+  }
+
+  void _spawnBasicAttackVisual(MonsterComponent target, DamageRoll roll) {
+    final start = player.center;
+    final end = target.center;
+    final isRanged = hero.classId != HeroClassId.paladin;
+    if (isRanged) {
+      world.add(
+        ProjectileComponent(
+          sprite: _projectileSprite,
+          start: start,
+          end: end,
+          duration: 0.22,
+          visualHeight: ProjectileComponent.basicVisualHeight,
+          onArrived: () {
+            if (!target.isMounted || !target.isAlive) {
+              return;
+            }
+            _damageMonster(
+              target,
+              roll.amount,
+              isCrit: roll.isCrit,
+            );
+            _tryCollectKill(target);
+          },
+        )..paint.filterQuality = FilterQuality.low,
+      );
+      return;
+    }
+
+    _spawnSkillVfx(end, size: Vector2.all(72));
+    _damageMonster(target, roll.amount, isCrit: roll.isCrit);
     _tryCollectKill(target);
   }
 
   void _handleAutoSkills(double dt) {
+    // Manual skills only: tick CD + SP regen, never auto-cast.
     autoSkillSystem.sp = player.currentSp;
-    final enemyDistances = _targetDistances();
-    final events = autoSkillSystem.tick(
-      dt,
-      enemiesInRange: enemyDistances.length,
-      enemyDistances: enemyDistances,
-    );
+    autoSkillSystem.tick(dt, enemiesInRange: 0);
     player.setSp(autoSkillSystem.sp);
-
-    if (events.isEmpty) {
-      return;
-    }
-
-    for (final event in events) {
-      _applySkillEvent(event);
-    }
-    _publishHud();
   }
 
   void _applySkillEvent(SkillCastEvent event) {
     player.playCastAnimation();
+    if (event.skillId == 'concentrate') {
+      _activateConcentrate();
+      return;
+    }
     final targets = _targetsInRange(
       event.range,
     ).take(event.targetCount).toList(growable: false);
     if (targets.isEmpty) {
-      _spawnSkillVfx(player.center);
-    } else {
-      for (final target in targets) {
-        _spawnSkillVisual(event, target);
-        _spawnSkillVfx(target.center);
-        _damageMonster(target, event.damage, skillId: event.skillId);
-        _tryCollectKill(target);
-      }
+      _spawnSkillVfx(player.center, size: Vector2.all(96));
+      return;
+    }
+    if (event.skillId == 'arrow_shower') {
+      _spawnArrowShower(event, targets);
+      return;
+    }
+    for (final target in targets) {
+      final roll = CombatMath.rollSkillDamage(
+        event.damage,
+        critChanceValue: CombatMath.critChance(
+          hero,
+          ownedUpgradeIds: ownedRunUpgradeIds,
+          temporaryAllStatsBonus: _concentrateBonus,
+        ),
+        rng: _rng,
+      );
+      _spawnSkillVisual(event, target, roll);
     }
   }
 
-  void _damageMonster(MonsterComponent target, int amount, {String? skillId}) {
+  void _activateConcentrate() {
+    final rank = skillRank('concentrate');
+    _concentrateBonus = AutoSkillSystem.concentrateStatBonus(rank);
+    _concentrateTimer = 20;
+    _syncPlayerUpgradeStats();
+    _ensureConcentrateAura();
+    _spawnSkillVfx(player.center, size: Vector2.all(110));
+  }
+
+  void _tickConcentrate(double dt) {
+    if (_concentrateTimer <= 0) {
+      return;
+    }
+    _concentrateTimer = (_concentrateTimer - dt).clamp(0, 20).toDouble();
+    if (_concentrateAura != null && _concentrateAura!.isMounted) {
+      _concentrateAura!.position = player.center;
+    }
+    if (_concentrateTimer <= 0 && _concentrateBonus > 0) {
+      _concentrateBonus = 0;
+      _removeConcentrateAura();
+      _syncPlayerUpgradeStats();
+    }
+  }
+
+  void _ensureConcentrateAura() {
+    if (_concentrateAura != null && _concentrateAura!.isMounted) {
+      return;
+    }
+    final aura = _ConcentrateAuraComponent(
+      position: player.center,
+      priority: player.priority - 1,
+    );
+    _concentrateAura = aura;
+    world.add(aura);
+  }
+
+  void _removeConcentrateAura() {
+    _concentrateAura?.removeFromParent();
+    _concentrateAura = null;
+  }
+
+  void _spawnArrowShower(SkillCastEvent event, List<MonsterComponent> targets) {
+    final roll = CombatMath.rollSkillDamage(
+      event.damage,
+      critChanceValue: CombatMath.critChance(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
+      rng: _rng,
+    );
+    const rainCount = 18;
+    var shot = 0;
+    for (final target in targets) {
+      final impactDelay = 0.28 + _rng.nextDouble() * 0.18;
+      _spawnFallingArrow(
+        target: target,
+        duration: impactDelay,
+        onHit: () {
+          if (!target.isMounted || !target.isAlive) {
+            return;
+          }
+          _spawnSkillVfx(target.center, size: Vector2.all(100));
+          _damageMonster(
+            target,
+            roll.amount,
+            skillId: event.skillId,
+            isCrit: roll.isCrit,
+          );
+          _tryCollectKill(target);
+        },
+      );
+      shot += 1;
+    }
+    while (shot < rainCount) {
+      final target = targets[shot % targets.length];
+      final impactDelay = 0.22 + _rng.nextDouble() * 0.35;
+      _spawnFallingArrow(target: target, duration: impactDelay);
+      shot += 1;
+    }
+  }
+
+  void _spawnFallingArrow({
+    required MonsterComponent target,
+    required double duration,
+    void Function()? onHit,
+  }) {
+    final end = target.center.clone()
+      ..x += (_rng.nextDouble() - 0.5) * 28
+      ..y -= target.size.y * 0.15;
+    final start = Vector2(
+      end.x + (_rng.nextDouble() - 0.5) * 40,
+      end.y - (180 + _rng.nextDouble() * 80),
+    );
+    world.add(
+      ProjectileComponent(
+        sprite: _arrowShowerSprite,
+        start: start,
+        end: end,
+        duration: duration,
+        visualHeight: 56,
+        onArrived: onHit,
+      )..paint.filterQuality = FilterQuality.medium,
+    );
+  }
+
+  void _damageMonster(
+    MonsterComponent target,
+    int amount, {
+    String? skillId,
+    bool isCrit = false,
+  }) {
     final before = target.currentHp;
     target.takeDamage(amount);
     final damageDealt = before - target.currentHp;
     if (damageDealt <= 0) {
       return;
     }
+    _spawnDamageNumber(
+      target.position.clone()..y -= target.size.y * 0.85,
+      damageDealt,
+      isCrit: isCrit,
+    );
 
     final healFraction = RunUpgradeEffects.lifestealFraction(
       skillId,
@@ -476,6 +1028,16 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     if (healFraction > 0) {
       player.heal((damageDealt * healFraction).round());
     }
+  }
+
+  void _spawnDamageNumber(Vector2 position, int amount, {bool isCrit = false}) {
+    world.add(
+      DamageNumberComponent(
+        amount: amount,
+        position: position,
+        isCrit: isCrit,
+      ),
+    );
   }
 
   MonsterComponent? _nearestTargetInRange() {
@@ -499,7 +1061,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       }
       final dx = (monster.position.x - player.position.x).abs();
       final dy = (monster.position.y - player.position.y).abs();
-      return dx <= range && dy < 130;
+      return dx <= range && dy < _layout.verticalCombatReach;
     }).toList();
     targets.sort(
       (a, b) => (a.position.x - player.position.x).abs().compareTo(
@@ -516,7 +1078,7 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
             return false;
           }
           final dy = (monster.position.y - player.position.y).abs();
-          return dy < 130;
+          return dy < _layout.verticalCombatReach;
         })
         .map((monster) => (monster.position.x - player.position.x).abs())
         .toList();
@@ -524,24 +1086,129 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
     return distances;
   }
 
-  void _spawnSkillVisual(SkillCastEvent event, MonsterComponent target) {
+  void _spawnSkillVisual(
+    SkillCastEvent event,
+    MonsterComponent target,
+    DamageRoll roll,
+  ) {
     final start = player.center;
     final end = target.center;
+    final isUlt = event.kind == SkillCastKind.ultimate;
+    final duration = isUlt ? 0.38 : 0.32;
+    final height = isUlt
+        ? ProjectileComponent.ultimateVisualHeight
+        : ProjectileComponent.skillVisualHeight;
+
+    if (event.skillId == 'double_strafe') {
+      final half = math.max(1, (roll.amount / 2).round());
+      final offsets = <Vector2>[Vector2(0, -10), Vector2(0, 10)];
+      for (var i = 0; i < offsets.length; i++) {
+        final offset = offsets[i];
+        final dealsDamage = i == 0;
+        world.add(
+          ProjectileComponent(
+            sprite: _doubleStrafeSprite,
+            start: start + offset,
+            end: end + offset,
+            duration: duration + i * 0.04,
+            visualHeight: height,
+            onArrived: () {
+              if (!target.isMounted || !target.isAlive) {
+                return;
+              }
+              _spawnSkillVfx(target.center, size: Vector2.all(88));
+              if (dealsDamage) {
+                _damageMonster(
+                  target,
+                  half,
+                  skillId: event.skillId,
+                  isCrit: roll.isCrit,
+                );
+              } else {
+                _damageMonster(
+                  target,
+                  roll.amount - half,
+                  skillId: event.skillId,
+                  isCrit: roll.isCrit,
+                );
+              }
+              _tryCollectKill(target);
+            },
+          )..paint.filterQuality = FilterQuality.medium,
+        );
+      }
+      return;
+    }
+
+    final sprite = event.skillId == 'wind_arrow'
+        ? _windArrowSprite
+        : _projectileSprite;
+
+    void onHit() {
+      if (!target.isMounted || !target.isAlive) {
+        return;
+      }
+      _spawnSkillVfx(
+        target.center,
+        size: Vector2.all(isUlt ? 120 : 88),
+      );
+      _damageMonster(
+        target,
+        roll.amount,
+        skillId: event.skillId,
+        isCrit: roll.isCrit,
+      );
+      _tryCollectKill(target);
+    }
+
+    final projectile = ProjectileComponent(
+      sprite: sprite,
+      start: start,
+      end: end,
+      duration: duration,
+      visualHeight: event.skillId == 'wind_arrow' ? 56 : height,
+      onArrived: onHit,
+    )..paint.filterQuality = FilterQuality.medium;
+    world.add(projectile);
+    if (event.skillId == 'wind_arrow') {
+      world.add(_WindArrowTrailComponent(projectile));
+    }
+  }
+
+  void _onMonsterRangedAttack(MonsterComponent monster) {
+    if (_finished || !isRunReady || !monster.isAlive) {
+      return;
+    }
+
+    final start = monster.center;
+    final end = player.center;
     world.add(
       ProjectileComponent(
         sprite: _projectileSprite,
-        start: event.projectile ? start : end,
+        start: start,
         end: end,
-        duration: event.projectile ? 0.18 : 0.14,
-        radiusSize: event.kind == SkillCastKind.ultimate ? 14 : 7,
-      ),
+        duration: 0.22,
+        visualHeight: ProjectileComponent.skillVisualHeight,
+      )..paint.filterQuality = FilterQuality.none,
     );
+
+    final dx = (player.position.x - monster.position.x).abs();
+    final dy = (player.position.y - monster.position.y).abs();
+    if (dx <= monster.attackRange + 24 && dy < _layout.verticalCombatReach) {
+      final damage = _incomingDamage(monster.touchDamage);
+      _damagePlayer(damage);
+      _publishHud();
+      if (player.isDead) {
+        _finishRun();
+      }
+    }
   }
 
-  void _spawnSkillVfx(Vector2 position) {
+  void _spawnSkillVfx(Vector2 position, {Vector2? size}) {
     VfxComponent.create(
       kind: VfxComponent.forClass(hero.classId),
       position: position,
+      size: size ?? Vector2.all(96),
     ).then(
       (vfx) {
         if (vfx != null) {
@@ -610,7 +1277,15 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
       player.currentHp = 1;
       return;
     }
+    final before = player.currentHp;
     player.takeDamage(amount);
+    final dealt = before - player.currentHp;
+    if (dealt > 0) {
+      _spawnDamageNumber(
+        player.position.clone()..y -= player.size.y * 0.9,
+        dealt,
+      );
+    }
   }
 
   void _applyThorns(List<MonsterComponent> touchingMonsters, int damageTaken) {
@@ -782,13 +1457,25 @@ class MidgardRunGame extends FlameGame with KeyboardEvents {
 
   void _syncPlayerUpgradeStats() {
     player.setMaxHp(
-      CombatMath.maxHp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.maxHp(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     player.setMaxSp(
-      CombatMath.maxSp(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.maxSp(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     player.setMoveSpeed(
-      CombatMath.moveSpeed(hero, ownedUpgradeIds: ownedRunUpgradeIds),
+      CombatMath.moveSpeed(
+        hero,
+        ownedUpgradeIds: ownedRunUpgradeIds,
+        temporaryAllStatsBonus: _concentrateBonus,
+      ),
     );
     autoSkillSystem.setMaxSp(player.maxSp);
   }
@@ -860,4 +1547,114 @@ class _PendingOfferRequest {
 
   final ChestComponent? chest;
   final bool consumeTempXpThreshold;
+}
+
+class _ConcentrateAuraComponent extends PositionComponent {
+  _ConcentrateAuraComponent({
+    required Vector2 position,
+    required int priority,
+  }) : super(
+         position: position,
+         anchor: Anchor.center,
+         priority: priority,
+       );
+
+  double _pulse = 0;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    add(
+      CircleComponent(
+        radius: 54,
+        anchor: Anchor.center,
+        paint: Paint()..color = const Color(0x28FFD54F),
+      ),
+    );
+    add(
+      CircleComponent(
+        radius: 40,
+        anchor: Anchor.center,
+        paint: Paint()..color = const Color(0x44FFC107),
+      ),
+    );
+    add(
+      CircleComponent(
+        radius: 46,
+        anchor: Anchor.center,
+        paint: Paint()
+          ..color = const Color(0x99FFD54F)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      ),
+    );
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _pulse += dt * 2.4;
+    scale = Vector2.all(1 + 0.05 * math.sin(_pulse));
+  }
+}
+
+class _WindArrowTrailComponent extends Component {
+  _WindArrowTrailComponent(this._projectile);
+
+  final ProjectileComponent _projectile;
+  double _spawnTimer = 0;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!_projectile.isMounted) {
+      removeFromParent();
+      return;
+    }
+    _spawnTimer += dt;
+    if (_spawnTimer < 0.045) {
+      return;
+    }
+    _spawnTimer = 0;
+    parent?.add(
+      _FadingTrailDot(
+        position: _projectile.position.clone(),
+        priority: _projectile.priority - 1,
+      ),
+    );
+  }
+}
+
+class _FadingTrailDot extends CircleComponent {
+  _FadingTrailDot({
+    required Vector2 position,
+    required int priority,
+  }) : _maxLife = 0.32,
+       super(
+         radius: 5,
+         position: position,
+         anchor: Anchor.center,
+         priority: priority,
+         paint: Paint()..color = const Color(0xAA00E5FF),
+       );
+
+  final double _maxLife;
+  double _elapsed = 0;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _elapsed += dt;
+    if (_elapsed >= _maxLife) {
+      removeFromParent();
+      return;
+    }
+    final t = 1 - (_elapsed / _maxLife);
+    paint.color = Color.lerp(
+      const Color(0x0000E5FF),
+      const Color(0xCC00E5FF),
+      t,
+    )!;
+    radius = 5 * t;
+  }
 }

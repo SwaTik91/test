@@ -13,8 +13,6 @@ from PIL import Image
 # Wave 2 frame roots relative to assets/images/
 SCAN_DIRS = (
     "heroes",
-    "enemies/goblin",
-    "enemies/ogre",
     "props/chest",
     "vfx",
 )

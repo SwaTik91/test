@@ -41,6 +41,21 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> grantDebugLevels({
+    int baseLevels = 10,
+    int jobLevels = 10,
+  }) async {
+    final current = _hero;
+    if (current == null) return;
+    _hero = ProgressService.grantDebugLevels(
+      current,
+      baseLevels: baseLevels,
+      jobLevels: jobLevels,
+    );
+    await _save.persist(_hero!);
+    notifyListeners();
+  }
+
   Future<void> allocateStat(StatId stat) async {
     final current = _hero;
     if (current == null) return;

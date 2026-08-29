@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../core/ids.dart';
 import 'game_controller.dart';
+import 'hub_theme.dart';
 
 class StatsScreen extends StatelessWidget {
-  const StatsScreen({super.key, required this.controller});
+  const StatsScreen({
+    super.key,
+    required this.controller,
+    this.embedded = false,
+  });
 
   final GameController controller;
+  final bool embedded;
 
   static const _statLabels = {
     StatId.str: 'STR',
@@ -24,6 +30,48 @@ class StatsScreen extends StatelessWidget {
       builder: (context, _) {
         final hero = controller.hero!;
         final canAllocate = hero.unspentStatPoints > 0;
+        final theme = Theme.of(context).textTheme;
+
+        final body = HubTabBody(
+          child: ListView(
+            children: [
+              if (canAllocate)
+                HubPointsHeader(
+                  label: 'Очков статов: ${hero.unspentStatPoints}',
+                ),
+              for (final stat in StatId.values) ...[
+                HubCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _statLabels[stat]!,
+                          style: HubTheme.cardTitleStyle(theme),
+                        ),
+                      ),
+                      Text(
+                        '${hero.stats[stat] ?? 1}',
+                        style: HubTheme.cardTitleStyle(theme),
+                      ),
+                      if (canAllocate) ...[
+                        const SizedBox(width: 8),
+                        HubIncrementButton(
+                          onPressed: () => controller.allocateStat(stat),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        );
+
+        if (embedded) {
+          return body;
+        }
 
         return Scaffold(
           appBar: AppBar(
@@ -33,30 +81,7 @@ class StatsScreen extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (canAllocate)
-                Text('Очков статов: ${hero.unspentStatPoints}'),
-              ...StatId.values.map((stat) {
-                final value = hero.stats[stat] ?? 1;
-                return ListTile(
-                  title: Text(_statLabels[stat]!),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('$value'),
-                      if (canAllocate)
-                        IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: () => controller.allocateStat(stat),
-                        ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
+          body: body,
         );
       },
     );

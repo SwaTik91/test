@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../iap/iap_product.dart';
 import 'game_controller.dart';
+import 'hub_theme.dart';
 
 class ShopScreen extends StatefulWidget {
-  const ShopScreen({super.key, required this.controller});
+  const ShopScreen({
+    super.key,
+    required this.controller,
+    this.embedded = false,
+  });
 
   final GameController controller;
+  final bool embedded;
 
   @override
   State<ShopScreen> createState() => _ShopScreenState();
@@ -27,6 +33,24 @@ class _ShopScreenState extends State<ShopScreen> {
     if (mounted) {
       setState(() => _products = products);
     }
+  }
+
+  Future<void> _grantDebugLevels() async {
+    if (widget.controller.hero == null) {
+      return;
+    }
+    await widget.controller.grantDebugLevels();
+    if (!mounted) {
+      return;
+    }
+    final hero = widget.controller.hero!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Тест: база ${hero.baseLevel}, проф ${hero.jobLevel}',
+        ),
+      ),
+    );
   }
 
   Future<void> _purchase(IapProduct product) async {
@@ -53,6 +77,55 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   Widget build(BuildContext context) {
     final crystals = widget.controller.hero?.crystals ?? 0;
+    final theme = Theme.of(context).textTheme;
+
+    final body = _products == null
+        ? const Center(
+            child: CircularProgressIndicator(color: HubTheme.accent),
+          )
+        : HubTabBody(
+            child: ListView(
+              children: [
+                HubCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.diamond_outlined,
+                        size: 18,
+                        color: HubTheme.crystal,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Кристаллы: $crystals',
+                        style: HubTheme.cardTitleStyle(theme),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _DebugLevelsCard(
+                  onGrant: _grantDebugLevels,
+                  theme: theme,
+                ),
+                const SizedBox(height: 8),
+                for (final product in _products!) ...[
+                  _ProductCard(
+                    product: product,
+                    isPurchasing: _purchasingId == product.id,
+                    onPurchase: () => _purchase(product),
+                    theme: theme,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          );
+
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Магазин'),
@@ -61,35 +134,113 @@ class _ShopScreenState extends State<ShopScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: _products == null
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
+      body: body,
+    );
+  }
+}
+
+class _DebugLevelsCard extends StatelessWidget {
+  const _DebugLevelsCard({
+    required this.onGrant,
+    required this.theme,
+  });
+
+  final VoidCallback onGrant;
+  final TextTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return HubCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Кристаллы: $crystals',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  'Тест: +10 уровней',
+                  style: HubTheme.cardTitleStyle(theme),
                 ),
-                const SizedBox(height: 12),
-                ..._products!.map((product) {
-                  final isPurchasing = _purchasingId == product.id;
-                  return Card(
-                    child: ListTile(
-                      title: Text(product.title),
-                      subtitle: Text(product.description),
-                      trailing: isPurchasing
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(product.priceLabel),
-                      onTap: isPurchasing ? null : () => _purchase(product),
-                    ),
-                  );
-                }),
+                const SizedBox(height: 2),
+                Text(
+                  '+10 к базовому и +10 к проф. уровню. Для быстрых тестов.',
+                  style: HubTheme.cardSubtitleStyle(theme),
+                ),
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: HubTheme.accentButtonStyle(),
+            onPressed: onGrant,
+            child: const Text('+10 / +10'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  const _ProductCard({
+    required this.product,
+    required this.isPurchasing,
+    required this.onPurchase,
+    required this.theme,
+  });
+
+  final IapProduct product;
+  final bool isPurchasing;
+  final VoidCallback onPurchase;
+  final TextTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return HubCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.title, style: HubTheme.cardTitleStyle(theme)),
+                const SizedBox(height: 2),
+                Text(
+                  product.description,
+                  style: HubTheme.cardSubtitleStyle(theme),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.priceLabel,
+                  style: HubTheme.cardSubtitleStyle(theme),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isPurchasing)
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: HubTheme.accent,
+              ),
+            )
+          else
+            FilledButton(
+              style: HubTheme.accentButtonStyle(),
+              onPressed: onPurchase,
+              child: const Text('Купить'),
+            ),
+        ],
+      ),
     );
   }
 }

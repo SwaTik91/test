@@ -29,9 +29,6 @@ class RunUpgradeEffects {
     'wind_arrow__gust',
     'wind_arrow__knockback_wave',
     'wind_arrow__cutting_wind',
-    'trap__spiked_trap',
-    'trap__sticky_resin',
-    'trap__double_setup',
     'eagle_eye__hawk_focus',
     'eagle_eye__sniper_eye',
     'eagle_eye__hunting_instinct',
@@ -312,7 +309,6 @@ class RunUpgradeEffects {
     'double_strafe__heavy_tips': 1.25,
     'wind_arrow__knockback_wave': 1.12,
     'wind_arrow__cutting_wind': 1.25,
-    'trap__spiked_trap': 1.25,
     'fire_bolt__white_heat': 1.25,
     'frost__ice_shards': 1.25,
     'lightning__storm_sight': 1.12,
@@ -325,7 +321,6 @@ class RunUpgradeEffects {
 
   static const Map<String, double> _cooldownMultipliers = {
     'double_strafe__rapid_fire': 0.8,
-    'trap__sticky_resin': 0.85,
     'frost__eternal_frost': 0.85,
     'shield_bash__stunning_edge': 0.85,
     'shield_bash__shield_series': 0.8,
@@ -343,7 +338,6 @@ class RunUpgradeEffects {
 
   static const Map<String, int> _targetCountBonuses = {
     'double_strafe__triple_string': 1,
-    'trap__double_setup': 1,
     'arrow_shower__downpour': 2,
     'fire_bolt__explosive_ball': 1,
     'fire_bolt__chain_heat': 1,

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flame/components.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,33 +8,51 @@ import '../../art/animation_atlas.dart';
 import '../../art/art_atlas.dart';
 import '../../art/hero_anim_state.dart';
 import '../../core/ids.dart';
+import '../sprite_fit.dart';
 
 class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
+  /// Default spawn X — keep in sync with run ground strip layout.
+  static const double startX = 120;
+
   PlayerComponent._({
     required this.maxHp,
     required this.maxSp,
     required this.moveSpeed,
     required this.groundY,
+    required Vector2 footprintSize,
     required Map<HeroAnimName, SpriteAnimation> animations,
+    required double castDuration,
   }) : currentHp = maxHp,
        currentSp = maxSp,
+       _footprintSize = footprintSize.clone(),
+       _castDuration = castDuration,
        super(
          animations: animations,
          current: HeroAnimName.idle,
-         position: Vector2(120, groundY),
-         size: Vector2(48, 64),
+         position: Vector2(startX, groundY),
+         size: footprintSize.clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
     paint.color = Colors.white;
+    paint.filterQuality = FilterQuality.low;
+    _rebuildAnimRenderSizes(animations);
+    _syncFrameAspectSize();
   }
 
-  static const double _gravity = 1200;
-  static const double _jumpVelocity = -520;
+  static const double gravity = 1200;
+  static const double jumpVelocity = -520;
 
-  static double get _castDuration =>
-      AnimationAtlas.heroFrames(HeroClassId.archer, HeroAnimName.cast).length *
-      AnimationAtlas.heroStepTime(HeroAnimName.cast);
+  static double get jumpHeight =>
+      (jumpVelocity * jumpVelocity) / (2 * gravity);
+
+  static double get airTime => 2 * (-jumpVelocity) / gravity;
+
+  static double jumpDistance(double moveSpeed) => moveSpeed * airTime;
+
+  static double castDurationFor(HeroClassId classId) =>
+      AnimationAtlas.heroFrameCount(classId, HeroAnimName.cast) *
+      AnimationAtlas.heroStepTime(classId, HeroAnimName.cast);
 
   static Future<PlayerComponent> create({
     required HeroClassId classId,
@@ -40,6 +60,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required int maxSp,
     required double moveSpeed,
     required double groundY,
+    required Vector2 size,
   }) async {
     final animations = await _loadAnimations(classId);
     return PlayerComponent._(
@@ -47,7 +68,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       maxSp: maxSp,
       moveSpeed: moveSpeed,
       groundY: groundY,
+      footprintSize: size,
       animations: animations,
+      castDuration: castDurationFor(classId),
     );
   }
 
@@ -59,7 +82,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       for (final anim in HeroAnimName.values) {
         animations[anim] = await AnimationAtlas.load(
           AnimationAtlas.heroFrames(classId, anim),
-          AnimationAtlas.heroStepTime(anim),
+          AnimationAtlas.heroStepTime(classId, anim),
           loop: anim != HeroAnimName.cast,
         );
       }
@@ -92,6 +115,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     required this.groundY,
     required Sprite sprite,
     Vector2? position,
+    Vector2? size,
     int maxHp = 100,
     int maxSp = 50,
     double moveSpeed = 200,
@@ -100,21 +124,61 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
        moveSpeed = moveSpeed,
        currentHp = maxHp,
        currentSp = maxSp,
+       _footprintSize = (size ?? Vector2(216, 216)).clone(),
+       _castDuration = 0.24,
        super(
          animations: _singleSpriteAnimations(sprite),
          current: HeroAnimName.idle,
-         position: position ?? Vector2(120, groundY),
-         size: Vector2(48, 64),
+         position: position ?? Vector2(startX, groundY),
+         size: (size ?? Vector2(216, 216)).clone(),
          anchor: Anchor.bottomCenter,
          autoResize: false,
        ) {
     paint.color = Colors.white;
+    paint.filterQuality = FilterQuality.low;
+    _rebuildAnimRenderSizes(_singleSpriteAnimations(sprite));
+    _syncFrameAspectSize();
   }
+
+  @visibleForTesting
+  PlayerComponent.forTestWithAnimations({
+    required this.groundY,
+    required Map<HeroAnimName, SpriteAnimation> animations,
+    Vector2? position,
+    Vector2? size,
+    int maxHp = 100,
+    int maxSp = 50,
+    double moveSpeed = 200,
+    HeroAnimName current = HeroAnimName.idle,
+  }) : maxHp = maxHp,
+       maxSp = maxSp,
+       moveSpeed = moveSpeed,
+       currentHp = maxHp,
+       currentSp = maxSp,
+       _footprintSize = (size ?? Vector2(216, 216)).clone(),
+       _castDuration = 0.24,
+       super(
+         animations: animations,
+         current: current,
+         position: position ?? Vector2(startX, groundY),
+         size: (size ?? Vector2(216, 216)).clone(),
+         anchor: Anchor.bottomCenter,
+         autoResize: false,
+       ) {
+    paint.color = Colors.white;
+    paint.filterQuality = FilterQuality.low;
+    _rebuildAnimRenderSizes(animations);
+    _syncFrameAspectSize();
+  }
+
+  final Vector2 _footprintSize;
+  final Map<HeroAnimName, Vector2> _animRenderSizes = {};
+  final double _castDuration;
 
   int maxHp;
   int maxSp;
   double moveSpeed;
-  final double groundY;
+  double groundY;
 
   int currentHp;
   int currentSp;
@@ -124,27 +188,55 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
   double _damageFlashSeconds = 0;
   double _castTimer = 0;
 
+  /// Optional floor under the feet. `(x, y) → contact Y`.
+  double Function(double x, double y)? floorYAt;
+
   bool get isDead => currentHp <= 0;
 
-  bool get isGrounded => position.y >= groundY - 0.5;
+  double get terrainBodyHalfWidth =>
+      math.max(14, _footprintSize.x * 0.12).toDouble();
+
+  double floorYFor(double x, double y) => floorYAt?.call(x, y) ?? groundY;
+
+  bool get isGrounded => position.y >= floorYFor(position.x, position.y) - 0.5;
 
   Rect get bounds => Rect.fromLTWH(
-    position.x - size.x * anchor.x,
-    position.y - size.y * anchor.y,
-    size.x,
-    size.y,
+    position.x - _footprintSize.x * anchor.x,
+    position.y - _footprintSize.y * anchor.y,
+    _footprintSize.x,
+    _footprintSize.y,
   );
+
+  Vector2 get footprintSize => _footprintSize;
 
   void setHorizontal(double axis) {
     _horizontal = axis.clamp(-1, 1).toDouble();
   }
 
+  bool _facingLeft = false;
+
+  bool get isFacingLeft => _facingLeft;
+
+  void _syncFacing() {
+    final wantLeft = _horizontal < 0;
+    if (wantLeft != _facingLeft) {
+      _facingLeft = wantLeft;
+      flipHorizontallyAroundCenter();
+    }
+  }
+
   bool jump() {
     if (isGrounded) {
-      _verticalVelocity = _jumpVelocity;
+      _verticalVelocity = jumpVelocity;
       return true;
     }
     return false;
+  }
+
+  void landAt(double x, double y) {
+    position.x = x;
+    position.y = y;
+    _verticalVelocity = 0;
   }
 
   void playCastAnimation() {
@@ -193,17 +285,62 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
     moveSpeed = value;
   }
 
+  void setGroundY(double value) {
+    final wasOnContactLine = position.y >= groundY - 0.5;
+    groundY = value;
+    if (wasOnContactLine || position.y > groundY) {
+      position.y = groundY;
+    }
+  }
+
+  void setSize(Vector2 value) {
+    _footprintSize.setFrom(value);
+    final anims = animations;
+    if (anims != null) {
+      _rebuildAnimRenderSizes(anims);
+    }
+    _syncFrameAspectSize();
+  }
+
+  @override
+  void onMount() {
+    super.onMount();
+    _syncFrameAspectSize();
+  }
+
+  void _rebuildAnimRenderSizes(Map<HeroAnimName, SpriteAnimation> anims) {
+    _animRenderSizes.clear();
+    for (final entry in anims.entries) {
+      _animRenderSizes[entry.key] = SpriteFit.stableContainHeight(
+        animation: entry.value,
+        targetHeight: _footprintSize.y,
+      );
+    }
+  }
+
+  void _syncFrameAspectSize() {
+    final renderSize = _animRenderSizes[current];
+    if (renderSize != null) {
+      size.setFrom(renderSize);
+      return;
+    }
+    size.setFrom(_footprintSize);
+  }
+
+  static const double _runAnimSpeedThreshold = 12;
+
   @override
   void update(double dt) {
     super.update(dt);
+    _syncFacing();
     position.x += _horizontal * moveSpeed * dt;
     if (position.x < 0) {
       position.x = 0;
     }
 
-    _verticalVelocity += _gravity * dt;
+    _verticalVelocity += gravity * dt;
     position.y += _verticalVelocity * dt;
-    final floorY = groundY;
+    final floorY = floorYFor(position.x, position.y);
     if (position.y > floorY) {
       position.y = floorY;
       _verticalVelocity = 0;
@@ -217,9 +354,11 @@ class PlayerComponent extends SpriteAnimationGroupComponent<HeroAnimName> {
       grounded: isGrounded,
       vx: _horizontal * moveSpeed,
       casting: _castTimer > 0,
+      runSpeedThreshold: _runAnimSpeedThreshold,
     );
     if (current != anim) {
       current = anim;
+      _syncFrameAspectSize();
     }
 
     if (_damageFlashSeconds > 0) {

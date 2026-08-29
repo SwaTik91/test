@@ -1,5 +1,6 @@
 import 'package:flame/components.dart';
 
+import '../content/monsters.dart';
 import '../core/ids.dart';
 import 'hero_anim_state.dart';
 
@@ -9,25 +10,13 @@ class AnimationAtlas {
 
   static const assetRoot = 'assets/images/';
 
-  static const goblinWalkStepTime = 0.12;
-  static const goblinHurtStepTime = 0.08;
-  static const ogreWalkStepTime = 0.14;
-  static const ogreHurtStepTime = 0.08;
   static const chestOpenStepTime = 0.10;
   static const vfxStepTime = 0.08;
 
-  static List<String> get goblinWalkFrames =>
-      _frames('enemies/goblin', 'walk', 3);
-
-  static List<String> get goblinHurtFrames =>
-      _frames('enemies/goblin', 'hurt', 2);
-
-  static List<String> get ogreWalkFrames => _frames('enemies/ogre', 'walk', 3);
-
-  static List<String> get ogreHurtFrames => _frames('enemies/ogre', 'hurt', 2);
+  static const chestOpenFrameCount = 5;
 
   static List<String> get chestOpenFrames =>
-      _frames('props/chest', 'open', 3);
+      _frames('props/chest', 'open', chestOpenFrameCount);
 
   static List<String> get vfxSlashFrames => _frames('vfx', 'slash', 3);
 
@@ -35,36 +24,52 @@ class AnimationAtlas {
 
   static List<String> get vfxHolyFrames => _frames('vfx', 'holy', 3);
 
-  static List<String> heroFrames(HeroClassId classId, HeroAnimName anim) {
-    final folder = _heroFolder(classId);
-    return switch (anim) {
-      HeroAnimName.idle => _frames('heroes/$folder', 'idle', 2),
-      HeroAnimName.run => _frames('heroes/$folder', 'run', 4),
-      HeroAnimName.jump => _frames('heroes/$folder', 'jump', 2),
-      HeroAnimName.cast => _frames('heroes/$folder', 'cast', 3),
-    };
+  static const monsterWalkStepTime = 0.12;
+
+  static List<String> monsterWalkFrames(MonsterKind kind) {
+    final count = _monsterWalkFrameCount(kind);
+    if (count == 0) {
+      return const [];
+    }
+    return _frames(_monsterFolder(kind), 'walk', count);
   }
 
-  static double heroStepTime(HeroAnimName anim) => switch (anim) {
-        HeroAnimName.idle => 0.35,
-        HeroAnimName.run => 0.10,
-        HeroAnimName.jump => 0.12,
-        HeroAnimName.cast => 0.08,
-      };
+  static bool monsterHasWalkFrames(MonsterKind kind) =>
+      _monsterWalkFrameCount(kind) > 0;
+
+  static List<String> heroFrames(HeroClassId classId, HeroAnimName anim) {
+    final folder = _heroFolder(classId);
+    final count = _heroFrameCount(classId, anim);
+    return _frames('heroes/$folder', anim.name, count);
+  }
+
+  static int heroFrameCount(HeroClassId classId, HeroAnimName anim) =>
+      _heroFrameCount(classId, anim);
+
+  static double heroStepTime(HeroClassId classId, HeroAnimName anim) {
+    if (classId == HeroClassId.archer && anim == HeroAnimName.cast) {
+      // 8-frame draw cycle; faster step keeps cast pose ~0.40s (damage is instant).
+      return 0.05;
+    }
+    return switch (anim) {
+      HeroAnimName.idle => 0.35,
+      HeroAnimName.run => 0.10,
+      HeroAnimName.jump => 0.12,
+      HeroAnimName.cast => 0.08,
+    };
+  }
 
   /// Every wave-2 animation frame path for asset-existence tests.
   static List<String> get allFramePaths => [
         for (final classId in HeroClassId.values)
           for (final anim in HeroAnimName.values)
             ...heroFrames(classId, anim),
-        ...goblinWalkFrames,
-        ...goblinHurtFrames,
-        ...ogreWalkFrames,
-        ...ogreHurtFrames,
         ...chestOpenFrames,
         ...vfxSlashFrames,
         ...vfxFlameFrames,
         ...vfxHolyFrames,
+        for (final kind in MonsterKind.values)
+          ...monsterWalkFrames(kind),
       ];
 
   static Future<SpriteAnimation> load(
@@ -72,14 +77,32 @@ class AnimationAtlas {
     double stepTime, {
     bool loop = true,
   }) async {
+    // Flame Images already prefixes `assets/images/` — do not prepend [assetRoot].
     final sprites = await Future.wait(
-      frames.map((path) => Sprite.load('$assetRoot$path')),
+      frames.map(Sprite.load),
     );
     return SpriteAnimation.spriteList(
       sprites,
       stepTime: stepTime,
       loop: loop,
     );
+  }
+
+  static int _heroFrameCount(HeroClassId classId, HeroAnimName anim) {
+    if (classId == HeroClassId.archer) {
+      return switch (anim) {
+        HeroAnimName.idle => 4,
+        HeroAnimName.run => 8,
+        HeroAnimName.jump => 6,
+        HeroAnimName.cast => 8,
+      };
+    }
+    return switch (anim) {
+      HeroAnimName.idle => 2,
+      HeroAnimName.run => 4,
+      HeroAnimName.jump => 2,
+      HeroAnimName.cast => 3,
+    };
   }
 
   static String _heroFolder(HeroClassId id) => switch (id) {
@@ -90,4 +113,35 @@ class AnimationAtlas {
 
   static List<String> _frames(String folder, String prefix, int count) =>
       List.generate(count, (i) => '$folder/${prefix}_$i.png');
+
+  static int _monsterWalkFrameCount(MonsterKind kind) => switch (kind) {
+        MonsterKind.slime ||
+        MonsterKind.lunatic ||
+        MonsterKind.wolf ||
+        MonsterKind.mushroom ||
+        MonsterKind.bee ||
+        MonsterKind.crab ||
+        MonsterKind.ghost ||
+        MonsterKind.plant ||
+        MonsterKind.bossDemon ||
+        MonsterKind.bossSpider ||
+        MonsterKind.bossUndead ||
+        MonsterKind.bossGolem =>
+          6,
+      };
+
+  static String _monsterFolder(MonsterKind kind) => switch (kind) {
+        MonsterKind.slime => 'enemies/slime',
+        MonsterKind.lunatic => 'enemies/lunatic',
+        MonsterKind.wolf => 'enemies/wolf',
+        MonsterKind.mushroom => 'enemies/mushroom',
+        MonsterKind.bee => 'enemies/bee',
+        MonsterKind.crab => 'enemies/crab',
+        MonsterKind.ghost => 'enemies/ghost',
+        MonsterKind.plant => 'enemies/plant',
+        MonsterKind.bossDemon => 'enemies/boss_demon',
+        MonsterKind.bossSpider => 'enemies/boss_spider',
+        MonsterKind.bossUndead => 'enemies/boss_undead',
+        MonsterKind.bossGolem => 'enemies/boss_golem',
+      };
 }

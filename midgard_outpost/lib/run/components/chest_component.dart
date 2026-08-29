@@ -14,6 +14,7 @@ enum ChestAnimName {
 class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
   ChestComponent._({
     required Vector2 position,
+    required Vector2 size,
     required Map<ChestAnimName, SpriteAnimation> animations,
     required double openDuration,
   }) : _openDuration = openDuration,
@@ -21,10 +22,16 @@ class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
          animations: animations,
          current: ChestAnimName.closed,
          position: position,
-         size: Vector2(42, 34),
-       );
+         size: size,
+         anchor: Anchor.bottomCenter,
+       ) {
+    ArtAtlas.applyNearestNeighbor(this);
+  }
 
-  static Future<ChestComponent> create({required Vector2 position}) async {
+  static Future<ChestComponent> create({
+    required Vector2 position,
+    required Vector2 size,
+  }) async {
     try {
       final animations = await _loadAnimations();
       final openDuration =
@@ -32,12 +39,17 @@ class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
           AnimationAtlas.chestOpenStepTime;
       return ChestComponent._(
         position: position,
+        size: size,
         animations: animations,
         openDuration: openDuration,
       );
     } catch (_) {
       final sprite = await ArtAtlas.loadSprite(ArtAtlas.chest);
-      return ChestComponent.forTest(position: position, sprite: sprite);
+      return ChestComponent.forTest(
+        position: position,
+        size: size,
+        sprite: sprite,
+      );
     }
   }
 
@@ -59,6 +71,7 @@ class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
   @visibleForTesting
   factory ChestComponent.forTest({
     required Vector2 position,
+    required Vector2 size,
     required Sprite sprite,
   }) {
     final staticAnim = SpriteAnimation.spriteList(
@@ -72,6 +85,7 @@ class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
     };
     return ChestComponent._(
       position: position,
+      size: size,
       animations: animations,
       openDuration: 0.30,
     );
@@ -82,7 +96,12 @@ class ChestComponent extends SpriteAnimationGroupComponent<ChestAnimName> {
   bool isCollected = false;
   double _openTimer = 0;
 
-  Rect get bounds => Rect.fromLTWH(position.x, position.y, size.x, size.y);
+  Rect get bounds => Rect.fromLTWH(
+    position.x - size.x * anchor.x,
+    position.y - size.y * anchor.y,
+    size.x,
+    size.y,
+  );
 
   void collect() {
     if (isCollected) {

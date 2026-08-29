@@ -14,56 +14,63 @@ class UpgradePickerOverlay extends StatelessWidget {
     return ColoredBox(
       color: Colors.black.withValues(alpha: 0.62),
       child: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 860),
-            child: Padding(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
               padding: const EdgeInsets.all(20),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF172033),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Colors.amberAccent, width: 2),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 40,
+                  maxWidth: 860,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Выберите улучшение',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Забег на паузе. Нажмите на карту, чтобы продолжить.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 14,
-                        runSpacing: 14,
-                        alignment: WrapAlignment.center,
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF172033),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.amberAccent, width: 2),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final offer in offers)
-                            _UpgradeCard(
-                              title: offer.name,
-                              description: offer.description,
-                              onTap: () => game.chooseUpgrade(offer.id),
+                          const Text(
+                            'Выберите улучшение',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Забег на паузе. Нажмите на карту, чтобы продолжить.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white70, fontSize: 14),
+                          ),
+                          const SizedBox(height: 20),
+                          Wrap(
+                            spacing: 14,
+                            runSpacing: 14,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              for (final offer in offers)
+                                _UpgradeCard(
+                                  title: offer.name,
+                                  description: offer.description,
+                                  onTap: () => game.chooseUpgrade(offer.id),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

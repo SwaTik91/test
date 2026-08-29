@@ -39,7 +39,8 @@ class _RunScreenState extends State<RunScreen> {
             MidgardRunGame.upgradePickerOverlayKey: (context, game) =>
                 UpgradePickerOverlay(game: game),
           },
-          initialActiveOverlays: const [MidgardRunGame.hudOverlayKey],
+          // HUD is added from MidgardRunGame.onLoad after [player] is ready.
+          initialActiveOverlays: const [],
         ),
       ),
     );
