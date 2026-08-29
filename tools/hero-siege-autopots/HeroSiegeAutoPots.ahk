@@ -235,7 +235,7 @@ class AutoPots {
 
     static Toggle() {
         if !this.enabled && !Cfg.calibratedHp {
-            Overlay.Hint("Сначала откалибруй HP-бар клавишей F6 (на полном здоровье)")
+            Overlay.ShowHint("Сначала откалибруй HP-бар клавишей F6 (на полном здоровье)")
             SoundBeep(320, 180)
             return
         }
@@ -246,10 +246,10 @@ class AutoPots {
             this.hpMiss := 0
             this.mpMiss := 0
             SoundBeep(880, 90)
-            Overlay.Hint("Автопоты ВКЛ")
+            Overlay.ShowHint("Автопоты ВКЛ")
         } else {
             SoundBeep(420, 90)
-            Overlay.Hint("Автопоты ВЫКЛ")
+            Overlay.ShowHint("Автопоты ВЫКЛ")
         }
     }
 
@@ -334,16 +334,16 @@ class Calib {
 
         if this.mode = "" || (this.mode != start && this.mode != mid) {
             if !Game.IsActive() {
-                Overlay.Hint("Сначала кликни по окну Hero Siege, потом жми " (which = "hp" ? "F6" : "F7"))
+                Overlay.ShowHint("Сначала кликни по окну Hero Siege, потом жми " (which = "hp" ? "F6" : "F7"))
                 return
             }
             this.mode := start
-            Overlay.Hint(label ": наведи на ЛЕВЫЙ край полоски и нажми ту же клавишу")
+            Overlay.ShowHint(label ": наведи на ЛЕВЫЙ край полоски и нажми ту же клавишу")
             SoundBeep(620, 70)
             return
         }
         if !Game.IsActive() {
-            Overlay.Hint("Окно Hero Siege должно быть активным")
+            Overlay.ShowHint("Окно Hero Siege должно быть активным")
             return
         }
         MouseGetPos(&x, &y)
@@ -357,7 +357,7 @@ class Calib {
                 Cfg.mpX1 := relX, Cfg.mpY1 := relY
             }
             this.mode := mid
-            Overlay.Hint(label ": наведи на ПРАВЫЙ край полоски и нажми ту же клавишу")
+            Overlay.ShowHint(label ": наведи на ПРАВЫЙ край полоски и нажми ту же клавишу")
             SoundBeep(720, 70)
             return
         }
@@ -373,7 +373,7 @@ class Calib {
         Cfg.Save()
         this.mode := ""
         fill := (which = "hp") ? Cfg.hpFill : Cfg.mpFill
-        Overlay.Hint(label " сохранён, цвет " Col.Hex(fill) "  (калибруй на полном " label ")")
+        Overlay.ShowHint(label " сохранён, цвет " Col.Hex(fill) "  (калибруй на полном " label ")")
         SoundBeep(940, 110)
     }
 }
@@ -393,7 +393,7 @@ class Probe {
         }
         msg := Format("xy={},{}{}  {}  R={} G={} B={}", x, y, extra, Col.Hex(c), Col.R(c), Col.G(c), Col.B(c))
         ToolTip(msg)
-        Overlay.Hint(msg)
+        Overlay.ShowHint(msg)
         SetTimer(() => ToolTip(), -2500)
     }
 }
@@ -405,7 +405,7 @@ class Probe {
 class Overlay {
     static g := 0
     static txt := 0
-    static hint := ""
+    static hintMsg := ""
     static hintUntil := 0
 
     static Init() {
@@ -420,8 +420,10 @@ class Overlay {
         this.g := g
     }
 
-    static Hint(msg) {
-        this.hint := msg
+    ; Имя ShowHint, не Hint: в AHK v2 регистр не различается,
+    ; поэтому свойство hint и метод Hint() конфликтовали (Property is read-only).
+    static ShowHint(msg) {
+        this.hintMsg := msg
         this.hintUntil := A_TickCount + 3500
         this.Refresh()
     }
@@ -429,11 +431,11 @@ class Overlay {
     static Refresh() {
         if !this.txt
             return
-        if this.hint != "" && A_TickCount < this.hintUntil {
-            this.txt.Value := this.hint
+        if this.hintMsg != "" && A_TickCount < this.hintUntil {
+            this.txt.Value := this.hintMsg
             return
         }
-        this.hint := ""
+        this.hintMsg := ""
         state := AutoPots.enabled ? "ВКЛ" : "ВЫКЛ"
         if !Game.Exists() {
             this.txt.Value := "Hero Siege AutoPots  " state "`nигра не найдена"
@@ -501,7 +503,7 @@ class SettingsUi {
         Cfg.colorTol := Clamp(SafeInt(edTol.Value, Cfg.colorTol), 30, 180)
         Cfg.Save()
         SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
-        Overlay.Hint("Настройки сохранены")
+        Overlay.ShowHint("Настройки сохранены")
         this.Closed()
     }
 
