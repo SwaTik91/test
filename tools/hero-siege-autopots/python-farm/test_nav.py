@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from nav import FLOOR, FOG, WALL, astar, classify_rgb, nearest_fog, path_key, plan, to_grid
+from nav import FLOOR, FOG, WALL, astar, classify_rgb, decide_key, nearest_fog, path_key, plan, to_grid
 
 
 class ClassifyTests(unittest.TestCase):
@@ -56,10 +56,37 @@ class PathTests(unittest.TestCase):
         img[:, 14:17] = 250
         img[13:17, 14:17] = 90  # corridor through the wall
         img[:, 24:] = 8
-        grid, path, key = plan(img, cell=3)
+        grid, path, key = plan(img, cell=3)[:3]
         self.assertTrue(path, msg=f"grid=\n{grid}")
         self.assertEqual(key, "d")
         self.assertTrue(np.any(grid == FOG))
+
+    def test_path_key_staircase_uses_net_displacement(self):
+        """A* paths zigzag; first steps must not flip W/D every cell."""
+        path = [(8, 8), (7, 8), (7, 9), (6, 9), (6, 10), (5, 10), (5, 11)]
+        self.assertEqual(path_key(path), "d")
+
+    def test_keep_heading_on_same_axis(self):
+        path = [(8, 8), (7, 8), (7, 9), (6, 9), (6, 10)]
+        self.assertEqual(decide_key(path, last_key="d"), "d")
+
+    def test_plan_starts_at_yellow_player_not_center(self):
+        img = np.full((60, 60, 3), 90, dtype=np.uint8)
+        img[8:13, 8:13] = (240, 220, 30)
+        img[8:20, 0:6] = 8
+        img[48:58, 48:58] = 8
+        _grid, path, key = plan(img, cell=3)[:3]
+        self.assertTrue(path, msg="should path from the yellow player")
+        self.assertEqual(key, "a")
+
+    def test_plan_starts_at_white_player_icon(self):
+        img = np.full((60, 60, 3), 90, dtype=np.uint8)
+        img[6:11, 6:11] = 250
+        img[6:16, 0:5] = 8
+        img[50:58, 50:58] = 8
+        _grid, path, key = plan(img, cell=3)[:3]
+        self.assertTrue(path)
+        self.assertEqual(key, "a")
 
 
 if __name__ == "__main__":

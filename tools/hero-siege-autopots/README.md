@@ -4,7 +4,15 @@
 
 Рабочая версия **пот**: AutoHotkey смотрит HP/MP (DXGI) и жмёт банки, только пока активно окно Hero Siege.
 
-**Фарм случайных карт** — отдельный Python: снимок миникарты, белые стены, A* к туману, WASD. См. [`python-farm/README.md`](python-farm/README.md). В AHK ходьбу (F4) не включай, пока запущен python.
+**Фарм случайных карт** — Python A* по миникарте. См. [`python-farm/README.md`](python-farm/README.md).
+
+```text
+cd python-farm
+pip install -r requirements.txt
+python farm.py --debug
+```
+
+В окне отладки **красная точка должна быть на герое**. Если WASD в игре — скиллы: `python farm.py --debug --keys arrows`.
 
 Это не инжект и не работа с памятью игры. Автоматизация может нарушать правила игры — используй на свой риск.
 
@@ -33,13 +41,15 @@
 
 ## Ходьба по миникарте
 
-AHK-ходьба (F3/F4) слабая: лучи по точкам. Нормальный фарм — **Python A\***: [`python-farm/README.md`](python-farm/README.md).
+Python A\* по миникарте: [`python-farm/README.md`](python-farm/README.md).
 
 ```text
 cd python-farm
 pip install -r requirements.txt
 python farm.py --debug
 ```
+
+Красная точка в окне отладки = герой. Если ходишь стрелками: `python farm.py --debug --keys arrows`.
 
 ## Клавиши
 

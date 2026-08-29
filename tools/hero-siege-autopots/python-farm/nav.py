@@ -16,6 +16,7 @@ STEPS = (
     (0, -1, "a"),
     (0, 1, "d"),
 )
+DELTA = {"w": (-1, 0), "s": (1, 0), "a": (0, -1), "d": (0, 1)}
 
 
 def luma_rgb(rgb: np.ndarray) -> np.ndarray:
@@ -27,8 +28,7 @@ def luma_rgb(rgb: np.ndarray) -> np.ndarray:
 
 def classify_rgb(rgb: np.ndarray) -> np.ndarray:
     """rgb: HxWx3 uint8. White/gray lines = WALL, dark = FOG, else FLOOR."""
-    h, w = rgb.shape[:2]
-    out = np.full((h, w), FLOOR, dtype=np.uint8)
+    out = np.full(rgb.shape[:2], FLOOR, dtype=np.uint8)
     r = rgb[..., 0].astype(np.int16)
     g = rgb[..., 1].astype(np.int16)
     b = rgb[..., 2].astype(np.int16)
@@ -62,8 +62,113 @@ def walkable(grid: np.ndarray) -> np.ndarray:
     return grid != WALL
 
 
+def _flood_blob(mask: np.ndarray, y0: int, x0: int, seen: np.ndarray) -> list[tuple[int, int]]:
+    h, w = mask.shape
+    cells: list[tuple[int, int]] = []
+    q = deque([(y0, x0)])
+    seen[y0, x0] = True
+    while q:
+        y, x = q.popleft()
+        cells.append((y, x))
+        for dy, dx, _ in STEPS:
+            ny, nx = y + dy, x + dx
+            if ny < 0 or nx < 0 or ny >= h or nx >= w:
+                continue
+            if seen[ny, nx] or not mask[ny, nx]:
+                continue
+            seen[ny, nx] = True
+            q.append((ny, nx))
+    return cells
+
+
+def _best_compact_blob(
+    mask: np.ndarray,
+    *,
+    min_n: int,
+    max_n: int,
+    max_aspect: float,
+    max_side: int | None = None,
+) -> tuple[int, int] | None:
+    h, w = mask.shape
+    seen = np.zeros(mask.shape, dtype=bool)
+    best: tuple[float, int, int] | None = None
+    for y, x in np.argwhere(mask):
+        y, x = int(y), int(x)
+        if seen[y, x]:
+            continue
+        blob = _flood_blob(mask, y, x, seen)
+        n = len(blob)
+        ys = [p[0] for p in blob]
+        xs = [p[1] for p in blob]
+        touch = min(ys) == 0 or min(xs) == 0 or max(ys) == h - 1 or max(xs) == w - 1
+        if touch or n < min_n or n > max_n:
+            continue
+        bh = max(ys) - min(ys) + 1
+        bw = max(xs) - min(xs) + 1
+        if max(bh, bw) / max(1, min(bh, bw)) > max_aspect:
+            continue
+        if max_side is not None and max(bh, bw) > max_side:
+            continue
+        cy = int(round(sum(ys) / n))
+        cx = int(round(sum(xs) / n))
+        score = n * n / (bh * bw)
+        if best is None or score > best[0]:
+            best = (score, cy, cx)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def find_player_cell(rgb: np.ndarray, grid: np.ndarray, cell: int) -> tuple[int, int] | None:
+    """Hero icon: yellow/gold blob, else a small compact white square (not wall lines)."""
+    r = rgb[..., 0].astype(np.int16)
+    g = rgb[..., 1].astype(np.int16)
+    b = rgb[..., 2].astype(np.int16)
+    yellow = (r >= 190) & (g >= 170) & (b <= 110) & ((r - g) <= 55) & ((g - b) >= 40)
+    pix = _best_compact_blob(yellow, min_n=4, max_n=280, max_aspect=4.0)
+    if pix is None:
+        lu = luma_rgb(rgb)
+        chroma = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
+        white = (lu >= 200) & (chroma <= 40)
+        pix = _best_compact_blob(white, min_n=4, max_n=80, max_aspect=2.2, max_side=12)
+    if pix is None:
+        return None
+    gy = min(grid.shape[0] - 1, max(0, pix[0] // cell))
+    gx = min(grid.shape[1] - 1, max(0, pix[1] // cell))
+    return gy, gx
+
+
+def snap_walkable(grid: np.ndarray, start: tuple[int, int], radius: int = 6) -> tuple[int, int] | None:
+    h, w = grid.shape
+    sy, sx = start
+    if 0 <= sy < h and 0 <= sx < w and grid[sy, sx] != WALL:
+        return sy, sx
+    for r in range(1, radius + 1):
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                y, x = sy + dy, sx + dx
+                if 0 <= y < h and 0 <= x < w and grid[y, x] != WALL:
+                    return y, x
+    return None
+
+
+def _is_fog_speck(grid: np.ndarray, y: int, x: int) -> bool:
+    """Single dark pixel in the middle of a room is noise, not unexplored."""
+    h, w = grid.shape
+    fog_n = floor_n = 0
+    for dy, dx, _ in STEPS:
+        ny, nx = y + dy, x + dx
+        if ny < 0 or nx < 0 or ny >= h or nx >= w:
+            continue
+        if grid[ny, nx] == FOG:
+            fog_n += 1
+        elif grid[ny, nx] == FLOOR:
+            floor_n += 1
+    return fog_n == 0 and floor_n >= 3
+
+
 def nearest_fog(grid: np.ndarray, start: tuple[int, int]) -> tuple[int, int] | None:
-    """BFS through non-walls; first fog cell that is not the start."""
+    """BFS through non-walls; first real fog cell that is not the start."""
     h, w = grid.shape
     sy, sx = start
     if not (0 <= sy < h and 0 <= sx < w) or grid[sy, sx] == WALL:
@@ -71,10 +176,14 @@ def nearest_fog(grid: np.ndarray, start: tuple[int, int]) -> tuple[int, int] | N
     seen = np.zeros_like(grid, dtype=bool)
     q = deque([(sy, sx)])
     seen[sy, sx] = True
+    fallback: tuple[int, int] | None = None
     while q:
         y, x = q.popleft()
         if grid[y, x] == FOG and (y, x) != (sy, sx):
-            return y, x
+            if not _is_fog_speck(grid, y, x):
+                return y, x
+            if fallback is None:
+                fallback = (y, x)
         for dy, dx, _ in STEPS:
             ny, nx = y + dy, x + dx
             if ny < 0 or nx < 0 or ny >= h or nx >= w:
@@ -83,7 +192,7 @@ def nearest_fog(grid: np.ndarray, start: tuple[int, int]) -> tuple[int, int] | N
                 continue
             seen[ny, nx] = True
             q.append((ny, nx))
-    return None
+    return fallback
 
 
 def astar(grid: np.ndarray, start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]]:
@@ -125,50 +234,73 @@ def astar(grid: np.ndarray, start: tuple[int, int], goal: tuple[int, int]) -> li
     return []
 
 
-def path_key(path: list[tuple[int, int]], look: int = 4) -> str | None:
-    """First stable cardinal along the path (row down, col right)."""
+def path_key(path: list[tuple[int, int]], look: int = 12, last_key: str | None = None) -> str | None:
+    """Cardinal from net displacement, not the A* staircase's first step."""
     if len(path) < 2:
         return None
-    votes = {"w": 0, "a": 0, "s": 0, "d": 0}
     y0, x0 = path[0]
-    for y, x in path[1 : 1 + look]:
-        if y < y0:
-            votes["w"] += 1
-        elif y > y0:
-            votes["s"] += 1
-        elif x < x0:
-            votes["a"] += 1
-        elif x > x0:
-            votes["d"] += 1
-        y0, x0 = y, x
-    return max(votes, key=votes.get) if max(votes.values()) else None
+    y1, x1 = path[min(look, len(path) - 1)]
+    dy = y1 - y0
+    dx = x1 - x0
+    if dy == 0 and dx == 0:
+        return last_key
+    adx, ady = abs(dx), abs(dy)
+    horiz = "d" if dx > 0 else "a" if dx < 0 else None
+    vert = "s" if dy > 0 else "w" if dy < 0 else None
+    if last_key == horiz and horiz and adx * 2 >= ady:
+        return last_key
+    if last_key == vert and vert and ady * 2 >= adx:
+        return last_key
+    if adx > ady:
+        return horiz
+    if ady > adx:
+        return vert
+    if last_key in (horiz, vert):
+        return last_key
+    return horiz or vert
 
 
-def plan(rgb: np.ndarray, cell: int = 3) -> tuple[np.ndarray, list[tuple[int, int]], str | None]:
+def _ahead_wall(grid: np.ndarray | None, start: tuple[int, int], key: str) -> bool:
+    if grid is None or key not in DELTA:
+        return False
+    y, x = start
+    dy, dx = DELTA[key]
+    ny, nx = y + dy, x + dx
+    h, w = grid.shape
+    return ny < 0 or nx < 0 or ny >= h or nx >= w or grid[ny, nx] == WALL
+
+
+def decide_key(
+    path: list[tuple[int, int]],
+    last_key: str | None = None,
+    grid: np.ndarray | None = None,
+) -> str | None:
+    if not path:
+        return None
+    key = path_key(path, last_key=last_key)
+    if key and _ahead_wall(grid, path[0], key):
+        other = path_key(path, last_key=None)
+        if other and other != key and not _ahead_wall(grid, path[0], other):
+            return other
+        return None
+    return key
+
+
+def plan(
+    rgb: np.ndarray,
+    cell: int = 3,
+    last_key: str | None = None,
+) -> tuple[np.ndarray, list[tuple[int, int]], str | None]:
     cls = classify_rgb(rgb)
     grid = to_grid(cls, cell)
-    gh, gw = grid.shape
-    start = (gh // 2, gw // 2)
-    # If center is a wall (player icon / white), search nearby floor.
-    if grid[start] == WALL:
-        found = None
-        for r in range(1, 6):
-            for dy in range(-r, r + 1):
-                for dx in range(-r, r + 1):
-                    y, x = start[0] + dy, start[1] + dx
-                    if 0 <= y < gh and 0 <= x < gw and grid[y, x] != WALL:
-                        found = (y, x)
-                        break
-                if found:
-                    break
-            if found:
-                break
-        if found:
-            start = found
-        else:
-            return grid, [], None
+    found = find_player_cell(rgb, grid, cell)
+    start = found if found is not None else (grid.shape[0] // 2, grid.shape[1] // 2)
+    snapped = snap_walkable(grid, start)
+    if snapped is None:
+        return grid, [], None
+    start = snapped
     goal = nearest_fog(grid, start)
     if goal is None:
         return grid, [], None
     path = astar(grid, start, goal)
-    return grid, path, path_key(path)
+    return grid, path, decide_key(path, last_key=last_key, grid=grid)

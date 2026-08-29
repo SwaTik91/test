@@ -15,6 +15,25 @@ from nav import FLOOR, FOG, WALL, plan
 CONFIG_PATH = Path(__file__).with_name("farm.json")
 VK_F3, VK_F4, VK_SHIFT, VK_ESCAPE = 0x72, 0x73, 0x10, 0x1B
 VK = {"w": 0x57, "a": 0x41, "s": 0x53, "d": 0x44}
+TURN = {"w": "d", "d": "s", "s": "a", "a": "w"}
+
+
+def enable_dpi() -> None:
+    """Cursor pixels must match DXGI/dxcam pixels (125%/150% scaling)."""
+    import ctypes
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def patch_bytes(grid: np.ndarray, start: tuple[int, int], r: int = 4) -> bytes:
+    y, x = start
+    return np.ascontiguousarray(grid[max(0, y - r) : y + r + 1, max(0, x - r) : x + r + 1]).tobytes()
 
 
 def load_cfg() -> dict:
@@ -160,8 +179,9 @@ def crop_map(frame: np.ndarray, cfg: dict) -> np.ndarray | None:
     y1, y2 = max(0, y1), min(h, y2)
     if x2 - x1 < 24 or y2 - y1 < 24:
         return None
-    pad_x = max(2, int((x2 - x1) * 0.08))
-    pad_y = max(2, int((y2 - y1) * 0.08))
+    # Thin pad: a large inset can cut off the hero icon near the map edge.
+    pad_x = max(2, int((x2 - x1) * 0.03))
+    pad_y = max(2, int((y2 - y1) * 0.03))
     return frame[y1 + pad_y : y2 - pad_y, x1 + pad_x : x2 - pad_x]
 
 
@@ -184,19 +204,33 @@ def main() -> int:
         print("Этот фарм нужно запускать на Windows, рядом с игрой.")
         print("На этой машине можно только тесты: python test_nav.py")
         return 1
+    enable_dpi()
     parser = argparse.ArgumentParser(description="Hero Siege minimap A* farm")
-    parser.add_argument("--debug", action="store_true", help="окно: белое=стена, тёмное=туман, зелёный=путь")
+    parser.add_argument("--debug", action="store_true", help="окно: белое=стена, тёмное=туман, жёлтый=путь, красный=герой")
+    parser.add_argument(
+        "--keys",
+        choices=("wasd", "arrows"),
+        default="wasd",
+        help="клавиши ходьбы (в Hero Siege 2.0 по умолчанию стрелки)",
+    )
     args = parser.parse_args()
+    if args.keys == "arrows":
+        VK.update({"w": 0x26, "a": 0x25, "s": 0x28, "d": 0x27})
     io = WindowsIO()
     grabber = Grabber()
-    print("Захват:", grabber.mode)
+    print("Захват:", grabber.mode, "  клавиши:", args.keys)
     print("F3 — два угла миникарты (внутри рамки). F4 — ходьба. Shift+Esc — выход.")
-    print("AHK F4 не жми: WASD должен жать только python.")
+    print("С --debug красная точка = герой. Если она не на тебе — напиши цвет иконки.")
+    if args.keys == "wasd":
+        print("Если WASD в игре — скиллы, а ходишь стрелками:  python farm.py --debug --keys arrows")
     cfg = load_cfg()
     enabled = False
     calib_step = 0
     prev_f3 = prev_f4 = False
     last_key: str | None = None
+    lock_until = 0.0
+    stuck_sig = b""
+    stuck_since = 0.0
     cv2 = None
     if args.debug:
         try:
@@ -230,6 +264,10 @@ def main() -> int:
                     if not enabled:
                         io.release()
                         last_key = None
+                        lock_until = 0.0
+                    else:
+                        stuck_sig = b""
+                        stuck_since = 0.0
                     print("ХОДЬБА", "ВКЛ" if enabled else "ВЫКЛ")
             prev_f3, prev_f4 = f3, f4
 
@@ -239,6 +277,7 @@ def main() -> int:
             if not io.game_focused():
                 io.release()
                 last_key = None
+                lock_until = 0.0
                 time.sleep(0.05)
                 continue
             frame = grabber.grab()
@@ -250,17 +289,34 @@ def main() -> int:
                 io.release()
                 time.sleep(0.05)
                 continue
-            grid, path, key = plan(rgb, cell=3)
+            grid, path, key = plan(rgb, cell=2, last_key=last_key)
+            now = time.monotonic()
+            if path:
+                sig = patch_bytes(grid, path[0])
+                if sig != stuck_sig:
+                    stuck_sig, stuck_since = sig, now
+                elif last_key and now - stuck_since > 1.25:
+                    nxt = TURN[last_key]
+                    print(f"\nзастрял → {nxt}")
+                    last_key = nxt
+                    io.hold(nxt)
+                    lock_until = now + 0.75
+                    stuck_sig, stuck_since = b"", now
+                    time.sleep(0.08)
+                    continue
+            if last_key and now < lock_until and key and key != {"w": "s", "s": "w", "a": "d", "d": "a"}.get(last_key):
+                key = last_key
             if key != last_key:
                 io.hold(key)
                 last_key = key
-                print(f"\r{' '.join(key or '-')}  путь {len(path):3d}   ", end="", flush=True)
+                lock_until = now + 0.55
+                print(f"\r{(key or '-'):2s}  путь {len(path):3d}   ", end="", flush=True)
             if cv2 is not None:
                 vis = debug_view(grid, path)
                 vis = cv2.resize(vis, (vis.shape[1] * 6, vis.shape[0] * 6), interpolation=cv2.INTER_NEAREST)
                 cv2.imshow("HS farm", vis)
                 cv2.waitKey(1)
-            time.sleep(0.07)
+            time.sleep(0.1)
     finally:
         io.release()
         if cv2 is not None:
