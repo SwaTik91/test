@@ -250,10 +250,15 @@ class Pix {
         DllCall("GetCursorPos", "ptr", pt)
         sx := NumGet(pt, 0, "int")
         sy := NumGet(pt, 4, "int")
-        hdc := DllCall("GetDC", "ptr", 0, "ptr")
-        col := DllCall("GetPixel", "ptr", hdc, "int", sx, "int", sy, "uint")
-        DllCall("ReleaseDC", "ptr", 0, "ptr", hdc)
-        return this.FromColorRef(col)
+        if DxgiGrab.ready || Cfg.pixelMethod = "dxgi" {
+            c := DxgiGrab.Color(sx, sy)
+            if c || DxgiGrab.ready
+                return c
+        }
+        hwnd := WinExist("A")
+        NumPut("int", sx, "int", sy, pt)
+        DllCall("ScreenToClient", "ptr", hwnd, "ptr", pt)
+        return this.Get(NumGet(pt, 0, "int"), NumGet(pt, 4, "int"))
     }
 
     static AhkScreen(cx, cy, mode := "") {
@@ -847,10 +852,14 @@ class Calib {
         keyName := wantHp ? "F6" : "F7"
         leftStep := (this.mode = "hp1" || this.mode = "mp1")
         edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
-        if Col.IsDeadGdi(c)
-            ok := "GDI слепой. Жди красный от DXGI; если нет — закрой OBS и перезапусти скрипт"
+        if !DxgiGrab.ready
+            ok := "DXGI не запущен: " DxgiGrab.err
+        else if !c
+            ok := "DXGI кадр пустой — подожди секунду, поводи курсором"
+        else if onBar
+            ok := "✓ DXGI видит полоску — жми " keyName
         else
-            ok := onBar ? ("✓ ты на полоске — жми " keyName) : ("не тот цвет, наведи НА " barName " полоску")
+            ok := "DXGI " Col.Hex(c) " — наведи НА " barName " полоску"
         msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
             . "Полоска в ВЕРХНЕМ ЛЕВОМ углу, под именем персонажа.`n"
             . "Это не банка 1 внизу экрана.`n`n"
