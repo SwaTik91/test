@@ -27,10 +27,13 @@ CoordMode "ToolTip", "Screen"
 ;  настройках скрипта (по умолчанию 1 = HP, 2 = MP).
 ; =============================================================================
 
+DllCall("User32.dll\SetThreadDpiAwarenessContext", "ptr", -4)
 Cfg.Load()
 Overlay.Init()
 TrayMenu.Init()
-OnExit((*) => Pix.PrintFree())
+OnExit((*) => (DxgiGrab.Free(), Pix.PrintFree()))
+if !DxgiGrab.Init()
+    Overlay.ShowHint("DXGI не поднялся: " DxgiGrab.err "  (закрой OBS/Xbox Game Bar и перезапусти)")
 SetTimer(() => AutoPots.Tick(), Cfg.tickMs)
 TrayTip("Hero Siege AutoPots", "F8 — вкл/выкл   F6 — калибровка HP   F10 — настройки", "Iconi")
 
@@ -56,7 +59,7 @@ class Cfg {
     static tickMs := 60
     static colorTol := 90
     static pixelMode := "Slow"
-    static pixelMethod := "screen"
+    static pixelMethod := "dxgi"
     static overlayCorner := "br"
     static calibratedHp := false
     static calibratedMp := false
@@ -73,7 +76,14 @@ class Cfg {
         this.tickMs := SafeInt(IniRead(f, "general", "tickMs", this.tickMs), this.tickMs)
         this.colorTol := SafeInt(IniRead(f, "general", "colorTol", this.colorTol), this.colorTol)
         this.pixelMode := IniRead(f, "general", "pixelMode", this.pixelMode)
-        this.pixelMethod := IniRead(f, "general", "pixelMethod", "screen")
+        this.pixelMethod := IniRead(f, "general", "pixelMethod", "dxgi")
+        if IniRead(f, "general", "dxgiMigrated", "0") != "1" {
+            this.pixelMethod := "dxgi"
+            try {
+                IniWrite("1", f, "general", "dxgiMigrated")
+                IniWrite("dxgi", f, "general", "pixelMethod")
+            }
+        }
         this.overlayCorner := IniRead(f, "general", "overlayCorner", this.overlayCorner)
         this.calibratedHp := IniRead(f, "hp", "calibrated", "0") = "1"
         this.hpX1 := SafeFloat(IniRead(f, "hp", "x1", this.hpX1), this.hpX1)
@@ -194,12 +204,18 @@ class Pix {
     static printHwnd := 0
 
     static Get(cx, cy) {
-        switch Cfg.pixelMethod {
+        method := Cfg.pixelMethod
+        if method = "dxgi" && !DxgiGrab.ready
+            method := "screen"
+        switch method {
             case "window": return this.AhkClient(cx, cy, "Slow")
             case "alt":    return this.AhkScreen(cx, cy, "Alt")
             case "slow":   return this.AhkScreen(cx, cy, "Slow")
             case "print":  return this.PrintGet(cx, cy)
-            default:       return this.Screen(cx, cy)
+            case "screen": return this.Screen(cx, cy)
+            default:
+                this.ToScreen(cx, cy, &sx, &sy)
+                return DxgiGrab.Color(sx, sy)
         }
     }
 
@@ -307,10 +323,246 @@ class Pix {
         alt := this.AhkScreen(cx, cy, "Alt")
         window := this.AhkClient(cx, cy, "Slow")
         print := this.PrintGet(cx, cy)
+        dxgi := DxgiGrab.Color(sx, sy)
         return Map(
             "sx", sx, "sy", sy, "cx", cx, "cy", cy,
-            "screen", screen, "alt", alt, "window", window, "print", print
+            "screen", screen, "alt", alt, "window", window, "print", print, "dxgi", dxgi
         )
+    }
+}
+
+; -----------------------------------------------------------------------------
+;  DXGI Desktop Duplication — единственный способ увидеть кадр DirectX-игры,
+;  когда GDI отдаёт одну заливку 0x3F3949 (это не античит).
+; -----------------------------------------------------------------------------
+
+class DxgiGrab {
+    static ready := false
+    static err := ""
+    static factory := 0, adapter := 0, output := 0, output1 := 0
+    static device := 0, ctx := 0, dup := 0, staging := 0
+    static outputLeft := 0, outputTop := 0, width := 0, height := 0
+    static pitch := 0, bits := 0, mapped := false, inSysMem := false
+    static frameRes := 0, lastGrab := -1
+
+    static Init() {
+        this.Free()
+        try {
+            this.InitRaw()
+            this.ready := true
+            this.err := ""
+            Loop 12 {
+                if this.Grab(80)
+                    break
+            }
+            return this.bits != 0
+        } catch as e {
+            this.err := e.Message
+            this.Free()
+            return false
+        }
+    }
+
+    static InitRaw() {
+        if !DllCall("GetModuleHandle", "str", "DXGI")
+            DllCall("LoadLibrary", "str", "DXGI")
+        if !DllCall("GetModuleHandle", "str", "D3D11")
+            DllCall("LoadLibrary", "str", "D3D11")
+        DllCall("ole32\CLSIDFromString", "wstr", "{7b7166ec-21c7-44ae-b21a-c9ae321ae369}", "ptr", riid := Buffer(16), "HRESULT")
+        DllCall("DXGI\CreateDXGIFactory1", "ptr", riid, "ptr*", &factory := 0, "HRESULT")
+        this.factory := factory
+        found := false
+        Loop 10 {
+            try ComCall(7, factory, "uint", A_Index - 1, "ptr*", &adapter := 0)
+            catch
+                break
+            Loop 8 {
+                try ComCall(7, adapter, "uint", A_Index - 1, "ptr*", &output := 0)
+                catch OSError as e {
+                    if (e.number & 0xFFFFFFFF) = 0x887A0002
+                        break
+                    throw
+                }
+                desc := Buffer(96, 0)
+                ComCall(7, output, "ptr", desc)
+                left := NumGet(desc, 72, "int")
+                top := NumGet(desc, 76, "int")
+                right := NumGet(desc, 80, "int")
+                bottom := NumGet(desc, 84, "int")
+                attached := NumGet(desc, 68, "int")
+                w := right - left, h := bottom - top
+                if attached && w > 64 && h > 64 {
+                    this.adapter := adapter
+                    this.output := output
+                    this.outputLeft := left
+                    this.outputTop := top
+                    this.width := w
+                    this.height := h
+                    found := true
+                    break 2
+                }
+                ObjRelease(output)
+            }
+            ObjRelease(adapter)
+        }
+        if !found
+            throw Error("DXGI: нет монитора")
+        DllCall("D3D11\D3D11CreateDevice"
+            , "ptr", this.adapter
+            , "int", 0
+            , "ptr", 0
+            , "uint", 0
+            , "ptr", 0
+            , "uint", 0
+            , "uint", 7
+            , "ptr*", &device := 0
+            , "ptr*", 0
+            , "ptr*", &ctx := 0
+            , "HRESULT")
+        this.device := device
+        this.ctx := ctx
+        this.output1 := ComObjQuery(this.output, "{00cddea8-939b-4b83-a340-a685226666cc}")
+        ComCall(22, this.output1, "ptr", device, "ptr*", &dup := 0)
+        this.dup := dup
+        dupDesc := Buffer(36, 0)
+        ComCall(7, dup, "ptr", dupDesc)
+        this.inSysMem := NumGet(dupDesc, 32, "uint")
+        texDesc := Buffer(44, 0)
+        NumPut("uint", this.width, texDesc, 0)
+        NumPut("uint", this.height, texDesc, 4)
+        NumPut("uint", 1, texDesc, 8)
+        NumPut("uint", 1, texDesc, 12)
+        NumPut("uint", 87, texDesc, 16)
+        NumPut("uint", 1, texDesc, 20)
+        NumPut("uint", 0, texDesc, 24)
+        NumPut("uint", 3, texDesc, 28)
+        NumPut("uint", 0, texDesc, 32)
+        NumPut("uint", 0x20000, texDesc, 36)
+        NumPut("uint", 0, texDesc, 40)
+        ComCall(5, device, "ptr", texDesc, "ptr", 0, "ptr*", &staging := 0)
+        this.staging := staging
+        Sleep 40
+    }
+
+    static Grab(timeout := 0) {
+        if !this.dup
+            return false
+        info := Buffer(48, 0)
+        res := 0
+        try ComCall(8, this.dup, "uint", timeout, "ptr", info, "ptr*", &res)
+        catch OSError as e {
+            hr := e.number & 0xFFFFFFFF
+            if hr = 0x887A0027
+                return this.bits != 0
+            if hr = 0x887A0026 {
+                this.ready := false
+                return this.Init()
+            }
+            return false
+        }
+        if NumGet(info, 0, "int64") = 0 {
+            if res
+                ObjRelease(res)
+            try ComCall(14, this.dup)
+            return this.bits != 0
+        }
+        this.Unmap()
+        this.frameRes := res
+        if this.inSysMem {
+            mapped := Buffer(A_PtrSize * 2, 0)
+            ComCall(12, this.dup, "ptr", mapped)
+            this.pitch := NumGet(mapped, 0, "int")
+            this.bits := NumGet(mapped, A_PtrSize, "ptr")
+        } else {
+            tex := ComObjQuery(res, "{6f15aaf2-d208-4e89-9ab4-489535d34f9c}")
+            ComCall(47, this.ctx, "ptr", this.staging, "ptr", tex)
+            mapped := Buffer(16, 0)
+            ComCall(14, this.ctx, "ptr", this.staging, "uint", 0, "uint", 1, "uint", 0, "ptr", mapped)
+            this.bits := NumGet(mapped, 0, "ptr")
+            this.pitch := NumGet(mapped, A_PtrSize, "uint")
+        }
+        this.mapped := true
+        return this.bits != 0
+    }
+
+    static Unmap() {
+        if !this.mapped {
+            if this.frameRes {
+                ObjRelease(this.frameRes)
+                this.frameRes := 0
+                try ComCall(14, this.dup)
+            }
+            return
+        }
+        try {
+            if this.inSysMem
+                ComCall(13, this.dup)
+            else
+                ComCall(15, this.ctx, "ptr", this.staging, "uint", 0)
+        }
+        if this.frameRes {
+            ObjRelease(this.frameRes)
+            this.frameRes := 0
+        }
+        try ComCall(14, this.dup)
+        this.mapped := false
+    }
+
+    static Color(sx, sy) {
+        if !this.ready && !this.Init()
+            return 0
+        if this.lastGrab != A_TickCount {
+            this.lastGrab := A_TickCount
+            this.Grab(0)
+        }
+        if !this.bits || !this.pitch
+            return 0
+        x := sx - this.outputLeft
+        y := sy - this.outputTop
+        if x < 0 || y < 0 || x >= this.width || y >= this.height
+            return 0
+        bgra := NumGet(this.bits + (y * this.pitch) + (x * 4), "uint")
+        r := (bgra >> 16) & 0xFF
+        g := (bgra >> 8) & 0xFF
+        b := bgra & 0xFF
+        return (r << 16) | (g << 8) | b
+    }
+
+    static Free() {
+        try this.Unmap()
+        this.output1 := ""
+        if this.staging {
+            try ObjRelease(this.staging)
+            this.staging := 0
+        }
+        if this.dup {
+            try ObjRelease(this.dup)
+            this.dup := 0
+        }
+        if this.ctx {
+            try ObjRelease(this.ctx)
+            this.ctx := 0
+        }
+        if this.device {
+            try ObjRelease(this.device)
+            this.device := 0
+        }
+        if this.output {
+            try ObjRelease(this.output)
+            this.output := 0
+        }
+        if this.adapter {
+            try ObjRelease(this.adapter)
+            this.adapter := 0
+        }
+        if this.factory {
+            try ObjRelease(this.factory)
+            this.factory := 0
+        }
+        this.bits := 0
+        this.ready := false
+        this.mapped := false
+        this.frameRes := 0
     }
 }
 
@@ -572,7 +824,7 @@ class Calib {
         leftStep := (this.mode = "hp1" || this.mode = "mp1")
         edge := leftStep ? "ЛЕВЫЙ" : "ПРАВЫЙ"
         if Col.IsDeadGdi(c)
-            ok := "кадр не читается (заливка окна). Нужен оконный/безрамочный режим"
+            ok := "GDI слепой. Жди красный от DXGI; если нет — закрой OBS и перезапусти скрипт"
         else
             ok := onBar ? ("✓ ты на полоске — жми " keyName) : ("не тот цвет, наведи НА " barName " полоску")
         msg := "НЕ КЛИКАЙ — только курсор и " keyName "`n"
@@ -591,23 +843,24 @@ class Calib {
 class Probe {
     static Show() {
         d := Pix.DumpAtCursor()
-        if Col.IsDeadGdi(d["window"]) && !Col.IsDeadGdi(d["screen"]) {
-            Cfg.pixelMethod := "screen"
-            Cfg.Save()
-        }
         cur := Pix.Get(d["cx"], d["cy"])
         msg := Format(
-            "метод {} → {}`nscreen {}`nalt {}`nwindow {}  (часто 3F3949 = DirectX)`nprint {}`nscreen-xy {},{}  client {},{}",
+            "метод {} → {}`ndxgi {}`nscreen {}`nalt {}`nwindow {}`nprint {}`nxy {},{}",
             Cfg.pixelMethod, Col.Hex(cur),
-            Col.Hex(d["screen"]), Col.Hex(d["alt"]),
+            Col.Hex(d["dxgi"]), Col.Hex(d["screen"]), Col.Hex(d["alt"]),
             Col.Hex(d["window"]), Col.Hex(d["print"]),
-            d["sx"], d["sy"], d["cx"], d["cy"]
+            d["sx"], d["sy"]
         )
-        if Col.IsDeadGdi(cur)
-            msg .= "`nкадр не читается: поставь оконный/безрамочный режим, не exclusive fullscreen"
-        ToolTip(msg)
+        if !DxgiGrab.ready
+            msg .= "`nDXGI: " DxgiGrab.err
+        else if Col.IsRed(d["dxgi"])
+            msg .= "`nDXGI видит красный — калибруй F6"
+        else if Col.IsDeadGdi(d["dxgi"])
+            msg .= "`nзакрой OBS/Xbox overlay и перезапусти скрипт"
+        MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
+        ToolTip(msg, l + 24, b - 220)
         Overlay.ShowHint(msg)
-        SetTimer(() => ToolTip(), -5000)
+        SetTimer(() => ToolTip(), -6000)
     }
 }
 
@@ -741,9 +994,9 @@ class SettingsUi {
         g.Add("Text", "xm y+10", "Допуск цвета (30–150):")
         edTol := g.Add("Edit", "x+8 yp w80", Cfg.colorTol)
         g.Add("Text", "xm y+10", "Чтение пикселя:")
-        edMethod := g.Add("DropDownList", "x+8 yp w140", ["screen", "alt", "slow", "window", "print"])
+        edMethod := g.Add("DropDownList", "x+8 yp w140", ["dxgi", "screen", "alt", "slow", "window", "print"])
         edMethod.Text := Cfg.pixelMethod
-        g.Add("Text", "xm y+12 c666666 w360", "Цвет 3F3949 везде — это не защита, а DirectX: окно не отдаёт кадр. Метод screen читает рабочий стол. Игра должна быть в оконном или безрамочном режиме, не exclusive fullscreen. F9 показывает все методы.")
+        g.Add("Text", "xm y+12 c666666 w360", "3F3949 на screen/window — нормально для DirectX. Нужен метод dxgi (захват кадра как OBS). Если dxgi тоже врёт — закрой OBS/Xbox Game Bar и перезапусти скрипт. F9 показывает строку dxgi внизу экрана, не на HP.")
         btn := g.Add("Button", "xm y+16 w140 Default", "Сохранить")
         btn.OnEvent("Click", (*) => SettingsUi.Save(g, edHpKeys, edMpKeys, edHpPct, edMpPct, edCd, edTick, edTol, edMethod))
         g.OnEvent("Close", (*) => SettingsUi.Closed())
