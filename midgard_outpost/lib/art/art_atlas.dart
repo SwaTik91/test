@@ -90,7 +90,13 @@ class ArtAtlas {
   /// Alias for [chest].
   static String get chestPath => chest;
 
+  /// Full Flutter asset path (`assets/images/...`) for [AssetImage] / [rootBundle].
+  static String flutterAsset(String relativePath) => '$assetRoot$relativePath';
+
+  /// Flame [Sprite.load] path. Flame's Images cache already prefixes `assets/images/`.
+  static String flameAsset(String relativePath) => relativePath;
+
   static Future<Sprite> loadSprite(String path) {
-    return Sprite.load('$assetRoot$path');
+    return Sprite.load(flameAsset(path));
   }
 }
