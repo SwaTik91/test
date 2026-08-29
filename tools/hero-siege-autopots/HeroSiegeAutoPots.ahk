@@ -371,6 +371,7 @@ class DxgiGrab {
     static outputLeft := 0, outputTop := 0, width := 0, height := 0
     static pitch := 0, bits := 0, mapped := false, inSysMem := false
     static frameRes := 0, lastGrab := -1
+    static cpu := 0, cpuPitch := 0
 
     static Init() {
         this.Free()
@@ -499,77 +500,84 @@ class DxgiGrab {
         this.height := DllCall("GetSystemMetrics", "int", 79, "int")
     }
 
-    static Grab(timeout := 0) {
+    static Grab(timeout := 50) {
         if !this.dup
             return false
+        this.lastGrab := A_TickCount
+        this.Unmap()
         info := Buffer(48, 0)
         res := 0
         try ComCall(8, this.dup, "uint", timeout, "ptr", info, "ptr*", &res)
         catch OSError as e {
             hr := e.number & 0xFFFFFFFF
             if hr = 0x887A0027
-                return this.bits != 0
+                return this.cpu != 0
             if hr = 0x887A0026 {
                 this.ready := false
                 return this.Init()
             }
-            return false
+            return this.cpu != 0
         }
         if NumGet(info, 0, "int64") = 0 {
             if res
                 ObjRelease(res)
             try ComCall(14, this.dup)
-            return this.bits != 0
+            return this.cpu != 0
         }
-        this.Unmap()
         this.frameRes := res
-        if this.inSysMem {
-            mapped := Buffer(A_PtrSize * 2, 0)
-            ComCall(12, this.dup, "ptr", mapped)
-            this.pitch := NumGet(mapped, 0, "int")
-            this.bits := NumGet(mapped, A_PtrSize, "ptr")
-        } else {
-            tex := ComObjQuery(res, "{6f15aaf2-d208-4e89-9ab4-489535d34f9c}")
-            ComCall(47, this.ctx, "ptr", this.staging, "ptr", tex)
-            mapped := Buffer(16, 0)
-            ComCall(14, this.ctx, "ptr", this.staging, "uint", 0, "uint", 1, "uint", 0, "ptr", mapped)
-            this.bits := NumGet(mapped, 0, "ptr")
-            this.pitch := NumGet(mapped, A_PtrSize, "uint")
-        }
         this.mapped := true
-        return this.bits != 0
+        try {
+            if this.inSysMem {
+                mapped := Buffer(A_PtrSize * 2, 0)
+                ComCall(12, this.dup, "ptr", mapped)
+                this.CopyBits(NumGet(mapped, A_PtrSize, "ptr"), NumGet(mapped, 0, "int"))
+            } else {
+                tex := ComObjQuery(res, "{6F15AAF2-D208-4E89-9AB4-489535D34F9C}")
+                ComCall(47, this.ctx, "ptr", this.staging, "ptr", tex)
+                mapped := Buffer(16, 0)
+                ComCall(14, this.ctx, "ptr", this.staging, "uint", 0, "uint", 1, "uint", 0, "ptr", mapped)
+                this.CopyBits(NumGet(mapped, 0, "ptr"), NumGet(mapped, A_PtrSize, "uint"))
+            }
+        } finally {
+            this.Unmap()
+        }
+        return this.cpu != 0
+    }
+
+    static CopyBits(pBits, pitch) {
+        if !pBits || pitch < 4 || this.height < 1
+            return
+        this.cpuPitch := pitch
+        this.pitch := pitch
+        this.cpu := Buffer(pitch * this.height)
+        DllCall("RtlMoveMemory", "ptr", this.cpu, "ptr", pBits, "uptr", pitch * this.height)
+        this.bits := this.cpu.Ptr
     }
 
     static Unmap() {
-        if !this.mapped {
-            if this.frameRes {
-                ObjRelease(this.frameRes)
-                this.frameRes := 0
-                try ComCall(14, this.dup)
+        if this.mapped {
+            try {
+                if this.inSysMem
+                    ComCall(13, this.dup)
+                else if this.staging
+                    ComCall(15, this.ctx, "ptr", this.staging, "uint", 0)
             }
-            return
-        }
-        try {
-            if this.inSysMem
-                ComCall(13, this.dup)
-            else
-                ComCall(15, this.ctx, "ptr", this.staging, "uint", 0)
+            this.mapped := false
         }
         if this.frameRes {
-            ObjRelease(this.frameRes)
+            try ObjRelease(this.frameRes)
             this.frameRes := 0
+            try ComCall(14, this.dup)
         }
-        try ComCall(14, this.dup)
-        this.mapped := false
     }
 
     static Color(sx, sy) {
         if !this.ready && !this.Init()
             return 0
-        if this.lastGrab != A_TickCount {
-            this.lastGrab := A_TickCount
-            this.Grab(0)
-        }
+        ; timeout 0 почти всегда DXGI_ERROR_WAIT_TIMEOUT — тогда навсегда
+        ; остаётся кадр калибровки (полное HP → вечные 100%).
+        if this.lastGrab != A_TickCount
+            this.Grab(40)
         if !this.bits || !this.pitch
             return 0
         x := sx - this.outputLeft
@@ -615,6 +623,7 @@ class DxgiGrab {
             this.factory := 0
         }
         this.bits := 0
+        this.cpu := 0
         this.ready := false
         this.mapped := false
         this.frameRes := 0
@@ -663,29 +672,33 @@ class DxgiGrab {
         best := 0, bestX1 := 0, bestX2 := 0, bestY := 0
         y := yMin
         while y <= yLim {
-            run := 0, rs := 0
-            x := xMin
-            while x <= xLim {
-                hit := (kind = "hp") ? Col.IsRed(this.BufColor(x, y)) : Col.IsBlue(this.BufColor(x, y))
-                if hit {
-                    if run = 0
-                        rs := x
-                    run += 1
-                } else {
-                    if run > best {
-                        best := run, bestX1 := rs, bestX2 := x - 1, bestY := y
-                    }
-                    run := 0
-                }
-                x += 1
-            }
-            if run > best {
-                best := run, bestX1 := rs, bestX2 := xLim, bestY := y
+            len := this.RowSpan(kind, y, xMin, xLim, &x1, &x2)
+            if len > best {
+                best := len, bestX1 := x1, bestX2 := x2, bestY := y
             }
             y += 1
         }
         if best < 28
             return false
+        ; Берём середину полоски по вертикали, а не 1px рамки, которая не укорачивается.
+        thresh := Max(28, Integer(best * 0.82))
+        yTop := bestY, yBot := bestY
+        y := bestY - 1
+        while y >= yMin {
+            if this.RowSpan(kind, y, xMin, xLim, &x1, &x2) < thresh
+                break
+            yTop := y
+            y -= 1
+        }
+        y := bestY + 1
+        while y <= yLim {
+            if this.RowSpan(kind, y, xMin, xLim, &x1, &x2) < thresh
+                break
+            yBot := y
+            y += 1
+        }
+        bestY := (yTop + yBot) // 2
+        this.RowSpan(kind, bestY, xMin, xLim, &bestX1, &bestX2)
         if bestX2 - bestX1 > 14 {
             bestX1 += 4
             bestX2 -= 4
@@ -695,6 +708,30 @@ class DxgiGrab {
         sx2 := this.outputLeft + bestX2
         sy2 := this.outputTop + bestY
         return true
+    }
+
+    static RowSpan(kind, y, xMin, xLim, &x1, &x2) {
+        best := 0, rs := 0, run := 0
+        x1 := 0, x2 := 0
+        x := xMin
+        while x <= xLim {
+            hit := (kind = "hp") ? Col.IsRed(this.BufColor(x, y)) : Col.IsBlue(this.BufColor(x, y))
+            if hit {
+                if run = 0
+                    rs := x
+                run += 1
+            } else {
+                if run > best {
+                    best := run, x1 := rs, x2 := x - 1
+                }
+                run := 0
+            }
+            x += 1
+        }
+        if run > best {
+            best := run, x1 := rs, x2 := xLim
+        }
+        return best
     }
 }
 
@@ -768,7 +805,7 @@ class MagGrab {
 ; -----------------------------------------------------------------------------
 
 class Bar {
-    static samples := 18
+    static samples := 24
 
     static Read(which) {
         Game.ClientSize(&w, &h)
@@ -796,9 +833,14 @@ class Bar {
     }
 
     static IsFilled(c, fill, which) {
-        if Col.Dist(c, fill) <= Cfg.colorTol
-            return true
-        return (which = "hp") ? Col.IsRed(c) : Col.IsBlue(c)
+        if !c || Col.IsDeadGdi(c)
+            return false
+        if Col.Dist(c, fill) > Cfg.colorTol
+            return false
+        ; Пустой трек часто тёмно-красный/синий. «Любой красный» → вечные 100%.
+        if which = "hp"
+            return Col.R(c) >= Col.R(fill) - 28
+        return Col.B(c) >= Col.B(fill) - 28
     }
 
     static SampleFill(which) {
@@ -851,6 +893,8 @@ class AutoPots {
 
     static Tick() {
         if Calib.mode = "" && Game.IsActive() {
+            if DxgiGrab.ready
+                DxgiGrab.Grab(30)
             now := A_TickCount
             if Cfg.calibratedHp {
                 this.hpPct := Bar.Read("hp")
@@ -982,7 +1026,14 @@ class Calib {
         this.tipOn := false
         ToolTip()
         Overlay.Place()
-        Overlay.ShowHint((which = "hp" ? "HP" : "MP") " найден, цвет " Col.Hex(fill) ". F8 — вкл автопоты")
+        pct := Bar.Read(which)
+        if which = "hp"
+            AutoPots.hpPct := pct
+        else
+            AutoPots.mpPct := pct
+        Overlay.ShowHint(Format(
+            "{} найден, цвет {}`nсейчас ~{}% — получи урон, цифра должна упасть. Потом F8",
+            which = "hp" ? "HP" : "MP", Col.Hex(fill), pct))
         SoundBeep(940, 110)
         return true
     }
@@ -1143,7 +1194,7 @@ class Overlay {
         g.MarginX := 10
         g.MarginY := 8
         g.SetFont("s10 c00E676", "Segoe UI")
-        this.txt := g.Add("Text", "w300 h70", "Hero Siege AutoPots`nвыкл  |  F11 двигает панель")
+        this.txt := g.Add("Text", "w300 h88", "Hero Siege AutoPots`nвыкл  |  F11 двигает панель")
         this.g := g
         this.Place()
         WinSetTransparent(190, g.Hwnd)
@@ -1153,7 +1204,7 @@ class Overlay {
         if !this.g
             return
         MonitorGetWorkArea(MonitorGetPrimary(), &l, &t, &r, &b)
-        w := 320, h := 96, pad := 18
+        w := 320, h := 118, pad := 18
         switch Cfg.overlayCorner {
             case "tl": x := l + pad, y := t + pad
             case "tr": x := r - w - pad, y := t + pad
@@ -1198,12 +1249,18 @@ class Overlay {
             return
         if this.hidden
             this.Place()
+        state := AutoPots.enabled ? "ВКЛ" : "ВЫКЛ"
+        hpLine := Cfg.calibratedHp
+            ? Format("HP ~ {}%  (порог {}%)", AutoPots.hpPct < 0 ? "?" : AutoPots.hpPct, Cfg.hpPct)
+            : "HP: нет калибровки (F6)"
+        mpLine := Cfg.calibratedMp
+            ? Format("MP ~ {}%  (порог {}%)", AutoPots.mpPct < 0 ? "?" : AutoPots.mpPct, Cfg.mpPct)
+            : "MP: нет калибровки (F7, необязательно)"
         if this.hintMsg != "" && A_TickCount < this.hintUntil {
-            this.txt.Value := this.hintMsg
+            this.txt.Value := this.hintMsg "`n" hpLine
             return
         }
         this.hintMsg := ""
-        state := AutoPots.enabled ? "ВКЛ" : "ВЫКЛ"
         if !Game.Exists() {
             this.txt.Value := "Hero Siege AutoPots  " state "`nигра не найдена"
             return
@@ -1212,12 +1269,6 @@ class Overlay {
             this.txt.Value := "Hero Siege AutoPots  " state "`nокно не в фокусе — поты не жмутся"
             return
         }
-        hpLine := Cfg.calibratedHp
-            ? Format("HP ~ {}%  (порог {}%)", AutoPots.hpPct < 0 ? "?" : AutoPots.hpPct, Cfg.hpPct)
-            : "HP: нет калибровки (F6)"
-        mpLine := Cfg.calibratedMp
-            ? Format("MP ~ {}%  (порог {}%)", AutoPots.mpPct < 0 ? "?" : AutoPots.mpPct, Cfg.mpPct)
-            : "MP: нет калибровки (F7, необязательно)"
         this.txt.Value := "Автопоты  " state "`n" hpLine "`n" mpLine
     }
 }
