@@ -2,6 +2,28 @@
 
 Interactive and static UI sketches for custom systems on top of a classic RO client.
 
+## Web panel (registration and account)
+
+Official site mock for Midgard Outpost — parchment, gold, plaza, same language as
+the Origin login. This is where players **register**, sign in on the web, read
+news, and browse ranking. Character creation still happens in the client; the
+live panel would write the rAthena `login` row (userid, user_pass, email, sex).
+
+| Page | HTML | Preview |
+| --- | --- | --- |
+| Home / news / status | [web-panel/index.html](./web-panel/index.html) | [web-panel-home.png](./web-panel-home.png) |
+| Create account | [web-panel/register.html](./web-panel/register.html) | [web-panel-register.png](./web-panel-register.png) |
+| Sign in | [web-panel/login.html](./web-panel/login.html) | [web-panel-login.png](./web-panel-login.png) |
+| My account | [web-panel/account.html](./web-panel/account.html) | [web-panel-account.png](./web-panel-account.png) |
+| Daily MVP ranking | [web-panel/ranking.html](./web-panel/ranking.html) | [web-panel-ranking.png](./web-panel-ranking.png) |
+| Download / goro.ini | [web-panel/download.html](./web-panel/download.html) | [web-panel-download.png](./web-panel-download.png) |
+
+Filled sample: account `testaccount`, email `player@midgard.local`, password
+masked. Sex and birthdate are stored for the later `0x0064` login packet.
+
+Not in this cut: VIP shop, battle pass, storage viewer. Those belong after
+the account table exists.
+
 ## Auto Battle
 
 - Interactive: [autobattle.html](./autobattle.html)

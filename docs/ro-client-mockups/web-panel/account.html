@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Account</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+      <a href="register.html">Register</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="download.html">Download</a>
+      <a class="on" href="account.html">Account</a>
+      <a class="btn ghost" href="index.html">Sign out</a>
+    </nav>
+  </header>
+
+  <h1 class="page-title">testaccount</h1>
+  <section class="grid-2">
+    <article class="panel">
+      <h2 class="card-title">Characters</h2>
+      <table>
+        <tr><th>Slot</th><th>Name</th><th>Job</th><th>Base / Job</th></tr>
+        <tr><td>1</td><td>Sirius</td><td>Swordman</td><td>42 / 21</td></tr>
+        <tr><td>2</td><td class="hint" style="margin:0">empty</td><td>—</td><td>—</td></tr>
+        <tr><td>3</td><td class="hint" style="margin:0">empty</td><td>—</td><td>—</td></tr>
+      </table>
+      <p class="hint">Characters are created in the client. This page only shows what char-server already stored.</p>
+    </article>
+    <article class="panel">
+      <h2 class="card-title">Account</h2>
+      <table>
+        <tr><td>Email</td><td>player@midgard.local</td></tr>
+        <tr><td>Gender</td><td>M</td></tr>
+        <tr><td>Group</td><td>Player</td></tr>
+        <tr><td>State</td><td class="ok">OK</td></tr>
+        <tr><td>Last IP</td><td>127.0.0.1</td></tr>
+      </table>
+      <form action="#" style="margin-top:14px">
+        <div class="field">
+          <label for="newpass">New password</label>
+          <input id="newpass" type="password" placeholder="leave empty to keep">
+        </div>
+        <button class="btn" type="button">SAVE</button>
+      </form>
+    </article>
+  </section>
+  <footer class="footer">Later: VIP status, battle pass, storage viewer. Not on this first cut.</footer>
+</div>
+</body>
+</html>

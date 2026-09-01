@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midgard — Download</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><strong>MIDGARD</strong><span>WEB PANEL</span></a>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+      <a href="register.html">Register</a>
+      <a href="ranking.html">Ranking</a>
+      <a class="on" href="download.html">Download</a>
+      <a class="btn ghost" href="login.html">Sign in</a>
+      <a class="btn" href="register.html">Create account</a>
+    </nav>
+  </header>
+
+  <h1 class="page-title">Download Midgard</h1>
+  <section class="grid-2">
+    <article class="panel">
+      <h2 class="card-title">Client</h2>
+      <p class="hint" style="margin-top:0">The playable client is <strong>goro</strong> — a custom Go client that speaks rAthena packets. Windows first; Android later. Data files (GRF / sprites) stay the same as a 2008-era Ragexe install.</p>
+      <table>
+        <tr><td>Windows client</td><td>goro-win.zip</td></tr>
+        <tr><td>Data / GRF</td><td>midgard-data.7z</td></tr>
+        <tr><td>Patcher</td><td>coming next</td></tr>
+      </table>
+      <p class="hint">Build artifact is a placeholder until CI publishes a signed zip.</p>
+    </article>
+    <article class="panel">
+      <h2 class="card-title">What to put in goro.ini</h2>
+      <p class="hint" style="margin-top:0">After the security patches, config is no longer read from the working directory. Use <code>--config</code> or <code>%AppData%/goro/goro.ini</code>.</p>
+      <table>
+        <tr><td>Server name</td><td>Local rAthena</td></tr>
+        <tr><td>Address</td><td>127.0.0.1</td></tr>
+        <tr><td>Port</td><td>6900</td></tr>
+        <tr><td>PACKETVER</td><td>match char-server</td></tr>
+      </table>
+    </article>
+  </section>
+  <footer class="footer">Bookmark this panel. The game itself still uses its own login window.</footer>
+</div>
+</body>
+</html>
