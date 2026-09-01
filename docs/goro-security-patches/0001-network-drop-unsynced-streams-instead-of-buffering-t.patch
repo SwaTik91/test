@@ -1,0 +1,241 @@
+From 09ac38c087c85a3628827ad2be0a5d7110b65402 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 24 Aug 2026 23:02:58 +0000
+Subject: [PATCH 1/6] network: drop unsynced streams instead of buffering them
+
+An unparseable stream made Framer.Push keep every byte and rescan the whole
+buffer for each new chunk, so a server could grow client memory without bound
+at quadratic cost. Framing failures now report ErrUnsyncedStream, the framer
+releases the bytes it already rejected, pending data is capped, and the read
+loop disconnects rather than retrying forever. Outbound trace logs no longer
+dump the payload of packets that carry a password or a session token.
+---
+ network/client.go                | 44 ++++++++++++++++---
+ network/framer.go                | 28 +++++++++++-
+ network/framer_hardening_test.go | 74 ++++++++++++++++++++++++++++++++
+ 3 files changed, 139 insertions(+), 7 deletions(-)
+ create mode 100644 network/framer_hardening_test.go
+
+diff --git a/network/client.go b/network/client.go
+index 5e4a2e2..fe2b915 100644
+--- a/network/client.go
++++ b/network/client.go
+@@ -44,6 +44,27 @@ type Client struct {
+ 
+ const sendQueueSize = 256
+ 
++// inboundQueueLimit bounds packets and errors buffered while the game loop is
++// busy, so a flooding server cannot grow them without limit.
++const inboundQueueLimit = 4096
++
++// traceHeadLimits caps how much of an outbound packet may reach the log for
++// opcodes whose payload carries a password or a session token.
++var traceHeadLimits = map[uint16]int{
++	PacketCAPlainLogin: 6,
++	PacketCAEnter:      6,
++	PacketCHDeleteChar: 6,
++}
++
++func tracePacketHead(packet []byte) string {
++	headLen := min(len(packet), 32)
++	if limit, ok := traceHeadLimits[ID(packet)]; ok {
++		headLen = min(headLen, limit)
++		return hex.EncodeToString(packet[:headLen]) + "+redacted"
++	}
++	return hex.EncodeToString(packet[:headLen])
++}
++
+ type outboundPacket struct {
+ 	data     []byte
+ 	enqueued time.Time
+@@ -117,8 +138,7 @@ func (c *Client) Send(data []byte) error {
+ 	elapsed := time.Since(start)
+ 
+ 	if c.trace || elapsed > 2*time.Millisecond {
+-		headLen := min(len(packet), 32)
+-		glog.Debugf("network enqueue opcode=0x%04X n=%d elapsed=%s head=%s", ID(packet), len(packet), elapsed, hex.EncodeToString(packet[:headLen]))
++		glog.Debugf("network enqueue opcode=0x%04X n=%d elapsed=%s head=%s", ID(packet), len(packet), elapsed, tracePacketHead(packet))
+ 	}
+ 	return nil
+ }
+@@ -570,11 +590,26 @@ func (c *Client) readLoop(conn net.Conn) {
+ 			}
+ 			packets, frameErr := c.framer.Push(buf[:n])
+ 			c.mu.Lock()
++			if len(c.packets)+len(packets) > inboundQueueLimit {
++				c.mu.Unlock()
++				if c.isCurrentConn(conn) {
++					c.addError(fmt.Errorf("inbound packet queue overflow"))
++				}
++				c.clearConn(conn)
++				return
++			}
+ 			c.packets = append(c.packets, packets...)
+-			if frameErr != nil {
++			if frameErr != nil && len(c.errs) < inboundQueueLimit {
+ 				c.errs = append(c.errs, FrameError{Err: frameErr})
+ 			}
+ 			c.mu.Unlock()
++			if errors.Is(frameErr, ErrUnsyncedStream) {
++				if c.isCurrentConn(conn) {
++					c.addError(frameErr)
++				}
++				c.clearConn(conn)
++				return
++			}
+ 		}
+ 		if err != nil {
+ 			if c.isCurrentConn(conn) {
+@@ -603,8 +638,7 @@ func (c *Client) writeLoop(conn net.Conn, sendCh <-chan outboundPacket) {
+ 		}
+ 		elapsed := time.Since(start)
+ 		if c.trace || queued > 2*time.Millisecond || elapsed > 2*time.Millisecond {
+-			headLen := min(len(packet.data), 32)
+-			glog.Debugf("network write opcode=0x%04X n=%d queued=%s elapsed=%s head=%s", ID(packet.data), len(packet.data), queued, elapsed, hex.EncodeToString(packet.data[:headLen]))
++			glog.Debugf("network write opcode=0x%04X n=%d queued=%s elapsed=%s head=%s", ID(packet.data), len(packet.data), queued, elapsed, tracePacketHead(packet.data))
+ 		}
+ 	}
+ }
+diff --git a/network/framer.go b/network/framer.go
+index 49f7955..e6accb0 100644
+--- a/network/framer.go
++++ b/network/framer.go
+@@ -2,9 +2,18 @@ package network
+ 
+ import (
+ 	"encoding/binary"
++	"errors"
+ 	"fmt"
+ )
+ 
++// ErrUnsyncedStream reports a stream that carries no recognizable packet, which
++// cannot be recovered from by discarding more bytes.
++var ErrUnsyncedStream = errors.New("unsynced packet stream")
++
++// maxBufferSize bounds pending bytes well above the 65535-byte ceiling a
++// variable-length packet header can express.
++const maxBufferSize = 128 * 1024
++
+ type Framer struct {
+ 	lengths LengthTable
+ 	buffer  []byte
+@@ -16,6 +25,11 @@ func NewFramer(lengths LengthTable) *Framer {
+ 
+ func (f *Framer) Push(data []byte) ([]Packet, error) {
+ 	f.buffer = append(f.buffer, data...)
++	if len(f.buffer) > maxBufferSize {
++		pending := len(f.buffer)
++		f.buffer = nil
++		return nil, fmt.Errorf("packet buffer overflow at %d bytes: %w", pending, ErrUnsyncedStream)
++	}
+ 
+ 	var packets []Packet
+ 	for {
+@@ -32,8 +46,8 @@ func (f *Framer) Push(data []byte) ([]Packet, error) {
+ 			if f.resyncToKnownPacket() {
+ 				continue
+ 			}
+-			f.buffer = f.buffer[1:]
+-			return packets, fmt.Errorf("unknown packet id 0x%04X", id)
++			f.discardUnsynced()
++			return packets, fmt.Errorf("unknown packet id 0x%04X: %w", id, ErrUnsyncedStream)
+ 		}
+ 
+ 		if length == -1 {
+@@ -58,6 +72,16 @@ func (f *Framer) Push(data []byte) ([]Packet, error) {
+ 	}
+ }
+ 
++// discardUnsynced drops every byte that resyncToKnownPacket already rejected,
++// keeping only the trailing byte it never inspected as an opcode prefix.
++func (f *Framer) discardUnsynced() {
++	if len(f.buffer) > 1 {
++		f.buffer = append(f.buffer[:0], f.buffer[len(f.buffer)-1])
++		return
++	}
++	f.buffer = nil
++}
++
+ func (f *Framer) resyncToKnownPacket() bool {
+ 	for offset := 1; offset+1 < len(f.buffer); offset++ {
+ 		id := ID(f.buffer[offset:])
+diff --git a/network/framer_hardening_test.go b/network/framer_hardening_test.go
+new file mode 100644
+index 0000000..0af50e7
+--- /dev/null
++++ b/network/framer_hardening_test.go
+@@ -0,0 +1,74 @@
++package network
++
++import (
++	"errors"
++	"strings"
++	"testing"
++)
++
++func TestFramerUnsyncedStreamDiscardsBuffer(t *testing.T) {
++	framer := NewFramer(PacketLengths2008())
++	garbage := make([]byte, 4096)
++	for i := range garbage {
++		garbage[i] = 0xFF
++	}
++
++	packets, err := framer.Push(garbage)
++	if len(packets) != 0 {
++		t.Fatalf("expected no packets, got %d", len(packets))
++	}
++	if !errors.Is(err, ErrUnsyncedStream) {
++		t.Fatalf("expected ErrUnsyncedStream, got %v", err)
++	}
++	if len(framer.buffer) > 1 {
++		t.Fatalf("expected buffer to be discarded, got %d bytes", len(framer.buffer))
++	}
++}
++
++func TestFramerRejectsBufferOverflow(t *testing.T) {
++	framer := NewFramer(LengthTable{})
++	framer.buffer = make([]byte, maxBufferSize)
++
++	if _, err := framer.Push([]byte{0x00, 0x01}); !errors.Is(err, ErrUnsyncedStream) {
++		t.Fatalf("expected ErrUnsyncedStream, got %v", err)
++	}
++	if framer.buffer != nil {
++		t.Fatalf("expected buffer to be released, got %d bytes", len(framer.buffer))
++	}
++}
++
++func TestTracePacketHeadRedactsCredentials(t *testing.T) {
++	packet := BuildAccountLoginPacket(AccountLogin{
++		Version:    24,
++		Username:   "audituser",
++		Password:   "SuperSecret123",
++		ClientType: 1,
++	})
++
++	head := tracePacketHead(packet)
++	if !strings.HasSuffix(head, "+redacted") {
++		t.Fatalf("expected redacted marker, got %q", head)
++	}
++	for _, secret := range []string{"audituser", "SuperSecret123"} {
++		if strings.Contains(head, encodeASCII(secret)) {
++			t.Fatalf("head %q leaks %q", head, secret)
++		}
++	}
++}
++
++func TestTracePacketHeadKeepsOrdinaryPackets(t *testing.T) {
++	packet := []byte{0x89, 0x00, 0x01, 0x02, 0x03, 0x04}
++	if head := tracePacketHead(packet); head != "890001020304" {
++		t.Fatalf("unexpected head %q", head)
++	}
++}
++
++func encodeASCII(value string) string {
++	var b strings.Builder
++	for i := 0; i < len(value); i++ {
++		const digits = "0123456789abcdef"
++		b.WriteByte(digits[value[i]>>4])
++		b.WriteByte(digits[value[i]&0x0f])
++	}
++	return b.String()
++}

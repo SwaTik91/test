@@ -1,0 +1,217 @@
+From e0748b9fbadb610fa1f7a6ca7b9d32b992f3b0da Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 24 Aug 2026 23:03:07 +0000
+Subject: [PATCH 3/6] game: bound guild emblem decoding and sandbox companion
+ AI
+
+A guild emblem arrives over the network as a zlib stream, and the decoder
+accepted whatever dimensions it declared, so a 4 KiB payload could drive a
+large allocation. Dimensions are now checked before decoding. Companion AI
+scripts come from the data directory or a GRF, so they no longer reach
+os.execute, io.popen, package.loadlib or the debug library, and io.open cannot
+escape the data directory.
+---
+ game/companion_ai.go                | 37 +++++++++++--
+ game/guild_emblem.go                | 18 +++++++
+ game/guild_emblem_hardening_test.go | 80 +++++++++++++++++++++++++++++
+ 3 files changed, 131 insertions(+), 4 deletions(-)
+ create mode 100644 game/guild_emblem_hardening_test.go
+
+diff --git a/game/companion_ai.go b/game/companion_ai.go
+index 676e0f3..d95e761 100644
+--- a/game/companion_ai.go
++++ b/game/companion_ai.go
+@@ -291,6 +291,7 @@ func companionAICandidates(kind companionAIKind, useCustom bool) []companionAICa
+ func (ai *companionAI) registerAPI(ctx client.Context, mode *WorldMode) {
+ 	L := ai.state
+ 	ai.registerLua51Compatibility()
++	ai.restrictSandbox()
+ 	ai.registerFileIO(ctx)
+ 	L.SetGlobal("MoveToOwner", L.NewFunction(func(L *lua.LState) int {
+ 		id := uint32(L.CheckInt(1))
+@@ -457,6 +458,24 @@ end
+ 	}
+ }
+ 
++// restrictSandbox removes the process, filesystem and native-loading surface
++// from AI scripts, which are loaded from the data directory or a GRF archive.
++func (ai *companionAI) restrictSandbox() {
++	L := ai.state
++	if osTable, ok := L.GetGlobal("os").(*lua.LTable); ok {
++		for _, name := range []string{"execute", "exit", "getenv", "remove", "rename", "setenv", "tmpname"} {
++			osTable.RawSetString(name, lua.LNil)
++		}
++	}
++	if ioTable, ok := L.GetGlobal("io").(*lua.LTable); ok {
++		ioTable.RawSetString("popen", lua.LNil)
++	}
++	if packageTable, ok := L.GetGlobal("package").(*lua.LTable); ok {
++		packageTable.RawSetString("loadlib", lua.LNil)
++	}
++	L.SetGlobal("debug", lua.LNil)
++}
++
+ func (ai *companionAI) registerFileIO(ctx client.Context) {
+ 	if ctx.Resources == nil || ctx.Resources.Root == "" {
+ 		return
+@@ -472,7 +491,12 @@ func (ai *companionAI) registerFileIO(ctx client.Context) {
+ 	}
+ 	root := ctx.Resources.Root
+ 	ioTable.RawSetString("open", L.NewFunction(func(L *lua.LState) int {
+-		path := companionAIIOPath(root, L.CheckString(1))
++		path, ok := companionAIIOPath(root, L.CheckString(1))
++		if !ok {
++			L.Push(lua.LNil)
++			L.Push(lua.LString("path outside data directory"))
++			return 2
++		}
+ 		mode := ""
+ 		nargs := 1
+ 		if L.GetTop() >= 2 {
+@@ -502,16 +526,21 @@ func (ai *companionAI) registerFileIO(ctx client.Context) {
+ 	}))
+ }
+ 
+-func companionAIIOPath(root, path string) string {
++func companionAIIOPath(root, path string) (string, bool) {
+ 	path = strings.TrimSpace(path)
+ 	path = strings.Trim(path, `"'`)
+ 	path = strings.ReplaceAll(path, "\\", string(filepath.Separator))
+ 	if filepath.IsAbs(path) {
+-		return filepath.Clean(path)
++		return "", false
+ 	}
+ 	path = strings.TrimPrefix(path, "."+string(filepath.Separator))
+ 	path = strings.TrimPrefix(path, "./")
+-	return filepath.Join(root, path)
++	resolved := filepath.Join(root, path)
++	relative, err := filepath.Rel(root, resolved)
++	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
++		return "", false
++	}
++	return resolved, true
+ }
+ 
+ func companionAIIOWriteMode(mode string) bool {
+diff --git a/game/guild_emblem.go b/game/guild_emblem.go
+index 24d970e..9c9197a 100644
+--- a/game/guild_emblem.go
++++ b/game/guild_emblem.go
+@@ -78,6 +78,9 @@ func decodeGuildEmblemImage(data []byte) (image.Image, error) {
+ 	if err != nil {
+ 		return nil, fmt.Errorf("read inflated emblem: %w", err)
+ 	}
++	if err := checkEmblemDimensions(decoded); err != nil {
++		return nil, err
++	}
+ 	img, err := res.DecodeImageData(decoded)
+ 	if err != nil {
+ 		return nil, err
+@@ -85,6 +88,21 @@ func decodeGuildEmblemImage(data []byte) (image.Image, error) {
+ 	return img, nil
+ }
+ 
++// maxEmblemDimension leaves room above the 24x24 emblems the reference client
++// ships, while keeping a declared size from driving a large decode.
++const maxEmblemDimension = 128
++
++func checkEmblemDimensions(data []byte) error {
++	config, _, err := image.DecodeConfig(bytes.NewReader(data))
++	if err != nil {
++		return nil
++	}
++	if config.Width <= 0 || config.Height <= 0 || config.Width > maxEmblemDimension || config.Height > maxEmblemDimension {
++		return fmt.Errorf("emblem size %dx%d out of range", config.Width, config.Height)
++	}
++	return nil
++}
++
+ func (m *WorldMode) applyGuildEmblemChange(ctx client.Context, change network.GuildEmblemChange) {
+ 	if change.ActorID == 0 || ctx.World == nil {
+ 		return
+diff --git a/game/guild_emblem_hardening_test.go b/game/guild_emblem_hardening_test.go
+new file mode 100644
+index 0000000..ea4edf0
+--- /dev/null
++++ b/game/guild_emblem_hardening_test.go
+@@ -0,0 +1,80 @@
++package game
++
++import (
++	"bytes"
++	"compress/zlib"
++	"image"
++	"image/color"
++	"image/png"
++	"path/filepath"
++	"testing"
++)
++
++func compressEmblem(t *testing.T, payload []byte) []byte {
++	t.Helper()
++	var buf bytes.Buffer
++	writer := zlib.NewWriter(&buf)
++	if _, err := writer.Write(payload); err != nil {
++		t.Fatal(err)
++	}
++	if err := writer.Close(); err != nil {
++		t.Fatal(err)
++	}
++	return buf.Bytes()
++}
++
++func encodeEmblemPNG(t *testing.T, width, height int) []byte {
++	t.Helper()
++	img := image.NewNRGBA(image.Rect(0, 0, width, height))
++	img.Set(0, 0, color.NRGBA{R: 255, A: 255})
++	var buf bytes.Buffer
++	if err := png.Encode(&buf, img); err != nil {
++		t.Fatal(err)
++	}
++	return buf.Bytes()
++}
++
++func TestDecodeGuildEmblemImageRejectsOversizedDimensions(t *testing.T) {
++	data := compressEmblem(t, encodeEmblemPNG(t, maxEmblemDimension+1, 1))
++
++	if _, err := decodeGuildEmblemImage(data); err == nil {
++		t.Fatal("expected oversized emblem to be rejected")
++	}
++}
++
++func TestDecodeGuildEmblemImageAcceptsNormalEmblem(t *testing.T) {
++	data := compressEmblem(t, encodeEmblemPNG(t, 24, 24))
++
++	img, err := decodeGuildEmblemImage(data)
++	if err != nil {
++		t.Fatalf("expected emblem to decode, got %v", err)
++	}
++	if img.Bounds().Dx() != 24 || img.Bounds().Dy() != 24 {
++		t.Fatalf("unexpected emblem size %v", img.Bounds())
++	}
++}
++
++func TestCompanionAIIOPathRejectsEscapes(t *testing.T) {
++	root := filepath.Join(string(filepath.Separator), "data", "ro")
++	for _, path := range []string{
++		"../secret.txt",
++		"..\\secret.txt",
++		"AI/../../secret.txt",
++		filepath.Join(string(filepath.Separator), "etc", "passwd"),
++	} {
++		if resolved, ok := companionAIIOPath(root, path); ok {
++			t.Fatalf("expected %q to be rejected, resolved to %q", path, resolved)
++		}
++	}
++}
++
++func TestCompanionAIIOPathAllowsDataFiles(t *testing.T) {
++	root := filepath.Join(string(filepath.Separator), "data", "ro")
++	resolved, ok := companionAIIOPath(root, "AI\\USER_AI\\Config.lua")
++	if !ok {
++		t.Fatal("expected data directory path to be allowed")
++	}
++	if want := filepath.Join(root, "AI", "USER_AI", "Config.lua"); resolved != want {
++		t.Fatalf("resolved %q, want %q", resolved, want)
++	}
++}

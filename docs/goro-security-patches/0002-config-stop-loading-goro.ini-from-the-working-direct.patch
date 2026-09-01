@@ -1,0 +1,152 @@
+From 56e0de727bc29c0ff62883b8002bd4ff4969a6b0 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 24 Aug 2026 23:03:07 +0000
+Subject: [PATCH 2/6] config: stop loading goro.ini from the working directory
+
+Starting the client from any directory picked up a goro.ini found there, and
+that file could set script.path, which the game loads as Lua with the full
+standard library. Configuration now comes from the user config directory or an
+explicit --config path, script.path is accepted only as a command line flag,
+and a config file holding a password that other users can read is reported as a
+warning. Log files are created 0600 because trace logging records packets.
+---
+ config/config.go                | 11 ++++---
+ config/config_hardening_test.go | 56 +++++++++++++++++++++++++++++++++
+ glog/logging.go                 |  2 +-
+ main.go                         |  4 +++
+ 4 files changed, 68 insertions(+), 5 deletions(-)
+ create mode 100644 config/config_hardening_test.go
+
+diff --git a/config/config.go b/config/config.go
+index c063310..b4300c1 100644
+--- a/config/config.go
++++ b/config/config.go
+@@ -24,6 +24,7 @@ type Config struct {
+ 	Gameplay GameplayConfig
+ 	Script   ScriptConfig
+ 	Log      LogConfig
++	Warnings []string
+ }
+ 
+ type WindowConfig struct {
+@@ -257,9 +258,6 @@ func configPathFromArgs(args []string) (string, bool) {
+ 			return strings.TrimPrefix(arg, "--config="), true
+ 		}
+ 	}
+-	if _, err := os.Stat("goro.ini"); err == nil {
+-		return "goro.ini", false
+-	}
+ 	return "", false
+ }
+ 
+@@ -276,6 +274,11 @@ func applyINIFile(cfg *Config, path string, explicit bool) error {
+ 	if err := applyINI(cfg, file); err != nil {
+ 		return fmt.Errorf("read config %s: %w", path, err)
+ 	}
++	if cfg.Login.Password != "" {
++		if info, err := file.Stat(); err == nil && info.Mode().Perm()&0o077 != 0 {
++			cfg.Warnings = append(cfg.Warnings, fmt.Sprintf("%s stores a password and is readable by other users", path))
++		}
++	}
+ 	return nil
+ }
+ 
+@@ -434,7 +437,7 @@ func applyConfigValue(cfg *Config, section, key, value string) error {
+ 	case "gameplay.forceuserai":
+ 		return setBool(value, &cfg.Gameplay.ForceUserAI)
+ 	case ".script", "script.path":
+-		cfg.Script.Path = value
++		cfg.Warnings = append(cfg.Warnings, "ignored script path from configuration file, pass --script instead")
+ 	case "log.level":
+ 		cfg.Log.Level = strings.ToLower(value)
+ 	case "log.file":
+diff --git a/config/config_hardening_test.go b/config/config_hardening_test.go
+new file mode 100644
+index 0000000..6728912
+--- /dev/null
++++ b/config/config_hardening_test.go
+@@ -0,0 +1,56 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestConfigPathFromArgsIgnoresWorkingDirectory(t *testing.T) {
++	dir := t.TempDir()
++	if err := os.WriteFile(filepath.Join(dir, "goro.ini"), []byte("data_dir = /tmp\n"), 0o600); err != nil {
++		t.Fatal(err)
++	}
++	t.Chdir(dir)
++
++	path, explicit := configPathFromArgs(nil)
++	if path != "" || explicit {
++		t.Fatalf("expected no implicit config, got %q explicit=%v", path, explicit)
++	}
++}
++
++func TestConfigPathFromArgsHonorsExplicitFlag(t *testing.T) {
++	path, explicit := configPathFromArgs([]string{"--config", "custom.ini"})
++	if path != "custom.ini" || !explicit {
++		t.Fatalf("unexpected config %q explicit=%v", path, explicit)
++	}
++}
++
++func TestApplyINIIgnoresScriptPath(t *testing.T) {
++	cfg := defaultConfig()
++	if err := applyINI(&cfg, strings.NewReader("[script]\npath = /tmp/evil.lua\n")); err != nil {
++		t.Fatal(err)
++	}
++	if cfg.Script.Path != "" {
++		t.Fatalf("expected script path to be ignored, got %q", cfg.Script.Path)
++	}
++	if len(cfg.Warnings) == 0 {
++		t.Fatal("expected a warning about the ignored script path")
++	}
++}
++
++func TestApplyINIFileWarnsOnReadablePassword(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "goro.ini")
++	if err := os.WriteFile(path, []byte("[login]\npassword = secret\n"), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	cfg := defaultConfig()
++	if err := applyINIFile(&cfg, path, true); err != nil {
++		t.Fatal(err)
++	}
++	if len(cfg.Warnings) == 0 {
++		t.Fatal("expected a warning about file permissions")
++	}
++}
+diff --git a/glog/logging.go b/glog/logging.go
+index 3d5f91d..f5120e6 100644
+--- a/glog/logging.go
++++ b/glog/logging.go
+@@ -28,7 +28,7 @@ func Configure(cfg config.LogConfig) (func() error, error) {
+ 				return nil, err
+ 			}
+ 		}
+-		file, err = os.OpenFile(cfg.File, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
++		file, err = os.OpenFile(cfg.File, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+diff --git a/main.go b/main.go
+index 16ecafe..b4b83ae 100644
+--- a/main.go
++++ b/main.go
+@@ -23,6 +23,10 @@ func main() {
+ 	}
+ 	defer closeLog()
+ 
++	for _, warning := range cfg.Warnings {
++		glog.Warnf("%s", warning)
++	}
++
+ 	game, err := app.New(cfg)
+ 	if err != nil {
+ 		glog.Fatalf("%v", err)

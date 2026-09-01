@@ -1,0 +1,163 @@
+/* Reproduction of the goro client rotheme widgets.
+   Every value here is taken from the client source: colors from
+   ui/rotheme/theme.go, geometry from ui/login_window.go,
+   ui/character_select_window.go, ui/window.go and ui/ro_titlebar.go. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+}
+
+body {
+  font-family: "DejaVu Sans", sans-serif;
+  font-size: 11px;
+  color: #26303a;
+}
+
+/* game/login.go:764 fills black, then the login background image; with no
+   game data present it falls back to this solid color. */
+.screen {
+  position: relative;
+width: 1280px;
+  height: 720px;
+  background: #0a0d16;
+}
+
+/* ui/window.go: 1px #76A0CE border, radius 6, white body. */
+.window {
+  position: absolute;
+  border: 1px solid #76a0ce;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* ui/ro_titlebar.go: 28px tall, vertical gradient, 1px bottom border,
+   left padding 12, title text #163658. */
+.titlebar {
+  height: 28px;
+  background: linear-gradient(#d6e8fa, #b8d6f2);
+  border-bottom: 1px solid #76a0ce;
+  padding-left: 12px;
+  display: flex;
+  align-items: center;
+  color: #163658;
+}
+
+/* ui/window.go: 42px footer, 1px #AEB4BC separator, #F4F6F8 body,
+   10px horizontal padding, 8px gap between buttons. */
+.footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42px;
+  border-top: 1px solid #aeb4bc;
+  background: #f4f6f8;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ui/rotheme/button.go: radius 6, 1px #8AAED6 border, 8x5.5 padding so the
+   height lands on 22px, vertical gradient, white 40% gloss inset 3px over
+   the top half. */
+.btn {
+  position: relative;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid #8aaed6;
+  border-radius: 6px;
+  background: linear-gradient(#f2f8fe, #e2eefb);
+  color: #26303a;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.btn::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 3px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+}
+
+.btn.disabled {
+  background: #e2e6eb;
+  border-color: #aeb4bc;
+  color: #62707e;
+}
+
+.btn.disabled::after {
+  display: none;
+}
+
+/* ui/rotheme/textfield.go: #FAFCFF body, 1px border that turns #528AC8 on
+   focus, a four row inset shadow at the top, text inset by 6x4. */
+.field {
+  position: relative;
+  width: 192px;
+  height: 22px;
+  background: #fafcff;
+  border: 1px solid #aeb4bc;
+}
+
+.field.focus {
+  border-color: #528ac8;
+}
+
+.field::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: linear-gradient(
+    to bottom,
+    rgba(82, 108, 138, 0.133) 0 1px,
+    rgba(82, 108, 138, 0.106) 1px 2px,
+    rgba(82, 108, 138, 0.078) 2px 3px,
+    rgba(82, 108, 138, 0.051) 3px 4px
+  );
+}
+
+.field .text {
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  height: 14px;
+  display: flex;
+  align-items: stretch;
+}
+
+.field .text span {
+  line-height: 14px;
+}
+
+/* Drawn as a 1px line from y+4 to y+height-4 whenever the field has focus. */
+.caret {
+  width: 1px;
+  background: #26303a;
+}
+
+.muted {
+  color: #62707e;
+}

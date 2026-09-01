@@ -1,0 +1,610 @@
+From 4ec191d580d44d21ee437c5b1ac1bd5a179dd7f0 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 24 Aug 2026 23:03:20 +0000
+Subject: [PATCH 4/6] res: validate Lua bytecode before parsing and running it
+
+Lua bytecode reaches the client as .lub files inside a GRF. Prototype counts
+were trusted, so a 20 byte file could request an 8 GiB allocation or a negative
+length; nesting was unbounded, so a few hundred kilobytes overflowed the
+goroutine stack unrecoverably; the fallback interpreter indexed its register
+file with 9 bit operands that could exceed it; and a self referential jump ran
+forever. Counts are now checked against the bytes that remain, nesting is capped
+at the limit the reference compiler uses, register access is bounds checked, and
+execution runs under a deadline and an instruction budget.
+---
+ res/lub.go                | 169 +++++++++++++++++++++------
+ res/lub_hardening_test.go | 236 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 370 insertions(+), 35 deletions(-)
+ create mode 100644 res/lub_hardening_test.go
+
+diff --git a/res/lub.go b/res/lub.go
+index 032f33a..420c2fb 100644
+--- a/res/lub.go
++++ b/res/lub.go
+@@ -1,11 +1,13 @@
+ package res
+ 
+ import (
++	"context"
+ 	"encoding/binary"
+ 	"errors"
+ 	"fmt"
+ 	"math"
+ 	"reflect"
++	"time"
+ 	"unsafe"
+ 
+ 	glua "github.com/yuin/gopher-lua"
+@@ -49,7 +51,7 @@ func parseLua51Bytecode(data []byte) (luaFunction, error) {
+ 	if err := reader.header(); err != nil {
+ 		return luaFunction{}, err
+ 	}
+-	fn, err := reader.function()
++	fn, err := reader.function(0)
+ 	if err != nil {
+ 		return luaFunction{}, err
+ 	}
+@@ -100,7 +102,23 @@ func (r *luaReader) header() error {
+ 	return nil
+ }
+ 
+-func (r *luaReader) function() (luaFunction, error) {
++// luaMaxPrototypeDepth mirrors the nested function limit of the reference Lua 5.1 compiler.
++const luaMaxPrototypeDepth = 200
++
++const (
++	luaCodeEntrySize     = 4
++	luaLineInfoEntrySize = 4
++	luaMinConstantSize   = 2
++	luaMinPrototypeSize  = 28
++	luaMinLocalSize      = 12
++	luaMinUpvalueSize    = 2
++)
++
++func (r *luaReader) function(depth int) (luaFunction, error) {
++	if depth > luaMaxPrototypeDepth {
++		return luaFunction{}, fmt.Errorf("nested Lua prototypes deeper than %d levels", luaMaxPrototypeDepth)
++	}
++
+ 	sourceName := r.string()
+ 	lineDefined := int(r.i32())
+ 	lastLine := int(r.i32())
+@@ -109,13 +127,13 @@ func (r *luaReader) function() (luaFunction, error) {
+ 	isVararg := int(r.u8())
+ 	maxStack := int(r.u8())
+ 
+-	codeCount := int(r.i32())
++	codeCount := r.count(luaCodeEntrySize, "code")
+ 	code := make([]uint32, codeCount)
+ 	for i := range code {
+ 		code[i] = r.u32()
+ 	}
+ 
+-	constantCount := int(r.i32())
++	constantCount := r.count(luaMinConstantSize, "constant")
+ 	constants := make([]luaValue, constantCount)
+ 	for i := range constants {
+ 		switch t := r.u8(); t {
+@@ -136,25 +154,25 @@ func (r *luaReader) function() (luaFunction, error) {
+ 		}
+ 	}
+ 
+-	protoCount := int(r.i32())
++	protoCount := r.count(luaMinPrototypeSize, "prototype")
+ 	protos := make([]luaFunction, protoCount)
+ 	for i := range protos {
+-		proto, err := r.function()
++		proto, err := r.function(depth + 1)
+ 		if err != nil {
+ 			return luaFunction{}, err
+ 		}
+ 		protos[i] = proto
+ 	}
+ 
+-	lineInfoCount := int(r.i32())
+-	r.skip(lineInfoCount * 4)
+-	localCount := int(r.i32())
++	lineInfoCount := r.count(luaLineInfoEntrySize, "line info")
++	r.skip(lineInfoCount * luaLineInfoEntrySize)
++	localCount := r.count(luaMinLocalSize, "local")
+ 	for i := 0; i < localCount; i++ {
+ 		r.string()
+ 		r.i32()
+ 		r.i32()
+ 	}
+-	upvalueCount := int(r.i32())
++	upvalueCount := r.count(luaMinUpvalueSize, "upvalue")
+ 	upvalues := make([]string, upvalueCount)
+ 	for i := 0; i < upvalueCount; i++ {
+ 		upvalues[i] = r.string()
+@@ -177,16 +195,21 @@ func (r *luaReader) function() (luaFunction, error) {
+ 	}, nil
+ }
+ 
++const luaExecutionTimeout = 2 * time.Second
++
+ func executeLuaFunctionWithGopherLua(fn luaFunction, globals map[string]luaValue, setup func(*glua.LState)) error {
+ 	if globals == nil {
+ 		return errors.New("nil Lua globals")
+ 	}
+-	proto, err := gopherLuaProto(fn)
++	proto, err := gopherLuaProto(fn, 0)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	state := glua.NewState(glua.Options{SkipOpenLibs: true})
+ 	defer state.Close()
++	ctx, cancel := context.WithTimeout(context.Background(), luaExecutionTimeout)
++	defer cancel()
++	state.SetContext(ctx)
+ 	openLuaResourceLibs(state)
+ 	if setup != nil {
+ 		setup(state)
+@@ -231,7 +254,10 @@ func openLuaResourceLibs(state *glua.LState) {
+ 	}
+ }
+ 
+-func gopherLuaProto(fn luaFunction) (*glua.FunctionProto, error) {
++func gopherLuaProto(fn luaFunction, depth int) (*glua.FunctionProto, error) {
++	if depth > luaMaxPrototypeDepth {
++		return nil, fmt.Errorf("nested Lua prototypes deeper than %d levels", luaMaxPrototypeDepth)
++	}
+ 	constants := make([]glua.LValue, len(fn.constants))
+ 	stringConstants := make([]string, len(fn.constants))
+ 	for i, value := range fn.constants {
+@@ -250,7 +276,7 @@ func gopherLuaProto(fn luaFunction) (*glua.FunctionProto, error) {
+ 	}
+ 	protos := make([]*glua.FunctionProto, len(fn.prototypes))
+ 	for i, child := range fn.prototypes {
+-		proto, err := gopherLuaProto(child)
++		proto, err := gopherLuaProto(child, depth+1)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+@@ -275,13 +301,22 @@ func gopherLuaProto(fn luaFunction) (*glua.FunctionProto, error) {
+ 		DbgCalls:           nil,
+ 		DbgUpvalues:        upvalues,
+ 	}
+-	setGopherLuaStringConstants(proto, stringConstants)
++	if err := setGopherLuaStringConstants(proto, stringConstants); err != nil {
++		return nil, err
++	}
+ 	return proto, nil
+ }
+ 
+-func setGopherLuaStringConstants(proto *glua.FunctionProto, constants []string) {
++func setGopherLuaStringConstants(proto *glua.FunctionProto, constants []string) error {
+ 	field := reflect.ValueOf(proto).Elem().FieldByName("stringConstants")
++	if !field.IsValid() || !field.CanAddr() {
++		return errors.New("gopher-lua function prototype has no stringConstants field")
++	}
++	if field.Type() != reflect.TypeOf(constants) {
++		return fmt.Errorf("unsupported gopher-lua stringConstants type %s", field.Type())
++	}
+ 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(constants))
++	return nil
+ }
+ 
+ func luaBuiltinGlobal(name string) bool {
+@@ -477,6 +512,29 @@ func (r *luaReader) u64() uint64 {
+ 	return binary.LittleEndian.Uint64(data)
+ }
+ 
++func (r *luaReader) count(minEntrySize int, what string) int {
++	value := int(r.i32())
++	if r.err != nil {
++		return 0
++	}
++	if value < 0 {
++		r.err = fmt.Errorf("invalid Lua %s count %d", what, value)
++		return 0
++	}
++	if value > r.remaining()/minEntrySize {
++		r.err = fmt.Errorf("truncated Lua bytecode: %s count %d exceeds %d remaining bytes", what, value, r.remaining())
++		return 0
++	}
++	return value
++}
++
++func (r *luaReader) remaining() int {
++	if r.off > len(r.data) {
++		return 0
++	}
++	return len(r.data) - r.off
++}
++
+ func (r *luaReader) skip(n int) {
+ 	r.bytes(n)
+ }
+@@ -498,7 +556,7 @@ func executeLuaFunction(fn luaFunction, globals map[string]luaValue) error {
+ 	if globals == nil {
+ 		return errors.New("nil Lua globals")
+ 	}
+-	regs := make([]luaValue, fn.maxStackSize+64)
++	regs := &luaRegisters{values: make([]luaValue, fn.maxStackSize+64)}
+ 	rk := func(index int) luaValue {
+ 		if index&luaBitRK != 0 {
+ 			constIndex := index &^ luaBitRK
+@@ -507,13 +565,15 @@ func executeLuaFunction(fn luaFunction, globals map[string]luaValue) error {
+ 			}
+ 			return luaValue{}
+ 		}
+-		if index >= 0 && index < len(regs) {
+-			return regs[index]
+-		}
+-		return luaValue{}
++		return regs.get(index)
+ 	}
+ 
++	steps := 0
+ 	for pc := 0; pc < len(fn.code); pc++ {
++		steps++
++		if steps > luaMaxInterpreterSteps {
++			return fmt.Errorf("lua execution exceeded %d instructions", luaMaxInterpreterSteps)
++		}
+ 		instruction := fn.code[pc]
+ 		op := int(instruction & 0x3f)
+ 		a := int((instruction >> 6) & 0xff)
+@@ -522,37 +582,41 @@ func executeLuaFunction(fn luaFunction, globals map[string]luaValue) error {
+ 		bx := int((instruction >> 14) & 0x3ffff)
+ 		switch op {
+ 		case luaOpMove:
+-			regs[a] = regs[b]
++			regs.set(a, regs.get(b))
+ 		case luaOpLoadK:
+-			regs[a] = luaConstant(fn, bx)
++			regs.set(a, luaConstant(fn, bx))
+ 		case luaOpLoadBool:
+-			regs[a] = luaValue{kind: luaBool}
++			value := luaValue{kind: luaBool}
+ 			if b != 0 {
+-				regs[a].num = 1
++				value.num = 1
+ 			}
++			regs.set(a, value)
+ 			if c != 0 {
+ 				pc++
+ 			}
+ 		case luaOpLoadNil:
+-			for index := a; index <= b && index < len(regs); index++ {
+-				regs[index] = luaValue{}
++			for index := a; index <= b && index < len(regs.values); index++ {
++				regs.set(index, luaValue{})
+ 			}
+ 		case luaOpGetGlobal:
+ 			name := luaConstant(fn, bx).str
+-			regs[a] = globals[name]
++			regs.set(a, globals[name])
+ 		case luaOpGetTable:
+-			regs[a] = tableGet(regs[b], rk(c))
++			regs.set(a, tableGet(regs.get(b), rk(c)))
+ 		case luaOpSetGlobal:
+ 			name := luaConstant(fn, bx).str
+-			globals[name] = regs[a]
++			value := regs.get(a)
++			if regs.err == nil {
++				globals[name] = value
++			}
+ 		case luaOpSetTable:
+-			tableSet(regs[a], rk(b), rk(c))
++			tableSet(regs.get(a), rk(b), rk(c))
+ 		case luaOpNewTable:
+-			regs[a] = luaValue{kind: luaTable, table: make(map[interface{}]luaValue)}
++			regs.set(a, luaValue{kind: luaTable, table: make(map[interface{}]luaValue)})
+ 		case luaOpSetList:
+ 			count := b
+ 			if count == 0 {
+-				count = len(regs) - a - 1
++				count = len(regs.values) - a - 1
+ 			}
+ 			block := c
+ 			if block == 0 {
+@@ -562,19 +626,53 @@ func executeLuaFunction(fn luaFunction, globals map[string]luaValue) error {
+ 				}
+ 				block = int(fn.code[pc])
+ 			}
++			if count < 0 || a+count >= len(regs.values) {
++				return fmt.Errorf("lua SETLIST registers %d..%d out of range", a, a+count)
++			}
+ 			base := (block - 1) * luaFieldsPerFlush
++			table := regs.get(a)
+ 			for i := 1; i <= count; i++ {
+-				tableSet(regs[a], luaValue{kind: luaNumber, num: float64(base + i)}, regs[a+i])
++				tableSet(table, luaValue{kind: luaNumber, num: float64(base + i)}, regs.get(a+i))
+ 			}
+ 		case luaOpReturn:
+ 			return nil
+ 		default:
+ 			return fmt.Errorf("unsupported Lua opcode %d", op)
+ 		}
++		if regs.err != nil {
++			return regs.err
++		}
+ 	}
+ 	return nil
+ }
+ 
++type luaRegisters struct {
++	values []luaValue
++	err    error
++}
++
++func (r *luaRegisters) get(index int) luaValue {
++	if r.err != nil {
++		return luaValue{}
++	}
++	if index < 0 || index >= len(r.values) {
++		r.err = fmt.Errorf("lua register %d out of range", index)
++		return luaValue{}
++	}
++	return r.values[index]
++}
++
++func (r *luaRegisters) set(index int, value luaValue) {
++	if r.err != nil {
++		return
++	}
++	if index < 0 || index >= len(r.values) {
++		r.err = fmt.Errorf("lua register %d out of range", index)
++		return
++	}
++	r.values[index] = value
++}
++
+ func luaConstant(fn luaFunction, index int) luaValue {
+ 	if index < 0 || index >= len(fn.constants) {
+ 		return luaValue{}
+@@ -611,8 +709,9 @@ func luaKey(value luaValue) interface{} {
+ }
+ 
+ const (
+-	luaBitRK          = 1 << 8
+-	luaFieldsPerFlush = 50
++	luaBitRK               = 1 << 8
++	luaFieldsPerFlush      = 50
++	luaMaxInterpreterSteps = 4_000_000
+ )
+ 
+ const (
+diff --git a/res/lub_hardening_test.go b/res/lub_hardening_test.go
+new file mode 100644
+index 0000000..e69b909
+--- /dev/null
++++ b/res/lub_hardening_test.go
+@@ -0,0 +1,236 @@
++package res
++
++import (
++	"encoding/binary"
++	"math"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestParseLua51BytecodeRejectsBogusCounts(t *testing.T) {
++	tests := []struct {
++		name string
++		fn   luaRawFunction
++		want string
++	}{
++		{"negative code count", luaRawFunction{codeCount: -1}, "invalid Lua code count"},
++		{"negative constant count", luaRawFunction{constantCount: -7}, "invalid Lua constant count"},
++		{"negative prototype count", luaRawFunction{protoCount: math.MinInt32}, "invalid Lua prototype count"},
++		{"negative line info count", luaRawFunction{lineInfoCount: -1}, "invalid Lua line info count"},
++		{"negative local count", luaRawFunction{localCount: -1}, "invalid Lua local count"},
++		{"negative upvalue count", luaRawFunction{upvalueCount: -1}, "invalid Lua upvalue count"},
++		{"absurd code count", luaRawFunction{codeCount: math.MaxInt32}, "code count 2147483647 exceeds"},
++		{"absurd constant count", luaRawFunction{constantCount: math.MaxInt32}, "constant count 2147483647 exceeds"},
++		{"absurd prototype count", luaRawFunction{protoCount: math.MaxInt32}, "prototype count 2147483647 exceeds"},
++		{"absurd local count", luaRawFunction{localCount: math.MaxInt32}, "local count 2147483647 exceeds"},
++		{"absurd upvalue count", luaRawFunction{upvalueCount: math.MaxInt32}, "upvalue count 2147483647 exceeds"},
++	}
++	for _, test := range tests {
++		t.Run(test.name, func(t *testing.T) {
++			start := time.Now()
++			_, err := parseLua51Bytecode(append(luaTestHeader(), test.fn.bytes()...))
++			if err == nil {
++				t.Fatalf("parseLua51Bytecode() = nil error, want %q", test.want)
++			}
++			if !strings.Contains(err.Error(), test.want) {
++				t.Fatalf("parseLua51Bytecode() error = %v, want it to contain %q", err, test.want)
++			}
++			if elapsed := time.Since(start); elapsed > time.Second {
++				t.Fatalf("parseLua51Bytecode() took %s, want an immediate rejection", elapsed)
++			}
++		})
++	}
++}
++
++func TestParseLua51BytecodeRejectsDeepNesting(t *testing.T) {
++	if _, err := parseLua51Bytecode(append(luaTestHeader(), luaNestedFunction(8)...)); err != nil {
++		t.Fatalf("parseLua51Bytecode() error = %v, want shallow nesting to parse", err)
++	}
++	data := append(luaTestHeader(), luaNestedFunction(luaMaxPrototypeDepth+16)...)
++	_, err := parseLua51Bytecode(data)
++	if err == nil {
++		t.Fatal("parseLua51Bytecode() = nil error, want deep nesting to be rejected")
++	}
++	if !strings.Contains(err.Error(), "nested Lua prototypes") {
++		t.Fatalf("parseLua51Bytecode() error = %v, want a nesting depth error", err)
++	}
++}
++
++func TestGopherLuaProtoRejectsDeepNesting(t *testing.T) {
++	fn := luaFunction{maxStackSize: 2}
++	for i := 0; i < luaMaxPrototypeDepth+16; i++ {
++		fn = luaFunction{prototypes: []luaFunction{fn}, maxStackSize: 2}
++	}
++	if _, err := gopherLuaProto(fn, 0); err == nil {
++		t.Fatal("gopherLuaProto() = nil error, want deep nesting to be rejected")
++	}
++}
++
++func TestExecuteLuaFunctionRejectsOutOfRangeRegisters(t *testing.T) {
++	tests := []struct {
++		name string
++		fn   luaFunction
++	}{
++		{"move source", luaFunction{
++			code:         []uint32{luaInstructionABC(luaOpMove, 0, 511, 0)},
++			maxStackSize: 2,
++		}},
++		{"move destination", luaFunction{
++			code:         []uint32{luaInstructionABC(luaOpMove, 255, 0, 0)},
++			maxStackSize: 0,
++		}},
++		{"get table source", luaFunction{
++			code:         []uint32{luaInstructionABC(luaOpGetTable, 0, 511, 0)},
++			maxStackSize: 2,
++		}},
++		{"set table target", luaFunction{
++			code:         []uint32{luaInstructionABC(luaOpSetTable, 255, 511, 511)},
++			maxStackSize: 0,
++		}},
++		{"set list range", luaFunction{
++			code: []uint32{
++				luaInstructionABC(luaOpNewTable, 250, 0, 0),
++				luaInstructionABC(luaOpSetList, 250, 400, 1),
++			},
++			maxStackSize: 255,
++		}},
++	}
++	for _, test := range tests {
++		t.Run(test.name, func(t *testing.T) {
++			globals := make(map[string]luaValue)
++			if err := executeLuaFunction(test.fn, globals); err == nil {
++				t.Fatal("executeLuaFunction() = nil error, want an out of range register error")
++			}
++		})
++	}
++}
++
++func TestExecuteLua51BytecodeRejectsOutOfRangeRegisters(t *testing.T) {
++	fn := luaRawFunction{
++		codeCount: 2,
++		code: []uint32{
++			luaInstructionABC(luaOpMove, 0, 511, 0),
++			luaInstructionABC(len(lua51ToGopherLuaOpcode), 0, 0, 0),
++		},
++	}
++	data := append(luaTestHeader(), fn.bytes()...)
++	if err := executeLua51Bytecode(data, make(map[string]luaValue)); err == nil {
++		t.Fatal("executeLua51Bytecode() = nil error, want the register operand to be rejected")
++	}
++}
++
++func TestExecuteLuaFunctionBuildsTables(t *testing.T) {
++	fn := luaFunction{
++		constants: []luaValue{
++			{kind: luaString, str: "List"},
++			{kind: luaNumber, num: 7},
++		},
++		code: []uint32{
++			luaInstructionABC(luaOpNewTable, 0, 0, 0),
++			luaInstructionABx(luaOpLoadK, 1, 1),
++			luaInstructionABC(luaOpSetList, 0, 1, 1),
++			luaInstructionABx(luaOpSetGlobal, 0, 0),
++			luaInstructionABC(luaOpReturn, 0, 1, 0),
++		},
++		maxStackSize: 2,
++	}
++	globals := make(map[string]luaValue)
++	if err := executeLuaFunction(fn, globals); err != nil {
++		t.Fatal(err)
++	}
++	table := globals["List"]
++	if table.kind != luaTable {
++		t.Fatalf("List = %#v, want Lua table", table)
++	}
++	if got := table.table[1]; got.kind != luaNumber || got.num != 7 {
++		t.Fatalf("List[1] = %#v, want Lua number 7", got)
++	}
++}
++
++func TestExecuteLuaFunctionStopsAtStepBudget(t *testing.T) {
++	code := make([]uint32, luaMaxInterpreterSteps+1)
++	for i := range code {
++		code[i] = luaInstructionABC(luaOpMove, 0, 1, 0)
++	}
++	err := executeLuaFunction(luaFunction{code: code, maxStackSize: 2}, make(map[string]luaValue))
++	if err == nil {
++		t.Fatal("executeLuaFunction() = nil error, want the step budget to be exhausted")
++	}
++	if !strings.Contains(err.Error(), "exceeded") {
++		t.Fatalf("executeLuaFunction() error = %v, want a step budget error", err)
++	}
++}
++
++func TestExecuteLuaFunctionWithGopherLuaStopsInfiniteLoop(t *testing.T) {
++	fn := luaFunction{
++		code:         []uint32{luaInstructionABx(luaOpJmp, 0, luaSbxBias-1)},
++		maxStackSize: 2,
++	}
++	start := time.Now()
++	err := executeLuaFunctionWithGopherLua(fn, make(map[string]luaValue), nil)
++	elapsed := time.Since(start)
++	if err == nil {
++		t.Fatal("executeLuaFunctionWithGopherLua() = nil error, want the deadline to fire")
++	}
++	if elapsed > 4*luaExecutionTimeout {
++		t.Fatalf("executeLuaFunctionWithGopherLua() took %s, want it to stop near %s", elapsed, luaExecutionTimeout)
++	}
++}
++
++// luaSbxBias is the signed offset Lua 5.1 applies to sBx operands.
++const luaSbxBias = 131071
++
++type luaRawFunction struct {
++	codeCount     int32
++	code          []uint32
++	constantCount int32
++	protoCount    int32
++	lineInfoCount int32
++	localCount    int32
++	upvalueCount  int32
++}
++
++func (f luaRawFunction) bytes(protos ...[]byte) []byte {
++	out := luaTestString("@hardening.lub")
++	out = luaTestI32(out, 0)
++	out = luaTestI32(out, 0)
++	out = append(out, 0, 0, 0, 2)
++	out = luaTestI32(out, f.codeCount)
++	for _, instruction := range f.code {
++		out = luaTestI32(out, int32(instruction))
++	}
++	out = luaTestI32(out, f.constantCount)
++	out = luaTestI32(out, f.protoCount)
++	for _, proto := range protos {
++		out = append(out, proto...)
++	}
++	out = luaTestI32(out, f.lineInfoCount)
++	out = luaTestI32(out, f.localCount)
++	out = luaTestI32(out, f.upvalueCount)
++	return out
++}
++
++func luaNestedFunction(depth int) []byte {
++	out := luaRawFunction{}.bytes()
++	for i := 0; i < depth; i++ {
++		out = luaRawFunction{protoCount: 1}.bytes(out)
++	}
++	return out
++}
++
++func luaTestHeader() []byte {
++	return []byte{0x1b, 'L', 'u', 'a', 0x51, 0, 1, 4, 4, 4, 8, 0}
++}
++
++func luaTestString(value string) []byte {
++	out := luaTestI32(nil, int32(len(value)+1))
++	out = append(out, value...)
++	return append(out, 0)
++}
++
++func luaTestI32(out []byte, value int32) []byte {
++	var word [4]byte
++	binary.LittleEndian.PutUint32(word[:], uint32(value))
++	return append(out, word[:]...)
++}

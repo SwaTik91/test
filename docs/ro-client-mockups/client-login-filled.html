@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>goro client - credentials entered</title>
+<link rel="stylesheet" href="client-flow.css">
+<style>
+  .login {
+    left: 488px;
+    top: 401px;
+    width: 304px;
+    height: 159px;
+  }
+
+  .login-body {
+    padding: 18px 20px 0 24px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    height: 22px;
+  }
+
+  .row + .row {
+    margin-top: 11px;
+  }
+
+  .row .label {
+    width: 56px;
+  }
+
+  .row .gap {
+    width: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="window login">
+    <div class="titlebar">Login</div>
+    <div class="login-body">
+      <div class="row">
+        <div class="label">Account</div>
+        <div class="gap"></div>
+        <div class="field">
+          <div class="text"><span>testaccount</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Password</div>
+        <div class="gap"></div>
+        <!-- ui/rotheme/textfield.go replaces the value with one asterisk per rune. -->
+        <div class="field focus">
+          <div class="text"><span>**********</span><i class="caret"></i></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="spacer"></div>
+      <div class="btn">Login</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

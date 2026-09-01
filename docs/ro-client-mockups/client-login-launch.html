@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>goro client - launch screen</title>
+<link rel="stylesheet" href="client-flow.css">
+<style>
+  /* ui/login_window.go: 304x159 window. Position from game/login_account_window.go:
+     x = (1280-304)/2 = 488, y = (720*2/3) - 159/2 = 401. */
+  .login {
+    left: 488px;
+    top: 401px;
+    width: 304px;
+    height: 159px;
+  }
+
+  /* Content padding top 18, left 24, right 20; rows 22px tall with an 11px gap. */
+  .login-body {
+    padding: 18px 20px 0 24px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    height: 22px;
+  }
+
+  .row + .row {
+    margin-top: 11px;
+  }
+
+  /* Label column is loginWindowFieldLeft - 36 = 56px, then a 12px gap. */
+  .row .label {
+    width: 56px;
+  }
+
+  .row .gap {
+    width: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="window login">
+    <div class="titlebar">Login</div>
+    <div class="login-body">
+      <div class="row">
+        <div class="label">Account</div>
+        <div class="gap"></div>
+        <div class="field focus">
+          <div class="text"><span></span><i class="caret"></i></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Password</div>
+        <div class="gap"></div>
+        <div class="field">
+          <div class="text"><span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="spacer"></div>
+      <div class="btn">Login</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
