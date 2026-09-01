@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Login — credentials entered</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; }
+  body {
+    font-family: "Palatino Linotype", Palatino, "Book Antiqua", "DejaVu Serif", serif;
+    color: #3a2612;
+  }
+  .screen {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    background: #1a1208 url("ludo-login-plaza.png") center / cover no-repeat;
+  }
+  .screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(20,10,4,.08), transparent 42%, rgba(20,10,4,.22));
+    pointer-events: none;
+  }
+  .brand {
+    position: absolute;
+    left: 48px;
+    top: 36px;
+    z-index: 2;
+    color: #fff8e8;
+    text-shadow: 0 2px 0 #4a2a10, 0 10px 22px rgba(20,10,4,.45);
+  }
+  .brand h1 {
+    font-size: 42px;
+    letter-spacing: 8px;
+    font-weight: 700;
+  }
+  .brand p {
+    margin-top: 4px;
+    font-size: 13px;
+    letter-spacing: 4px;
+    font-family: "DejaVu Sans", sans-serif;
+  }
+  .card {
+    position: absolute;
+    right: 64px;
+    top: 88px;
+    width: 360px;
+    padding: 28px 28px 24px;
+    z-index: 2;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(255,250,230,.35), transparent 46%),
+      linear-gradient(180deg, #f4e4bc 0%, #e6cf96 100%);
+    border: 4px solid #6a3f1c;
+    box-shadow:
+      0 0 0 2px #c9a24a,
+      0 18px 36px rgba(20,10,4,.4);
+  }
+  .card::before,
+  .card::after,
+  .card .c-bl,
+  .card .c-br {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 3px solid #8a5a24;
+    pointer-events: none;
+  }
+  .card::before { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
+  .card::after { top: 8px; right: 8px; border-left: 0; border-bottom: 0; }
+  .card .c-bl { bottom: 8px; left: 8px; border-right: 0; border-top: 0; }
+  .card .c-br { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
+  .title {
+    text-align: center;
+    font-size: 22px;
+    margin-bottom: 22px;
+    letter-spacing: .5px;
+  }
+  .field { margin-bottom: 14px; }
+  .label {
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .input,
+  .select {
+    width: 100%;
+    height: 40px;
+    border: 2px solid #6a3f1c;
+    border-radius: 20px;
+    background: #fffaf0;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font: 15px "DejaVu Sans", sans-serif;
+    color: #3a2612;
+  }
+  .select { justify-content: space-between; }
+  .select i {
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #6a3f1c;
+  }
+  .input.focus {
+    box-shadow: 0 0 0 3px rgba(201,162,74,.35);
+    background: #fff;
+  }
+  .caret {
+    width: 1px;
+    height: 16px;
+    margin-left: 1px;
+    background: #3a2612;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 18px;
+    font: 12px "DejaVu Sans", sans-serif;
+  }
+  .check b {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #6a3f1c;
+    background: #f0c14a;
+    position: relative;
+  }
+  .check b::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 0;
+    width: 5px;
+    height: 9px;
+    border: solid #3a2612;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .enter {
+    width: 100%;
+    height: 46px;
+    border: 2px solid #6a3f1c;
+    border-radius: 23px;
+    background: linear-gradient(180deg, #f6d56a, #c48a14);
+    color: #fffdf4;
+    font: 700 18px "Palatino Linotype", Palatino, serif;
+    letter-spacing: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 1px 0 #6a3f1c;
+    box-shadow: inset 0 1px 0 #ffe9a0, 0 4px 0 #6a3f1c;
+  }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="brand">
+    <h1>MIDGARD</h1>
+    <p>ENTER THE WORLD</p>
+  </div>
+  <form class="card" action="#" onsubmit="return false">
+    <i class="c-bl"></i><i class="c-br"></i>
+    <div class="title">Account Login</div>
+    <div class="field">
+      <div class="label">Server</div>
+      <div class="select"><span>Local rAthena · 127.0.0.1</span><i></i></div>
+    </div>
+    <div class="field">
+      <div class="label">Account</div>
+      <div class="input"><span>testaccount</span></div>
+    </div>
+    <div class="field">
+      <div class="label">Password</div>
+      <div class="input focus"><span>••••••••••</span><i class="caret"></i></div>
+    </div>
+    <div class="check"><b></b> Remember account</div>
+    <div class="enter">ENTER</div>
+  </form>
+</div>
+</body>
+</html>

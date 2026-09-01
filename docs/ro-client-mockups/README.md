@@ -2,6 +2,39 @@
 
 Interactive and static UI sketches for custom systems on top of a classic RO client.
 
+## Origin login and character select (redesign)
+
+Same three steps as the current client — launch, credentials, character pick —
+restyled after Ragnarok Origin: warm parchment cards, gold frames, a plaza
+backdrop, and a visible server list. This is a proposal, not a reproduction of
+what goro draws today.
+
+- Launch: [origin-login-launch.html](./origin-login-launch.html) — [origin-login-launch.png](./origin-login-launch.png)
+- Credentials: [origin-login-filled.html](./origin-login-filled.html) — [origin-login-filled.png](./origin-login-filled.png)
+- Connection failure: [origin-login-error.html](./origin-login-error.html) — [origin-login-error.png](./origin-login-error.png)
+- Character select: [origin-char-select.html](./origin-char-select.html) — [origin-char-select.png](./origin-char-select.png)
+
+Shared chrome: [origin-flow.css](./origin-flow.css).
+
+What this changes relative to the current goro screens:
+
+- The login card sits on the right of a full scene instead of a 304×159 dialog
+  two thirds down a black window.
+- Server is a visible dropdown (`Local rAthena · 127.0.0.1`). The live client
+  has no server UI and always uses `Connections[0]`.
+- Remember-account is on the form. The live client has no such checkbox.
+- Failures use a titled `Cannot Connect` prompt with a useful sentence, not a
+  generic `Disconnected` modal.
+- Character select is a full-screen plaza: large hero, nameplate, portrait
+  slots, and an info card that also shows zeny and last map — both omitted
+  today.
+- `ENTER WORLD` is the primary gold action; Create stays disabled on an
+  occupied slot, same rule as the current `Make` button.
+
+These four images are full Ludo `screenshot` generations, not HTML chrome
+composited over a background. Lettering on the character panel can drift
+between runs — that is the generator, not the client.
+
 ## Auto Battle
 
 - Interactive: [autobattle.html](./autobattle.html)

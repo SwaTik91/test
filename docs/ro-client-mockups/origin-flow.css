@@ -1,0 +1,207 @@
+/* Origin-inspired chrome over generated plaza art. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+}
+
+body {
+  font-family: "DejaVu Sans", "Segoe UI", sans-serif;
+  color: #4a3218;
+}
+
+.screen {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background: #1a1208 center / cover no-repeat;
+}
+
+.screen.login {
+  background-image: url("ludo-login-plaza.png");
+}
+
+.screen.charsel {
+  background-image: url("ludo-charsel-plaza.png");
+}
+
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20, 10, 4, 0.18), transparent 28%, transparent 62%, rgba(20, 10, 4, 0.28));
+  pointer-events: none;
+}
+
+.crest {
+  position: absolute;
+  left: 56px;
+  top: 36px;
+  color: #fff8e6;
+  text-shadow: 0 2px 0 #5a3210, 0 8px 18px rgba(40, 18, 6, 0.45);
+  z-index: 2;
+}
+
+.crest h1 {
+  font-size: 34px;
+  letter-spacing: 6px;
+  font-weight: 700;
+}
+
+.crest p {
+  margin-top: 4px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #fff3c8;
+}
+
+.panel {
+  position: absolute;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(255, 246, 223, 0.94), rgba(243, 226, 184, 0.94));
+  border: 3px solid #c9a24a;
+  box-shadow:
+    0 0 0 2px #8a6a2a,
+    0 14px 28px rgba(40, 18, 6, 0.35);
+}
+
+.panel::before,
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #f0d789;
+  pointer-events: none;
+}
+
+.panel::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+.panel::after { top: 6px; right: 6px; border-left: 0; border-bottom: 0; }
+
+.ornament-bl,
+.ornament-br {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #f0d789;
+  pointer-events: none;
+}
+
+.ornament-bl { bottom: 6px; left: 6px; border-right: 0; border-top: 0; }
+.ornament-br { bottom: 6px; right: 6px; border-left: 0; border-top: 0; }
+
+.panel-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #6a4318;
+  letter-spacing: 1px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a5424;
+  margin-bottom: 4px;
+}
+
+.input,
+.select {
+  height: 36px;
+  width: 100%;
+  border: 2px solid #c9a24a;
+  background: #fffaf0;
+  color: #4a3218;
+  font: 13px "DejaVu Sans", sans-serif;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+}
+
+.input.focus {
+  box-shadow: 0 0 0 2px rgba(201, 162, 74, 0.35);
+  background: #fff;
+}
+
+.input .caret {
+  width: 1px;
+  height: 16px;
+  margin-left: 1px;
+  background: #6a4318;
+}
+
+.select { justify-content: space-between; }
+
+.select .chev {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #8a6a2a;
+}
+
+.gold-btn {
+  height: 40px;
+  border: 2px solid #8a6a2a;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f6d56a, #d4a017);
+  color: #4a3218;
+  font: 700 14px "DejaVu Sans", sans-serif;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 #fff3b0, 0 3px 0 #8a6a2a;
+}
+
+.gold-btn.wide { width: 100%; }
+
+.ghost-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 2px solid #c9a24a;
+  background: #fff6df;
+  color: #6a4318;
+  font: 700 12px "DejaVu Sans", sans-serif;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ghost-btn.disabled {
+  color: #b59a6a;
+  border-color: #e0c98a;
+  background: #f6ecd0;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #7a5424;
+}
+
+.check i {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #c9a24a;
+  background: #fffaf0;
+}
+
+.bar {
+  height: 10px;
+  border: 1px solid #8a6a2a;
+  background: #efe0c4;
+  overflow: hidden;
+}
+
+.bar > span { display: block; height: 100%; }
+.bar.hp > span { background: linear-gradient(180deg, #f07171, #c0392b); width: 100%; }
+.bar.sp > span { background: linear-gradient(180deg, #6db4f0, #2b6cb0); width: 100%; }
+.bar.exp > span { background: linear-gradient(180deg, #f0d789, #c9a24a); width: 62%; }
+
+.muted { color: #8a6a2a; }
